@@ -6,6 +6,7 @@ class UserModel {
   String? aboutMe;
   double? latitude;
   double? longitude;
+  List<String> tags;
 
   UserModel({
     required this.id,
@@ -15,5 +16,6 @@ class UserModel {
     this.aboutMe,
     this.latitude,
     this.longitude,
-  });
+    List<String>? tags,
+  }) : tags = tags ?? [];
 }

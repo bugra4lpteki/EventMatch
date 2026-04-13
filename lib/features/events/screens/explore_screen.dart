@@ -12,6 +12,43 @@ class ExploreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Activity Feed (Sosyal Akış)
+        SizedBox(
+          height: 60,
+          child: Consumer<MockEventService>(
+            builder: (context, eventService, child) {
+              return ListView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                itemCount: eventService.activityFeed.length,
+                itemBuilder: (context, index) {
+                  return Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withOpacity(0.9), // Glassmorphism base
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.primary.withOpacity(0.3), width: 1), // Neon border hint
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.05),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        )
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        eventService.activityFeed[index],
+                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
         // Filter Chips
         SizedBox(
           height: 60,
@@ -42,6 +79,8 @@ class ExploreScreen extends StatelessWidget {
                         color: isSelected ? AppColors.primary : Colors.transparent,
                         width: 1.5,
                       ),
+                      elevation: isSelected ? 4 : 0,
+                      shadowColor: AppColors.primary.withOpacity(0.3),
                     ),
                   );
                 },

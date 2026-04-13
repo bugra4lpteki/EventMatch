@@ -8,6 +8,7 @@ import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
 import 'features/events/services/notification_service.dart';
+import 'features/messages/services/mock_message_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,10 @@ void main() async {
         ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
           create: (context) => MockMatchService(context.read<MockEventService>()),
           update: (context, eventService, matchService) => matchService ?? MockMatchService(eventService),
+        ),
+        ChangeNotifierProxyProvider<MockEventService, MockMessageService>(
+          create: (context) => MockMessageService(context.read<MockEventService>()),
+          update: (context, eventService, msgService) => msgService ?? MockMessageService(eventService),
         ),
         ChangeNotifierProxyProvider<MockEventService, LocationRadarService>(
           create: (context) => LocationRadarService(context.read<MockEventService>()),

@@ -100,6 +100,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
         description: _descriptionController.text.trim(),
         imageUrl: _imageUrlController.text.trim(),
         attendees: widget.event?.attendees ?? [],
+        isActive: widget.event?.isActive ?? true,
       );
 
       if (widget.event == null) {

@@ -18,6 +18,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late TextEditingController _aboutController;
   late TextEditingController _avatarUrlController;
 
+  final List<String> _availableTags = ['Techno', 'Tiyatro', 'Stand-up', 'Kahve', 'Gaming', 'Konser', 'Yürüyüş', 'Sinema'];
+  List<String> _selectedTags = [];
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +29,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _ageController = TextEditingController(text: user.age ?? '');
     _aboutController = TextEditingController(text: user.aboutMe ?? '');
     _avatarUrlController = TextEditingController(text: user.avatarUrl);
+    _selectedTags = List.from(user.tags);
   }
 
   @override
@@ -44,6 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         age: _ageController.text,
         aboutMe: _aboutController.text,
         avatarUrl: _avatarUrlController.text,
+        tags: _selectedTags,
       );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -141,7 +146,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 controller: _avatarUrlController,
                 label: 'Profil Resmi URL',
                 icon: Icons.link,
-                onChanged: (_) => setState(() {}), // Anlık fotoğrafı yenile
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 24),
+              const Text("İlgi Alanları", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableTags.map((tag) {
+                  final isSelected = _selectedTags.contains(tag);
+                  return FilterChip(
+                    label: Text(tag),
+                    selected: isSelected,
+                    selectedColor: AppColors.primary.withOpacity(0.3),
+                    checkmarkColor: AppColors.primary,
+                    backgroundColor: AppColors.surface,
+                    labelStyle: TextStyle(
+                      color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                    side: BorderSide(
+                      color: isSelected ? AppColors.primary : Colors.transparent,
+                    ),
+                    onSelected: (bool selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedTags.add(tag);
+                        } else {
+                          _selectedTags.remove(tag);
+                        }
+                      });
+                    },
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 32),
               ElevatedButton(
@@ -169,15 +207,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       color: AppColors.surface,
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: SwitchListTile(
-                      title: const Text('Yakındakiler Radarı', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-                      subtitle: const Text('Konumu izleyip yakındaki kullanıcıları bulur', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                      value: radarService.isRadarActive,
-                      activeColor: AppColors.primary,
-                      contentPadding: EdgeInsets.zero,
-                      onChanged: (bool value) {
-                        radarService.toggleRadar(value);
-                      },
+                    child: Column(
+                      children: [
+                        SwitchListTile(
+                          title: const Text('Yakındakiler Radarı', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                          subtitle: const Text('Konumu izleyip yakındaki kullanıcıları bulur', style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                          value: radarService.isRadarActive,
+                          activeColor: AppColors.primary,
+                          contentPadding: EdgeInsets.zero,
+                          onChanged: (bool value) {
+                            radarService.toggleRadar(value);
+                          },
+                        ),
+                        if (radarService.isRadarActive) ...[
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text('Radar Mesafesi', style: TextStyle(color: AppColors.textSecondary)),
+                              Text('${radarService.radarDistanceKm.toInt()} km', style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                          Slider(
+                            value: radarService.radarDistanceKm,
+                            min: 1.0,
+                            max: 50.0,
+                            activeColor: AppColors.primary,
+                            inactiveColor: AppColors.background,
+                            onChanged: (val) {
+                              radarService.updateRadarDistance(val);
+                            },
+                          ),
+                        ]
+                      ],
                     ),
                   );
                 },

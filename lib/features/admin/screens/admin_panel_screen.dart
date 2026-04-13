@@ -63,6 +63,27 @@ class AdminPanelScreen extends StatelessWidget {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text("Görünürlük", style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            height: 24, // Keep it compact to fit the trailing slot easily
+                            child: Transform.scale(
+                              scale: 0.8, // Make the visual switch smaller so it doesn't clip tightly in the box
+                              child: Switch(
+                                value: event.isActive,
+                                activeColor: AppColors.primary,
+                                onChanged: (val) {
+                                  eventService.toggleEventVisibility(event.id);
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.edit, color: AppColors.secondary),
                         onPressed: () {

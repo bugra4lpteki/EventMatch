@@ -9,6 +9,7 @@ class EventModel {
   final String description;
   final String imageUrl;
   final List<UserModel> attendees;
+  bool isActive;
 
   EventModel({
     required this.id,
@@ -18,6 +19,7 @@ class EventModel {
     required this.dateTime,
     required this.description,
     required this.imageUrl,
+    this.isActive = true,
     List<UserModel>? attendees,
   }) : attendees = attendees ?? [];
 }

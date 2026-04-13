@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
@@ -112,12 +114,12 @@ class EventDetailScreen extends StatelessWidget {
                             child: Icon(Icons.broken_image, color: AppColors.primary, size: 64),
                           ),
                         ),
-                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                          if (wasSynchronouslyLoaded) return child;
-                          return AnimatedOpacity(
-                            child: child,
-                            opacity: frame == null ? 0.0 : 1.0,
-                            duration: const Duration(milliseconds: 500),
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Shimmer.fromColors(
+                            baseColor: AppColors.surface,
+                            highlightColor: AppColors.primary.withOpacity(0.3),
+                            child: Container(color: Colors.white),
                           );
                         },
                       )
@@ -197,6 +199,7 @@ class EventDetailScreen extends StatelessWidget {
                         height: 56,
                         child: ElevatedButton(
                           onPressed: isAttending ? null : () {
+                            HapticFeedback.lightImpact();
                             eventService.joinEvent(event.id);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/event_model.dart';
 
@@ -47,13 +48,12 @@ class EventCard extends StatelessWidget {
                             child: Icon(Icons.broken_image, color: AppColors.primary, size: 48),
                           ),
                         ),
-                        frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                          if (wasSynchronouslyLoaded) return child;
-                          return AnimatedOpacity(
-                            child: child,
-                            opacity: frame == null ? 0.0 : 1.0,
-                            duration: const Duration(milliseconds: 500),
-                            curve: Curves.easeOut,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Shimmer.fromColors(
+                            baseColor: AppColors.surface,
+                            highlightColor: AppColors.primary.withOpacity(0.3),
+                            child: Container(height: 180, color: Colors.white),
                           );
                         },
                       )

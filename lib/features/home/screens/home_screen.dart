@@ -8,6 +8,7 @@ import '../../events/screens/requests_screen.dart';
 import '../../profile/screens/profile_screen.dart';
 import '../../admin/screens/admin_panel_screen.dart';
 import '../../events/services/location_radar_service.dart';
+import '../../messages/screens/messages_screen.dart';
 
 class RadarIconWidget extends StatefulWidget {
   const RadarIconWidget({super.key});
@@ -81,24 +82,75 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                             itemCount: radarService.nearbyUsers.length,
                             itemBuilder: (context, index) {
                               final u = radarService.nearbyUsers[index];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                  backgroundColor: AppColors.surface,
-                                  backgroundImage: u.avatarUrl.startsWith('http') ? NetworkImage(u.avatarUrl) : null,
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface.withOpacity(0.6),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.white12, width: 1),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppColors.primary.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    )
+                                  ]
                                 ),
-                                title: Text(u.name, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-                                subtitle: Text(u.aboutMe ?? '', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary)),
-                                trailing: ElevatedButton(
-                                  onPressed: () {
-                                     // Sadece görsel geri bildirim
-                                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${u.name} kişisine selam gönderildi!')));
-                                     Navigator.pop(context);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary.withOpacity(0.2),
-                                    elevation: 0,
-                                  ),
-                                  child: const Text('Selam Ver', style: TextStyle(color: AppColors.primary)),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 28,
+                                          backgroundColor: AppColors.background,
+                                          backgroundImage: u.avatarUrl.startsWith('http') ? NetworkImage(u.avatarUrl) : null,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(u.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 4),
+                                              if (u.aboutMe != null)
+                                                Text(u.aboutMe!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                            ],
+                                          ),
+                                        ),
+                                        ElevatedButton.icon(
+                                          onPressed: () {
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${u.name} kişisine selam gönderildi!')));
+                                            Navigator.pop(context);
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary.withOpacity(0.2),
+                                            elevation: 0,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          ),
+                                          icon: const Icon(Icons.waving_hand, color: AppColors.primary, size: 16),
+                                          label: const Text('Selam', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                                        ),
+                                      ],
+                                    ),
+                                    if (u.tags.isNotEmpty) ...[
+                                      const SizedBox(height: 16),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: u.tags.map((t) => Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primary.withOpacity(0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                                          ),
+                                          child: Text(t, style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                                        )).toList(),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               );
                             },
@@ -168,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final List<Widget> _pages = [
     const ExploreScreen(),
     const RequestsScreen(),
+    const MessagesScreen(),
     const ProfileScreen(),
   ];
 
@@ -236,6 +289,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               label: 'İstekler',
+            ),
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.message_outlined),
+              activeIcon: Icon(Icons.message),
+              label: 'Mesajlar',
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),

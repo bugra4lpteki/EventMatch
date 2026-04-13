@@ -9,13 +9,17 @@ class MockEventService extends ChangeNotifier {
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
     age: '26',
     aboutMe: 'Yeni insanlarla tanışmayı ve yeni etkinlikler keşfetmeyi severim.',
+    tags: ['Techno', 'Kahve', 'Gaming'],
   );
 
-  void updateCurrentUser({required String name, required String age, required String aboutMe, required String avatarUrl}) {
+  void updateCurrentUser({required String name, required String age, required String aboutMe, required String avatarUrl, List<String>? tags}) {
     currentUser.name = name;
     currentUser.age = age;
     currentUser.aboutMe = aboutMe;
     currentUser.avatarUrl = avatarUrl;
+    if (tags != null) {
+      currentUser.tags = tags;
+    }
     notifyListeners();
   }
 
@@ -33,7 +37,14 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];
+  final List<String> activityFeed = [
+    '🔥 Merve "Ahududu" oyununa bilet aldı!',
+    '🌟 Caner ilgi alanlarına "Tiyatro" ekledi.',
+    '💖 Zeynep ile yüksek eşleşme oranınız var!',
+    '🎉 Buğra "Kaç Para Bi Fön" etkinliğine bakıyor.'
+  ];
+
+  List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];
   String _selectedCategory = 'Tümü';
 
   String get selectedCategory => _selectedCategory;
@@ -223,8 +234,28 @@ class MockEventService extends ChangeNotifier {
   ];
 
   List<EventModel> get filteredEvents {
-    if (_selectedCategory == 'Tümü') return _events;
-    return _events.where((e) => e.category == _selectedCategory).toList();
+    final activeEvents = _events.where((e) => e.isActive).toList();
+    
+    if (_selectedCategory == 'Tümü') return activeEvents;
+    
+    if (_selectedCategory == '🔥 Popüler') {
+      final sorted = List<EventModel>.from(activeEvents)..sort((a,b) => b.attendees.length.compareTo(a.attendees.length));
+      return sorted;
+    }
+    
+    if (_selectedCategory == '🌟 Sana Özel' || _selectedCategory == '💖 Eşleşme Oranı Yüksek') {
+      return List<EventModel>.from(activeEvents).reversed.toList();
+    }
+    
+    return activeEvents.where((e) => e.category == _selectedCategory).toList();
+  }
+
+  void toggleEventVisibility(String id) {
+    final index = _events.indexWhere((e) => e.id == id);
+    if (index >= 0) {
+      _events[index].isActive = !_events[index].isActive;
+      notifyListeners();
+    }
   }
 
   EventModel? getEventById(String id) {
