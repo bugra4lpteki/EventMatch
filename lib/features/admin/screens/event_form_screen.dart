@@ -54,7 +54,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
       builder: (context, child) {
          return Theme(
            data: Theme.of(context).copyWith(
-             colorScheme: const ColorScheme.dark(
+             colorScheme: ColorScheme.dark(
                primary: AppColors.primary,
                onPrimary: Colors.white,
                surface: AppColors.surface,
@@ -118,7 +118,7 @@ class _EventFormScreenState extends State<EventFormScreen> {
     final isEditing = widget.event != null;
     return Scaffold(
       appBar: AppBar(
-        title: Text(isEditing ? 'Etkinliği Düzenle' : 'Yeni Etkinlik', style: const TextStyle(color: AppColors.primary)),
+        title: Text(isEditing ? 'Etkinliği Düzenle' : 'Yeni Etkinlik', style: TextStyle(color: AppColors.primary)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -149,11 +149,11 @@ class _EventFormScreenState extends State<EventFormScreen> {
                       return TextFormField(
                         controller: textEditingController,
                         focusNode: focusNode,
-                        style: const TextStyle(color: AppColors.textPrimary),
+                        style: TextStyle(color: AppColors.textPrimary),
                         onChanged: (val) => _categoryController.text = val,
                         decoration: InputDecoration(
                           labelText: 'Kategori (Örn: Tiyatro, Stand-up veya Yeni Ekle)',
-                          labelStyle: const TextStyle(color: AppColors.textSecondary),
+                          labelStyle: TextStyle(color: AppColors.textSecondary),
                           filled: true,
                           fillColor: AppColors.surface,
                           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
@@ -179,8 +179,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                      children: [
                        Text("Tarih ve Saat: ${_selectedDate.day.toString().padLeft(2,'0')}.${_selectedDate.month.toString().padLeft(2,'0')}.${_selectedDate.year} ${_selectedDate.hour.toString().padLeft(2,'0')}:${_selectedDate.minute.toString().padLeft(2,'0')}", 
-                            style: const TextStyle(color: AppColors.textPrimary)),
-                       const Icon(Icons.calendar_today, color: AppColors.primary),
+                            style: TextStyle(color: AppColors.textPrimary)),
+                       Icon(Icons.calendar_today, color: AppColors.primary),
                      ],
                    ),
                 ),
@@ -210,10 +210,10 @@ class _EventFormScreenState extends State<EventFormScreen> {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
-      style: const TextStyle(color: AppColors.textPrimary),
+      style: TextStyle(color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: AppColors.textSecondary),
+        labelStyle: TextStyle(color: AppColors.textSecondary),
         filled: true,
         fillColor: AppColors.surface,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),

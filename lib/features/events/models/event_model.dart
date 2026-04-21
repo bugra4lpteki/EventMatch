@@ -9,6 +9,8 @@ class EventModel {
   final String description;
   final String imageUrl;
   final List<UserModel> attendees;
+  final double? latitude;
+  final double? longitude;
   bool isActive;
 
   EventModel({
@@ -19,7 +21,14 @@ class EventModel {
     required this.dateTime,
     required this.description,
     required this.imageUrl,
+    this.latitude,
+    this.longitude,
     this.isActive = true,
+    this.atmosphere = 'Sakin',
+    this.isPopular = false,
     List<UserModel>? attendees,
   }) : attendees = attendees ?? [];
+
+  final String atmosphere;
+  final bool isPopular;
 }

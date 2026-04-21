@@ -19,7 +19,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _login() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Lütfen tüm alanları doldurun.'),
           backgroundColor: AppColors.error,
         ),
@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Giriş başarısız. Bilgileri kontrol edin.'),
           backgroundColor: AppColors.error,
         ),
@@ -50,11 +50,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.topRight,
             radius: 1.5,
-            colors: [Color(0xFF2E004F), AppColors.background],
+            colors: [AppColors.surface, AppColors.background],
           ),
         ),
         child: SafeArea(
@@ -65,11 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(
-                    Icons.nightlife,
-                    size: 80,
-                    color: AppColors.primary,
-                  ),
+                  Icon(Icons.location_on, color: AppColors.primary, size: 48),
                   const SizedBox(height: 16),
                   Text(
                     'EventMatch',
@@ -93,7 +89,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 48),
                   TextField(
                     controller: _emailController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'E-posta',
                       prefixIcon: Icon(
                         Icons.email_outlined,
@@ -105,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Şifre',
                       prefixIcon: Icon(
                         Icons.lock_outline,
@@ -126,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               strokeWidth: 2,
                             ),
                           )
-                        : const Text('GİRİŞ YAP'),
+                        : Text('GİRİŞ YAP'),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
@@ -138,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       );
                     },
-                    child: const Text('Hesabın yok mu? Hemen Kaydol!'),
+                    child: Text('Hesabın yok mu? Hemen Kaydol!'),
                   ),
                 ],
               ),

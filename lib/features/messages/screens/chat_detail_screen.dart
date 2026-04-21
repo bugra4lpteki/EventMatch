@@ -53,18 +53,18 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 children: [
                   Text(
                     widget.chat.participant.name,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                   ),
                   if (widget.chat.isEventBased && widget.chat.relatedEvent != null)
                     Row(
                       children: [
-                        const Icon(Icons.event, size: 12, color: AppColors.primary),
+                        Icon(Icons.event, size: 12, color: AppColors.primary),
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
                             widget.chat.relatedEvent!.title,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12, color: AppColors.primary),
+                            style: TextStyle(fontSize: 12, color: AppColors.primary),
                           ),
                         ),
                       ],
@@ -83,7 +83,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         ),
                         child: Text(
                           tag,
-                          style: const TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       )).toList(),
                     ),
@@ -132,12 +132,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.tips_and_updates, color: AppColors.primary, size: 20),
+                      Icon(Icons.tips_and_updates, color: AppColors.primary, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
                           matchInsightTitle,
-                          style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -198,19 +198,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12).copyWith(
         bottom: MediaQuery.of(context).padding.bottom + 12,
       ),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
-        border: Border(top: BorderSide(color: Colors.white10)),
+        border: const Border(top: BorderSide(color: Colors.white10)),
       ),
       child: Row(
         children: [
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: const TextStyle(color: AppColors.textPrimary),
+              style: TextStyle(color: AppColors.textPrimary),
               decoration: InputDecoration(
                 hintText: 'Mesaj yaz...',
-                hintStyle: const TextStyle(color: AppColors.textSecondary),
+                hintStyle: TextStyle(color: AppColors.textSecondary),
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
@@ -226,7 +226,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             onTap: _sendMessage,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.primary,
                 shape: BoxShape.circle,
               ),

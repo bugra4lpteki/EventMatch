@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
+import 'core/theme/theme_service.dart';
 import 'features/auth/services/mock_auth_service.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/home/screens/home_screen.dart';
+import 'features/home/screens/splash_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
@@ -17,6 +19,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => ThemeService()),
         ChangeNotifierProvider(create: (_) => MockAuthService()),
         ChangeNotifierProvider(create: (_) => MockEventService()),
         ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
@@ -42,18 +45,15 @@ class EventMatchApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'EventMatch',
-      theme: AppTheme.darkTheme,
-      debugShowCheckedModeBanner: false,
-      home: Consumer<MockAuthService>(
-        builder: (context, auth, child) {
-          if (auth.isAuthenticated) {
-            return const HomeScreen();
-          }
-          return const LoginScreen();
-        },
-      ),
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return MaterialApp(
+          title: 'EventMatch',
+          theme: AppTheme.darkTheme,
+          debugShowCheckedModeBanner: false,
+          home: const SplashScreen(),
+        );
+      },
     );
   }
 }

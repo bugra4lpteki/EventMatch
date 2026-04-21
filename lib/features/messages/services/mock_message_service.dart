@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
 import '../../events/models/event_model.dart';
@@ -77,6 +79,58 @@ class MockMessageService extends ChangeNotifier {
         ],
       ),
     ];
+    
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final messagesJson = prefs.getStringList('savedMessages');
+    if (messagesJson != null) {
+      for (var str in messagesJson) {
+        try {
+          final map = jsonDecode(str);
+          final chatId = map['chatId'];
+          final chatIndex = _chats.indexWhere((c) => c.id == chatId);
+          if (chatIndex >= 0) {
+            // Sadece daha önce eklenmemişse ekle (id kontrolü)
+            final exists = _chats[chatIndex].messages.any((m) => m.id == map['id']);
+            if (!exists) {
+              _chats[chatIndex].messages.add(MessageModel(
+                id: map['id'],
+                senderId: map['senderId'],
+                text: map['text'],
+                timestamp: DateTime.parse(map['timestamp']),
+              ));
+            }
+          }
+        } catch(e) {
+          // ignore parsing error
+        }
+      }
+      
+      // Sohbetleri en son mesaja göre sırala
+      _chats.sort((a,b) {
+         final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);
+         final bTime = b.messages.isNotEmpty ? b.messages.last.timestamp : DateTime(2000);
+         return bTime.compareTo(aTime);
+      });
+      
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveMessage(String chatId, MessageModel msg) async {
+    final prefs = await SharedPreferences.getInstance();
+    final messagesJson = prefs.getStringList('savedMessages') ?? [];
+    messagesJson.add(jsonEncode({
+      'chatId': chatId,
+      'id': msg.id,
+      'senderId': msg.senderId,
+      'text': msg.text,
+      'timestamp': msg.timestamp.toIso8601String(),
+    }));
+    await prefs.setStringList('savedMessages', messagesJson);
   }
 
   void sendMessage(String chatId, String text) {
@@ -94,6 +148,7 @@ class MockMessageService extends ChangeNotifier {
       final chat = _chats.removeAt(chatIndex);
       _chats.insert(0, chat);
       
+      _saveMessage(chatId, newMessage);
       notifyListeners();
     }
   }

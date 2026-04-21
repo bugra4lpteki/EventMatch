@@ -7,87 +7,14 @@ import '../models/event_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
+import '../services/notification_service.dart';
+import '../../profile/screens/user_profile_screen.dart';
+import '../screens/venue_chat_screen.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final EventModel event;
 
   const EventDetailScreen({super.key, required this.event});
-
-  void _showRequestSheet(BuildContext context, UserModel user, String eventId, bool hasSentReq, MockMatchService matchService) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(24.0),
-          decoration: const BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(2))),
-              const SizedBox(height: 24),
-              CircleAvatar(
-                radius: 50,
-                backgroundColor: AppColors.surface,
-                child: ClipOval(
-                  child: user.avatarUrl.startsWith('http')
-                      ? Image.network(user.avatarUrl, width: 100, height: 100, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 50, color: AppColors.primary))
-                      : Image.asset(user.avatarUrl, width: 100, height: 100, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person, size: 50, color: AppColors.primary)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "${user.name}${user.age != null && user.age!.isNotEmpty ? ', ${user.age}' : ''}",
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              ),
-              if (user.aboutMe != null && user.aboutMe!.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  user.aboutMe!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 16, color: AppColors.textSecondary, height: 1.5),
-                ),
-              ],
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: hasSentReq
-                      ? null
-                      : () {
-                          matchService.sendRequest(eventId, user);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("Eşleşme isteği gönderildi!"), backgroundColor: AppColors.secondary),
-                          );
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: hasSentReq ? AppColors.surface : AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  ),
-                  child: Text(
-                    hasSentReq ? 'İSTEK GÖNDERİLDİ' : 'TANIŞMAK İSTER MİSİN? (İSTEK GÖNDER)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                      color: hasSentReq ? AppColors.textSecondary : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,6 +26,23 @@ class EventDetailScreen extends StatelessWidget {
           SliverAppBar(
             expandedHeight: 300,
             pinned: true,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.notifications_active_outlined, color: AppColors.primary),
+                onPressed: () async {
+                  HapticFeedback.mediumImpact();
+                  await NotificationService.scheduleEventReminders(event);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Hatırlatıcılar kuruldu! (09:00, 30dk kala ve tam saatinde)'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(
                 tag: 'event_image_${event.id}',
@@ -110,7 +54,7 @@ class EventDetailScreen extends StatelessWidget {
                         colorBlendMode: BlendMode.darken,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: AppColors.surface,
-                          child: const Center(
+                          child: Center(
                             child: Icon(Icons.broken_image, color: AppColors.primary, size: 64),
                           ),
                         ),
@@ -130,7 +74,7 @@ class EventDetailScreen extends StatelessWidget {
                         colorBlendMode: BlendMode.darken,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: AppColors.surface,
-                          child: const Center(
+                          child: Center(
                             child: Icon(Icons.broken_image, color: AppColors.primary, size: 64),
                           ),
                         ),
@@ -154,7 +98,7 @@ class EventDetailScreen extends StatelessWidget {
                 children: [
                   Text(
                     event.category.toUpperCase(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.secondary,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.2,
@@ -171,23 +115,23 @@ class EventDetailScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      const Icon(Icons.location_on, color: AppColors.primary),
+                      Icon(Icons.location_on, color: AppColors.primary),
                       const SizedBox(width: 8),
-                      Text(event.location, style: const TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+                      Text(event.location, style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
                     ],
                   ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      const Icon(Icons.access_time, color: AppColors.primary),
+                      Icon(Icons.access_time, color: AppColors.primary),
                       const SizedBox(width: 8),
-                      Text(dateStr, style: const TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+                      Text(dateStr, style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
                     ],
                   ),
                   const SizedBox(height: 24),
-                  const Text("Hakkında", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  Text("Hakkında", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   const SizedBox(height: 8),
-                  Text(event.description, style: const TextStyle(color: AppColors.textSecondary, height: 1.5)),
+                  Text(event.description, style: TextStyle(color: AppColors.textSecondary, height: 1.5)),
                   const SizedBox(height: 40),
                   
                   // Ben de Buradayım Button
@@ -202,7 +146,7 @@ class EventDetailScreen extends StatelessWidget {
                             HapticFeedback.lightImpact();
                             eventService.joinEvent(event.id);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text('Etkinliğe katıldın! Artık listedesin.'),
                                 backgroundColor: AppColors.primary,
                               )
@@ -229,8 +173,106 @@ class EventDetailScreen extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 40),
-                  const Text("Takılmak İsteyenler", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  const SizedBox(height: 32),
+                  // Check-in and Chat Section
+                  Consumer<MockEventService>(
+                    builder: (context, eventService, child) {
+                      final isAttending = eventService.isUserAttending(event.id);
+                      final isCheckedIn = eventService.isUserCheckedIn(event.id);
+
+                      if (!isAttending) return const SizedBox.shrink();
+
+                      return Column(
+                        children: [
+                          _buildGlassCard(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: isCheckedIn ? Colors.green.withOpacity(0.2) : AppColors.primary.withOpacity(0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        isCheckedIn ? Icons.location_on : Icons.location_on_outlined,
+                                        color: isCheckedIn ? Colors.green : AppColors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            isCheckedIn ? 'Mekandasın!' : 'Mekanda mısın?',
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                          Text(
+                                            isCheckedIn ? 'Diğerleriyle sohbete başla.' : 'Check-in yap, rozetini kap!',
+                                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (!isCheckedIn)
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          HapticFeedback.heavyImpact();
+                                          eventService.checkIn(event.id);
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.primary,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: const Text('CHECK-IN'),
+                                      )
+                                    else
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.green),
+                                        ),
+                                        child: const Text('MEKANDA', style: TextStyle(color: Colors.green, fontSize: 10, fontWeight: FontWeight.bold)),
+                                      ),
+                                  ],
+                                ),
+                                if (isCheckedIn) ...[
+                                  const Divider(color: Colors.white10, height: 32),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (context) => VenueChatScreen(event: event)),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.chat_bubble_outline),
+                                      label: const Text('MEKAN SOHBETİNE KATIL'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: AppColors.primary,
+                                        side: BorderSide(color: AppColors.primary),
+                                        padding: const EdgeInsets.symmetric(vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 32),
+                        ],
+                      );
+                    },
+                  ),
+
+                  Text("Takılmak İsteyenler", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   const SizedBox(height: 16),
                   
                   // Attendees List
@@ -246,7 +288,7 @@ class EventDetailScreen extends StatelessWidget {
                              color: AppColors.surface.withOpacity(0.5),
                              borderRadius: BorderRadius.circular(16),
                            ),
-                           child: const Center(
+                           child: Center(
                              child: Text("Takılmak isteyenleri görmek için etkinliğe katılın.", 
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: AppColors.textSecondary)),
@@ -255,7 +297,7 @@ class EventDetailScreen extends StatelessWidget {
                       }
 
                       if (attendees.isEmpty) {
-                        return const Center(child: Text("Henüz kimse katılmadı. İlk sen ol!", style: TextStyle(color: AppColors.textSecondary)));
+                        return Center(child: Text("Henüz kimse katılmadı. İlk sen ol!", style: TextStyle(color: AppColors.textSecondary)));
                       }
 
                       return ListView.builder(
@@ -265,36 +307,78 @@ class EventDetailScreen extends StatelessWidget {
                         itemBuilder: (context, index) {
                           final user = attendees[index];
                           final hasSentReq = matchService.hasSentRequest(event.id, user.id);
+                          final isAtVenue = (index % 2 == 0); 
                           
                           return ListTile(
                             onTap: () {
-                              _showRequestSheet(context, user, event.id, hasSentReq, matchService);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => UserProfileScreen(
+                                    user: user,
+                                    eventId: event.id,
+                                  ),
+                                ),
+                              );
                             },
                             contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundColor: AppColors.surface,
-                              radius: 24,
-                              child: ClipOval(
-                                child: user.avatarUrl.startsWith('http')
-                                  ? Image.network(
-                                      user.avatarUrl,
-                                      width: 48, height: 48, fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: AppColors.primary),
-                                    )
-                                  : Image.asset(
-                                      user.avatarUrl,
-                                      width: 48, height: 48, fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.person, color: AppColors.primary),
+                            leading: Stack(
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: AppColors.surface,
+                                  radius: 24,
+                                  child: ClipOval(
+                                    child: user.avatarUrl.startsWith('http')
+                                      ? Image.network(
+                                          user.avatarUrl,
+                                          width: 48, height: 48, fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Icon(Icons.person, color: AppColors.primary),
+                                        )
+                                      : Image.asset(
+                                          user.avatarUrl,
+                                          width: 48, height: 48, fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) => Icon(Icons.person, color: AppColors.primary),
+                                        ),
+                                  ),
+                                ),
+                                if (isAtVenue)
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: AppColors.background, width: 2),
+                                      ),
                                     ),
-                              ),
+                                  ),
+                              ],
                             ),
-                            title: Text(user.name, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                            title: Row(
+                              children: [
+                                Text(user.name, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                                if (isAtVenue) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: const Text('MEKANDA', style: TextStyle(color: Colors.green, fontSize: 8, fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ],
+                            ),
                             trailing: hasSentReq 
-                            ? const OutlinedButton(
+                            ? OutlinedButton(
                                 onPressed: null,
                                 child: Text("İstek Gönderildi", style: TextStyle(color: AppColors.textSecondary)),
                               )
-                            : const Icon(Icons.chevron_right, color: AppColors.primary),
+                            : Icon(Icons.chevron_right, color: AppColors.primary),
                           );
                         },
                       );
@@ -307,6 +391,18 @@ class EventDetailScreen extends StatelessWidget {
           )
         ],
       ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: AppColors.surface.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: child,
     );
   }
 }

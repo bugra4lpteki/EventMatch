@@ -16,8 +16,8 @@ class MessagesScreen extends StatelessWidget {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           backgroundColor: AppColors.background,
-          title: const Text('Mesajlar', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-          bottom: const TabBar(
+          title: Text('Mesajlar', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+          bottom: TabBar(
             indicatorColor: AppColors.primary,
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
@@ -46,7 +46,7 @@ class MessagesScreen extends StatelessWidget {
 
   Widget _buildChatList(BuildContext context, List<ChatModel> chats, MockMessageService service) {
     if (chats.isEmpty) {
-      return const Center(child: Text("Henüz hiç mesajınız yok.", style: TextStyle(color: AppColors.textSecondary)));
+      return Center(child: Text("Henüz hiç mesajınız yok.", style: TextStyle(color: AppColors.textSecondary)));
     }
 
     return ListView.builder(
@@ -72,7 +72,7 @@ class MessagesScreen extends StatelessWidget {
             children: [
               Text(
                 chat.participant.name,
-                style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               if (lastMsg != null)
                 Text(
@@ -91,7 +91,7 @@ class MessagesScreen extends StatelessWidget {
               if (chat.isEventBased && chat.relatedEvent != null)
                 Text(
                   chat.relatedEvent!.title,
-                  style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
+                  style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               if (lastMsg != null)
                 Text(
@@ -108,7 +108,7 @@ class MessagesScreen extends StatelessWidget {
           trailing: chat.unreadCount > 0
               ? Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
                   ),

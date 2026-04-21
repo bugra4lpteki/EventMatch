@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../auth/services/mock_auth_service.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/screens/explore_screen.dart';
 import '../../events/screens/requests_screen.dart';
+import '../../events/screens/swipe_screen.dart';
 import '../../profile/screens/profile_screen.dart';
-import '../../admin/screens/admin_panel_screen.dart';
-import '../../events/services/location_radar_service.dart';
 import '../../messages/screens/messages_screen.dart';
+import '../../../core/theme/theme_service.dart';
+import '../../events/services/location_radar_service.dart';
+import '../../events/screens/event_map_screen.dart';
 
 class RadarIconWidget extends StatefulWidget {
   const RadarIconWidget({super.key});
@@ -43,7 +44,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
           // Radar kapalıysa gri soluk bir ikon gösterelim
           return Container(
             margin: const EdgeInsets.only(right: 8),
-            child: const Icon(Icons.radar, color: AppColors.surface, size: 24),
+            child: Icon(Icons.radar, color: AppColors.surface, size: 24),
           );
         }
 
@@ -53,7 +54,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
             return GestureDetector(
               onTap: () {
                 if (radarService.nearbyUsers.isEmpty) {
-                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Şu an çevrede kimse yok.', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.surface));
+                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Şu an çevrede kimse yok.', style: TextStyle(color: Colors.white)), backgroundColor: AppColors.surface));
                    return;
                 }
                 showModalBottomSheet(
@@ -62,7 +63,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                   backgroundColor: Colors.transparent,
                   builder: (context) => Container(
                     padding: const EdgeInsets.all(24.0),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: AppColors.background,
                       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
                     ),
@@ -71,9 +72,9 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                       children: [
                         Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(2))),
                         const SizedBox(height: 24),
-                        const Icon(Icons.radar, color: AppColors.primary, size: 48),
+                        Icon(Icons.radar, color: AppColors.primary, size: 48),
                         const SizedBox(height: 8),
-                        Text('Yakındaki ${radarService.nearbyUsersCount} Kişi', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        Text('Yakındaki ${radarService.nearbyUsersCount} Kişi', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                         const SizedBox(height: 16),
                         ConstrainedBox(
                           constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
@@ -112,10 +113,10 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
-                                              Text(u.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                              Text(u.name, style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
                                               const SizedBox(height: 4),
                                               if (u.aboutMe != null)
-                                                Text(u.aboutMe!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                                Text(u.aboutMe!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
                                             ],
                                           ),
                                         ),
@@ -129,8 +130,8 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                             elevation: 0,
                                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                           ),
-                                          icon: const Icon(Icons.waving_hand, color: AppColors.primary, size: 16),
-                                          label: const Text('Selam', style: TextStyle(color: AppColors.primary, fontSize: 12)),
+                                          icon: Icon(Icons.waving_hand, color: AppColors.primary, size: 16),
+                                          label: Text('Selam', style: TextStyle(color: AppColors.primary, fontSize: 12)),
                                         ),
                                       ],
                                     ),
@@ -146,7 +147,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                             borderRadius: BorderRadius.circular(8),
                                             border: Border.all(color: AppColors.primary.withOpacity(0.3)),
                                           ),
-                                          child: Text(t, style: const TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+                                          child: Text(t, style: TextStyle(color: AppColors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
                                         )).toList(),
                                       ),
                                     ],
@@ -219,6 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _pages = [
     const ExploreScreen(),
+    const SwipeScreen(),
     const RequestsScreen(),
     const MessagesScreen(),
     const ProfileScreen(),
@@ -226,83 +228,90 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('EventMatch', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-        actions: [
-          const Center(child: RadarIconWidget()),
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings, color: AppColors.textPrimary),
-            onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminPanelScreen()));
-            },
+    return Consumer<ThemeService>(
+      builder: (context, themeService, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('EventMatch', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.map_outlined),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const EventMapScreen()),
+                  );
+                },
+              ),
+              Center(child: RadarIconWidget()),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: AppColors.textPrimary),
-            onPressed: () {
-              context.read<MockAuthService>().logout();
-            },
-          )
-        ],
-      ),
-      body: _pages[_currentIndex],
-      bottomNavigationBar: Theme(
-        data: Theme.of(context).copyWith(
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-        ),
-        child: BottomNavigationBar(
-          backgroundColor: AppColors.background,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.textSecondary,
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.explore_outlined),
-              activeIcon: Icon(Icons.explore),
-              label: 'Keşfet',
+          body: _pages[_currentIndex],
+          bottomNavigationBar: Theme(
+            data: Theme.of(context).copyWith(
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
             ),
-            BottomNavigationBarItem(
-              icon: Consumer<MockMatchService>(
-                builder: (context, matchService, child) {
-                  final reqCount = matchService.incomingRequests.length;
-                  return Badge(
-                    isLabelVisible: reqCount > 0,
-                    label: Text(reqCount.toString()),
-                    child: const Icon(Icons.favorite_border),
-                  );
-                },
-              ),
-              activeIcon: Consumer<MockMatchService>(
-                builder: (context, matchService, child) {
-                  final reqCount = matchService.incomingRequests.length;
-                  return Badge(
-                    isLabelVisible: reqCount > 0,
-                    label: Text(reqCount.toString()),
-                    child: const Icon(Icons.favorite),
-                  );
-                },
-              ),
-              label: 'İstekler',
+            child: BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: AppColors.background,
+              selectedItemColor: AppColors.primary,
+              unselectedItemColor: AppColors.textSecondary,
+              currentIndex: _currentIndex,
+              onTap: (index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              },
+              items: [
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.explore_outlined),
+                  activeIcon: Icon(Icons.explore),
+                  label: 'Keşfet',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.swipe_outlined),
+                  activeIcon: Icon(Icons.swipe),
+                  label: 'Eşleş',
+                ),
+                BottomNavigationBarItem(
+                  icon: Consumer<MockMatchService>(
+                    builder: (context, matchService, child) {
+                      final reqCount = matchService.incomingRequests.length;
+                      return Badge(
+                        isLabelVisible: reqCount > 0,
+                        label: Text(reqCount.toString()),
+                        child: const Icon(Icons.favorite_border),
+                      );
+                    },
+                  ),
+                  activeIcon: Consumer<MockMatchService>(
+                    builder: (context, matchService, child) {
+                      final reqCount = matchService.incomingRequests.length;
+                      return Badge(
+                        isLabelVisible: reqCount > 0,
+                        label: Text(reqCount.toString()),
+                        child: const Icon(Icons.favorite),
+                      );
+                    },
+                  ),
+                  label: 'İstekler',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.message_outlined),
+                  activeIcon: Icon(Icons.message),
+                  label: 'Mesajlar',
+                ),
+                const BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline),
+                  activeIcon: Icon(Icons.person),
+                  label: 'Profil',
+                ),
+              ],
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.message_outlined),
-              activeIcon: Icon(Icons.message),
-              label: 'Mesajlar',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profil',
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

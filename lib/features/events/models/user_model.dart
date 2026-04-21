@@ -7,6 +7,11 @@ class UserModel {
   double? latitude;
   double? longitude;
   List<String> tags;
+  List<String> plannedEvents;
+  List<String> pastEvents;
+  int points;
+  List<String> badges;
+  String? checkedInEventId;
 
   UserModel({
     required this.id,
@@ -16,6 +21,14 @@ class UserModel {
     this.aboutMe,
     this.latitude,
     this.longitude,
+    this.points = 0,
+    this.checkedInEventId,
+    List<String>? badges,
     List<String>? tags,
-  }) : tags = tags ?? [];
+    List<String>? plannedEvents,
+    List<String>? pastEvents,
+  })  : badges = badges ?? [],
+        tags = tags ?? [],
+        plannedEvents = plannedEvents ?? [],
+        pastEvents = pastEvents ?? [];
 }

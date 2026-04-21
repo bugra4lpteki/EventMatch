@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color background = Color(0xFF0D0D12); // Deep dark space
-  static const Color surface = Color(0xFF1A1A24); // Elevated component surface
-  static const Color primary = Color(0xFFD900FF); // Neon Purple
-  static const Color primaryVariant = Color(0xFF9000FF); // Deep Neon Purple
-  static const Color secondary = Color(0xFF00F0FF); // Neon Cyan for contrasts
-  static const Color textPrimary = Colors.white;
-  static const Color textSecondary = Colors.white60;
-  static const Color error = Color(0xFFFF3366);
+  // Aktif tema renkleri (ThemeService tarafından değiştirilir)
+  static Color background = const Color(0xFF121212); 
+  static Color surface = const Color(0xFF1E1E1E); 
+  static Color primary = const Color(0xFFD4AF37); 
+  static Color primaryVariant = const Color(0xFFFDE047); 
+  static Color secondary = const Color(0xFFE5E5E5); 
+  static Color textPrimary = const Color(0xFFFFFFFF); 
+  static Color textSecondary = const Color(0xFFA3A3A3); 
+  static Color error = const Color(0xFFEF4444); 
 }

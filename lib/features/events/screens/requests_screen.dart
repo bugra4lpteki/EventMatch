@@ -11,7 +11,7 @@ class RequestsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Eşleşme İstekleri',
           style: TextStyle(
             fontWeight: FontWeight.bold,
@@ -25,7 +25,7 @@ class RequestsScreen extends StatelessWidget {
         builder: (context, matchService, child) {
           final requests = matchService.incomingRequests;
           if (requests.isEmpty) {
-            return const Center(
+            return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -68,10 +68,7 @@ class RequestsScreen extends StatelessWidget {
                                 height: 60,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(
-                                      Icons.person,
-                                      color: AppColors.primary,
-                                    ),
+                                    Icon(Icons.person, color: AppColors.primary),
                               )
                             : Image.asset(
                                 req.fromUser.avatarUrl,
@@ -79,10 +76,7 @@ class RequestsScreen extends StatelessWidget {
                                 height: 60,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) =>
-                                    const Icon(
-                                      Icons.person,
-                                      color: AppColors.primary,
-                                    ),
+                                    Icon(Icons.person, color: AppColors.primary),
                               ),
                       ),
                     ),
@@ -93,14 +87,14 @@ class RequestsScreen extends StatelessWidget {
                         children: [
                           Text(
                             req.fromUser.name,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: AppColors.textPrimary,
                               fontSize: 18,
                             ),
                           ),
                           const SizedBox(height: 4),
-                          const Text(
+                          Text(
                             "Seninle tanışmak istiyor!",
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
@@ -111,10 +105,7 @@ class RequestsScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                            color: AppColors.textSecondary,
-                          ),
+                          icon: Icon(Icons.close, color: AppColors.textSecondary),
                           onPressed: () {
                             matchService.rejectRequest(req.id);
                           },
@@ -129,7 +120,7 @@ class RequestsScreen extends StatelessWidget {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(24),
                                 ),
-                                title: const Text(
+                                title: Text(
                                   'Eşleşme Sağlandı! 🎉',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(color: AppColors.primary),
@@ -137,7 +128,7 @@ class RequestsScreen extends StatelessWidget {
                                 content: Text(
                                   '${req.fromUser.name} ile eşleştin. Şimdi mesajlaşma vakti!',
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: AppColors.textPrimary,
                                   ),
                                 ),
@@ -148,7 +139,7 @@ class RequestsScreen extends StatelessWidget {
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: AppColors.primary,
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         'Kapat',
                                         style: TextStyle(color: Colors.white),
                                       ),
@@ -164,7 +155,7 @@ class RequestsScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: const Text(
+                          child: Text(
                             "Kabul Et",
                             style: TextStyle(color: Colors.white),
                           ),

@@ -27,7 +27,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
+            colorScheme: ColorScheme.dark(
               primary: AppColors.primary,
               onPrimary: Colors.white,
               surface: AppColors.surface,
@@ -42,7 +42,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (picked != null) {
       if (!AgeValidator.isAdult(picked)) {
         ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(
+           SnackBar(
             content: Text('Uygulamayı kullanmak için 18 yaşından büyük olmalısınız.'),
             backgroundColor: AppColors.error,
           ),
@@ -57,14 +57,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _register() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen tüm alanları doldurun.'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Lütfen tüm alanları doldurun.'), backgroundColor: AppColors.error),
       );
       return;
     }
 
     if (_selectedDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen doğum tarihinizi seçin.'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Lütfen doğum tarihinizi seçin.'), backgroundColor: AppColors.error),
       );
       return;
     }
@@ -83,7 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Navigator.pop(context); // Ana sayfa Provider üzerinden _isAuthenticated=true olunca otomatik geçer
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kayıt başarısız. Lütfen tekrar deneyin.'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Kayıt başarısız. Lütfen tekrar deneyin.'), backgroundColor: AppColors.error),
       );
     }
   }
@@ -96,11 +96,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         leading: const BackButton(color: Colors.white),
       ),
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
-            center: Alignment.topLeft,
+            center: Alignment.topRight,
             radius: 1.5,
-            colors: [Color(0xFF2E004F), AppColors.background],
+            colors: [AppColors.surface, AppColors.background],
           ),
         ),
         child: SafeArea(
@@ -111,7 +111,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.person_add_alt_1, size: 60, color: AppColors.secondary),
+                  Icon(Icons.person_add_alt_1, size: 60, color: AppColors.secondary),
                   const SizedBox(height: 16),
                   Text(
                     'Aramıza Katıl',
@@ -123,7 +123,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 32),
                   TextField(
                     controller: _emailController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'E-posta',
                       prefixIcon: Icon(Icons.email_outlined, color: AppColors.textSecondary),
                     ),
@@ -132,7 +132,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Şifre',
                       prefixIcon: Icon(Icons.lock_outline, color: AppColors.textSecondary),
                     ),
@@ -150,7 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.cake_outlined, color: AppColors.textSecondary),
+                          Icon(Icons.cake_outlined, color: AppColors.textSecondary),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
@@ -164,7 +164,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ),
                           ),
                           if (_selectedDate != null)
-                             const Icon(Icons.check_circle, color: AppColors.primary),
+                             Icon(Icons.check_circle, color: AppColors.primary),
                         ],
                       ),
                     ),
@@ -174,7 +174,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: _isLoading ? null : _register,
                     child: _isLoading 
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('KAYIT OL'),
+                      : Text('KAYIT OL'),
                   ),
                 ],
               ),

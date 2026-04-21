@@ -11,7 +11,7 @@ class AdminPanelScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Yönetim Paneli', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+        title: Text('Yönetim Paneli', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
       ),
       body: Consumer<MockEventService>(
         builder: (context, eventService, child) {
@@ -21,7 +21,7 @@ class AdminPanelScreen extends StatelessWidget {
           final events = eventService.getAdminEvents(); // Helper ekleyeceğim mock_event_service'e.
           
           if (events.isEmpty) {
-             return const Center(child: Text("Henüz hiç etkinlik yok.", style: TextStyle(color: AppColors.textSecondary)));
+             return Center(child: Text("Henüz hiç etkinlik yok.", style: TextStyle(color: AppColors.textSecondary)));
           }
 
           return ListView.builder(
@@ -44,7 +44,7 @@ class AdminPanelScreen extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(
                               width: 60, height: 60, color: Colors.black26,
-                              child: const Icon(Icons.broken_image, color: AppColors.primary),
+                              child: Icon(Icons.broken_image, color: AppColors.primary),
                             ),
                           )
                         : Image.asset(
@@ -54,19 +54,19 @@ class AdminPanelScreen extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(
                               width: 60, height: 60, color: Colors.black26,
-                              child: const Icon(Icons.broken_image, color: AppColors.primary),
+                              child: Icon(Icons.broken_image, color: AppColors.primary),
                             ),
                           ),
                   ),
-                  title: Text(event.title, style: const TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-                  subtitle: Text("${event.category}\n${event.location}", style: const TextStyle(color: AppColors.textSecondary)),
+                  title: Text(event.title, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+                  subtitle: Text("${event.category}\n${event.location}", style: TextStyle(color: AppColors.textSecondary)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Text("Görünürlük", style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
+                          Text("Görünürlük", style: TextStyle(fontSize: 10, color: AppColors.textSecondary)),
                           const SizedBox(height: 6),
                           SizedBox(
                             height: 24, // Keep it compact to fit the trailing slot easily
@@ -85,7 +85,7 @@ class AdminPanelScreen extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        icon: const Icon(Icons.edit, color: AppColors.secondary),
+                        icon: Icon(Icons.edit, color: AppColors.secondary),
                         onPressed: () {
                           Navigator.push(context, MaterialPageRoute(
                             builder: (context) => EventFormScreen(event: event)
@@ -99,16 +99,16 @@ class AdminPanelScreen extends StatelessWidget {
                             context: context, 
                             builder: (context) => AlertDialog(
                               backgroundColor: AppColors.surface,
-                              title: const Text("Silmek istediğinize emin misiniz?", style: TextStyle(color: AppColors.textPrimary)),
+                              title: Text("Silmek istediğinize emin misiniz?", style: TextStyle(color: AppColors.textPrimary)),
                               actions: [
-                                TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal", style: TextStyle(color: AppColors.textSecondary))),
+                                TextButton(onPressed: () => Navigator.pop(context), child: Text("İptal", style: TextStyle(color: AppColors.textSecondary))),
                                 ElevatedButton(
                                   onPressed: () {
                                     eventService.deleteEvent(event.id);
                                     Navigator.pop(context);
                                   },
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                                  child: const Text("Sil"),
+                                  child: Text("Sil"),
                                 ),
                               ],
                             ));
