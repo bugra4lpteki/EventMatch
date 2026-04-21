@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
+import '../models/carpool_model.dart';
 
 class MockEventService extends ChangeNotifier {
   MockEventService() {
@@ -503,5 +504,69 @@ class MockEventService extends ChangeNotifier {
       'score': score,
       'commonalities': commonalities,
     };
+  }
+
+  // --- Carpooling (Birlikte Git) Feature ---
+  final Map<String, List<CarpoolModel>> _carpools = {};
+
+  List<CarpoolModel> getCarpoolsForEvent(String eventId) {
+    return _carpools[eventId] ?? _getMockCarpools(eventId);
+  }
+
+  List<CarpoolModel> _getMockCarpools(String eventId) {
+    // Generate some initial mock carpools for demonstration
+    if (!_carpools.containsKey(eventId)) {
+      _carpools[eventId] = [
+        CarpoolModel(
+          id: 'cp_${eventId}_1',
+          eventId: eventId,
+          creator: UserModel(
+            id: 'u_driver_1',
+            name: 'Murat Aras',
+            avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100',
+          ),
+          type: CarpoolType.offer,
+          note: 'Kadıköy\'den geçeceğim, 3 kişilik yerim var.',
+          capacity: 3,
+          participants: [],
+        ),
+        CarpoolModel(
+          id: 'cp_${eventId}_2',
+          eventId: eventId,
+          creator: UserModel(
+            id: 'u_rider_1',
+            name: 'Selin Yıldız',
+            avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100',
+          ),
+          type: CarpoolType.request,
+          note: 'Beşiktaş civarından taksi paylaşmak isteyen?',
+        ),
+      ];
+    }
+    return _carpools[eventId]!;
+  }
+
+  void addCarpool(CarpoolModel carpool) {
+    if (!_carpools.containsKey(carpool.eventId)) {
+      _carpools[carpool.eventId] = [];
+    }
+    _carpools[carpool.eventId]!.add(carpool);
+    notifyListeners();
+  }
+
+  void joinCarpool(String eventId, String carpoolId) {
+    final list = _carpools[eventId];
+    if (list != null) {
+      final index = list.indexWhere((c) => c.id == carpoolId);
+      if (index >= 0) {
+        final cp = list[index];
+        if (cp.type == CarpoolType.offer && cp.availableSeats > 0) {
+          if (!cp.participants.any((u) => u.id == currentUser.id)) {
+            cp.participants.add(currentUser);
+            notifyListeners();
+          }
+        }
+      }
+    }
   }
 }

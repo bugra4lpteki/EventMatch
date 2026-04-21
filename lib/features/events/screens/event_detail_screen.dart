@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
@@ -10,6 +11,7 @@ import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
+import '../widgets/carpool_sheet.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final EventModel event;
@@ -113,12 +115,22 @@ class EventDetailScreen extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(Icons.location_on, color: AppColors.primary),
-                      const SizedBox(width: 8),
-                      Text(event.location, style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
-                    ],
+                  InkWell(
+                    onTap: () async {
+                      if (event.latitude != null && event.longitude != null) {
+                        final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}');
+                        if (await canLaunchUrl(url)) {
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        }
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Icon(Icons.location_on, color: AppColors.primary),
+                        const SizedBox(width: 8),
+                        Text(event.location, style: TextStyle(fontSize: 16, color: AppColors.textPrimary)),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -171,6 +183,37 @@ class EventDetailScreen extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
+
+                  const SizedBox(height: 16),
+                  // Birlikte Git (Carpool) Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => CarpoolSheet(event: event),
+                        );
+                      },
+                      icon: Icon(Icons.directions_car_outlined, color: AppColors.primary),
+                      label: Text(
+                        'BİRLİKTE GİT (ULAŞIM)',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: AppColors.primary, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 32),
@@ -272,8 +315,6 @@ class EventDetailScreen extends StatelessWidget {
                     },
                   ),
 
-                  Text("Takılmak İsteyenler", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                  const SizedBox(height: 16),
                   
                   // Attendees List
                   Consumer2<MockEventService, MockMatchService>(
@@ -289,7 +330,7 @@ class EventDetailScreen extends StatelessWidget {
                              borderRadius: BorderRadius.circular(16),
                            ),
                            child: Center(
-                             child: Text("Takılmak isteyenleri görmek için etkinliğe katılın.", 
+                             child: Text("Katılımcıları görmek için etkinliğe katılın.", 
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: AppColors.textSecondary)),
                            ),
