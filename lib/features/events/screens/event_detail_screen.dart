@@ -11,7 +11,7 @@ import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
-import '../widgets/carpool_sheet.dart';
+
 
 class EventDetailScreen extends StatelessWidget {
   final EventModel event;
@@ -185,36 +185,6 @@ class EventDetailScreen extends StatelessWidget {
                     },
                   ),
 
-                  const SizedBox(height: 16),
-                  // Birlikte Git (Carpool) Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        showModalBottomSheet(
-                          context: context,
-                          isScrollControlled: true,
-                          backgroundColor: Colors.transparent,
-                          builder: (context) => CarpoolSheet(event: event),
-                        );
-                      },
-                      icon: Icon(Icons.directions_car_outlined, color: AppColors.primary),
-                      label: Text(
-                        'BİRLİKTE GİT (ULAŞIM)',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primary,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: AppColors.primary, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                      ),
-                    ),
-                  ),
 
                   const SizedBox(height: 32),
                   // Check-in and Chat Section

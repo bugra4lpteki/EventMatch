@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:excel/excel.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
-import '../models/carpool_model.dart';
 
 class MockEventService extends ChangeNotifier {
   MockEventService() {
@@ -16,10 +16,16 @@ class MockEventService extends ChangeNotifier {
     if (name != null) currentUser.name = name;
     final age = prefs.getString('userAge');
     if (age != null) currentUser.age = age;
+    final gender = prefs.getString('userGender');
+    if (gender != null) currentUser.gender = gender;
     final aboutMe = prefs.getString('userAboutMe');
     if (aboutMe != null) currentUser.aboutMe = aboutMe;
+    final socialLinks = prefs.getStringList('userSocialLinks');
+    if (socialLinks != null) currentUser.socialLinks = socialLinks;
     final avatarUrl = prefs.getString('userAvatarUrl');
     if (avatarUrl != null) currentUser.avatarUrl = avatarUrl;
+    final avatarUrls = prefs.getStringList('userAvatarUrls');
+    if (avatarUrls != null) currentUser.avatarUrls = avatarUrls;
     final tags = prefs.getStringList('userTags');
     if (tags != null) currentUser.tags = tags;
     final pastEvents = prefs.getStringList('userPastEvents');
@@ -42,8 +48,11 @@ class MockEventService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userName', currentUser.name);
     await prefs.setString('userAge', currentUser.age ?? '');
+    await prefs.setString('userGender', currentUser.gender ?? '');
     await prefs.setString('userAboutMe', currentUser.aboutMe ?? '');
+    await prefs.setStringList('userSocialLinks', currentUser.socialLinks);
     await prefs.setString('userAvatarUrl', currentUser.avatarUrl);
+    await prefs.setStringList('userAvatarUrls', currentUser.avatarUrls);
     await prefs.setStringList('userTags', currentUser.tags);
     await prefs.setStringList('plannedEvents', currentUser.plannedEvents);
     await prefs.setStringList('userPastEvents', currentUser.pastEvents);
@@ -57,8 +66,10 @@ class MockEventService extends ChangeNotifier {
     id: 'user_1',
     name: 'Ali Rıza',
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
+    avatarUrls: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'],
     age: '26',
     aboutMe: 'Yeni insanlarla tanışmayı ve yeni etkinlikler keşfetmeyi severim.',
+    socialLinks: ['https://instagram.com/eventmatch', 'https://x.com/eventmatch'],
     tags: ['Techno', 'Kahve', 'Gaming'],
     points: 1250,
     badges: ['Sahne Tozu Yutmuş', 'Müzik Tutkunu'],
@@ -69,16 +80,24 @@ class MockEventService extends ChangeNotifier {
   void updateCurrentUser({
     required String name,
     required String age,
+    String? gender,
     required String aboutMe,
+    List<String>? socialLinks,
     required String avatarUrl,
+    List<String>? avatarUrls,
     List<String>? tags,
     List<String>? plannedEvents,
     List<String>? pastEvents,
   }) {
     currentUser.name = name;
     currentUser.age = age;
+    if (gender != null) currentUser.gender = gender;
     currentUser.aboutMe = aboutMe;
+    if (socialLinks != null) currentUser.socialLinks = socialLinks;
     currentUser.avatarUrl = avatarUrl;
+    if (avatarUrls != null) {
+      currentUser.avatarUrls = avatarUrls;
+    }
     if (tags != null) {
       currentUser.tags = tags;
     }
@@ -106,12 +125,7 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  final List<String> activityFeed = [
-    '🔥 Merve "Ahududu" oyununa bilet aldı!',
-    '🌟 Caner ilgi alanlarına "Tiyatro" ekledi.',
-    '💖 Zeynep ile yüksek eşleşme oranınız var!',
-    '🎉 Buğra "Kaç Para Bi Fön" etkinliğine bakıyor.'
-  ];
+  final List<String> activityFeed = [];
 
   List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];
   String _selectedCategory = 'Tümü';
@@ -149,6 +163,60 @@ class MockEventService extends ChangeNotifier {
       _events[index] = event;
       notifyListeners();
     }
+  }
+
+  Future<void> importEventsFromExcel(List<int> bytes) async {
+    var excel = Excel.decodeBytes(bytes);
+    for (var table in excel.tables.keys) {
+      var sheet = excel.tables[table];
+      if (sheet == null) continue;
+
+      // Skip header row
+      for (int i = 1; i < sheet.maxRows; i++) {
+        var row = sheet.row(i);
+        if (row.isEmpty) continue;
+        
+        try {
+          final title = row[0]?.value?.toString() ?? '';
+          if (title.isEmpty || title == 'null') continue;
+          
+          final category = row.length > 1 ? row[1]?.value?.toString() ?? 'Diğer' : 'Diğer';
+          final location = row.length > 2 ? row[2]?.value?.toString() ?? 'Bilinmeyen Konum' : 'Bilinmeyen Konum';
+          
+          DateTime dateTime = DateTime.now().add(const Duration(days: 7));
+          if (row.length > 3 && row[3]?.value != null) {
+            dateTime = DateTime.tryParse(row[3]!.value.toString()) ?? dateTime;
+          }
+
+          final description = row.length > 4 ? row[4]?.value?.toString() ?? '' : '';
+          final imageUrl = row.length > 5 ? row[5]?.value?.toString() ?? 'assets/images/placeholder.png' : 'assets/images/placeholder.png';
+          
+          double? lat;
+          if (row.length > 6 && row[6]?.value != null) lat = double.tryParse(row[6]!.value.toString());
+          
+          double? lng;
+          if (row.length > 7 && row[7]?.value != null) lng = double.tryParse(row[7]!.value.toString());
+
+          final newEvent = EventModel(
+            id: 'e_excel_${DateTime.now().millisecondsSinceEpoch}_$i',
+            title: title,
+            category: category == 'null' ? 'Diğer' : category,
+            location: location == 'null' ? 'Bilinmeyen Konum' : location,
+            dateTime: dateTime,
+            description: description == 'null' ? '' : description,
+            imageUrl: (imageUrl.isEmpty || imageUrl == 'null') ? 'assets/images/placeholder.png' : imageUrl,
+            latitude: lat,
+            longitude: lng,
+            attendees: [],
+          );
+          
+          _events.insert(0, newEvent);
+        } catch (e) {
+          debugPrint('Error parsing row $i: $e');
+        }
+      }
+    }
+    notifyListeners();
   }
 
   void deleteEvent(String id) {
@@ -353,7 +421,8 @@ class MockEventService extends ChangeNotifier {
   ];
 
   List<EventModel> get filteredEvents {
-    List<EventModel> activeEvents = _events.where((e) => e.isActive).toList();
+    final now = DateTime.now();
+    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now)).toList();
     
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
@@ -428,8 +497,7 @@ class MockEventService extends ChangeNotifier {
   }
 
   // Get all events
-  // Get all events
-  List<EventModel> get allEvents => [..._events];
+  List<EventModel> get allEvents => _events.where((e) => e.dateTime.isAfter(DateTime.now())).toList();
 
   bool isUserCheckedIn(String eventId) {
     return currentUser.checkedInEventId == eventId;
@@ -504,69 +572,4 @@ class MockEventService extends ChangeNotifier {
       'score': score,
       'commonalities': commonalities,
     };
-  }
-
-  // --- Carpooling (Birlikte Git) Feature ---
-  final Map<String, List<CarpoolModel>> _carpools = {};
-
-  List<CarpoolModel> getCarpoolsForEvent(String eventId) {
-    return _carpools[eventId] ?? _getMockCarpools(eventId);
-  }
-
-  List<CarpoolModel> _getMockCarpools(String eventId) {
-    // Generate some initial mock carpools for demonstration
-    if (!_carpools.containsKey(eventId)) {
-      _carpools[eventId] = [
-        CarpoolModel(
-          id: 'cp_${eventId}_1',
-          eventId: eventId,
-          creator: UserModel(
-            id: 'u_driver_1',
-            name: 'Murat Aras',
-            avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100',
-          ),
-          type: CarpoolType.offer,
-          note: 'Kadıköy\'den geçeceğim, 3 kişilik yerim var.',
-          capacity: 3,
-          participants: [],
-        ),
-        CarpoolModel(
-          id: 'cp_${eventId}_2',
-          eventId: eventId,
-          creator: UserModel(
-            id: 'u_rider_1',
-            name: 'Selin Yıldız',
-            avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100',
-          ),
-          type: CarpoolType.request,
-          note: 'Beşiktaş civarından taksi paylaşmak isteyen?',
-        ),
-      ];
-    }
-    return _carpools[eventId]!;
-  }
-
-  void addCarpool(CarpoolModel carpool) {
-    if (!_carpools.containsKey(carpool.eventId)) {
-      _carpools[carpool.eventId] = [];
-    }
-    _carpools[carpool.eventId]!.add(carpool);
-    notifyListeners();
-  }
-
-  void joinCarpool(String eventId, String carpoolId) {
-    final list = _carpools[eventId];
-    if (list != null) {
-      final index = list.indexWhere((c) => c.id == carpoolId);
-      if (index >= 0) {
-        final cp = list[index];
-        if (cp.type == CarpoolType.offer && cp.availableSeats > 0) {
-          if (!cp.participants.any((u) => u.id == currentUser.id)) {
-            cp.participants.add(currentUser);
-            notifyListeners();
-          }
-        }
-      }
-    }
-  }
-}
+  }}

@@ -6,10 +6,12 @@ import '../../events/screens/explore_screen.dart';
 import '../../events/screens/requests_screen.dart';
 import '../../events/screens/swipe_screen.dart';
 import '../../profile/screens/profile_screen.dart';
+import '../../profile/screens/settings_screen.dart';
 import '../../messages/screens/messages_screen.dart';
 import '../../../core/theme/theme_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/screens/event_map_screen.dart';
+import '../../../core/widgets/custom_app_background.dart';
 
 class RadarIconWidget extends StatefulWidget {
   const RadarIconWidget({super.key});
@@ -230,9 +232,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: Text('EventMatch', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+        return CustomAppBackground(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              backgroundColor: AppColors.background.withOpacity(0.85),
+              elevation: 0,
+              title: Text('EventMatch', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
             actions: [
               IconButton(
                 icon: const Icon(Icons.map_outlined),
@@ -244,6 +250,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
               Center(child: RadarIconWidget()),
+              if (_currentIndex == 4)
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                ),
             ],
           ),
           body: _pages[_currentIndex],
@@ -254,7 +270,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: BottomNavigationBar(
               type: BottomNavigationBarType.fixed,
-              backgroundColor: AppColors.background,
+              backgroundColor: AppColors.background.withOpacity(0.85),
+              elevation: 0,
               selectedItemColor: AppColors.primary,
               unselectedItemColor: AppColors.textSecondary,
               currentIndex: _currentIndex,
@@ -310,6 +327,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
+        ),
         );
       },
     );

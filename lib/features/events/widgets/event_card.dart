@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
-import 'candy_machine_avatars.dart';
 
 class EventCard extends StatelessWidget {
   final EventModel event;
@@ -34,20 +33,18 @@ class EventCard extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Stack(
-                children: [
-                  Hero(
+          child: AspectRatio(
+            aspectRatio: 3 / 4,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Hero(
                     tag: 'event_image_${event.id}',
                     child: event.imageUrl.startsWith('http')
                         ? Image.network(
                             event.imageUrl,
-                            height: 140,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(
-                              height: 140,
                               color: AppColors.surface,
                               child: Center(
                                 child: Icon(Icons.broken_image, color: AppColors.primary, size: 32),
@@ -58,16 +55,14 @@ class EventCard extends StatelessWidget {
                               return Shimmer.fromColors(
                                 baseColor: AppColors.surface,
                                 highlightColor: AppColors.primary.withOpacity(0.3),
-                                child: Container(height: 140, color: Colors.white),
+                                child: Container(color: Colors.white),
                               );
                             },
                           )
                         : Image.asset(
                             event.imageUrl,
-                            height: 140,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) => Container(
-                              height: 140,
                               color: AppColors.surface,
                               child: Center(
                                 child: Icon(Icons.broken_image, color: AppColors.primary, size: 32),
@@ -75,48 +70,53 @@ class EventCard extends StatelessWidget {
                             ),
                           ),
                   ),
-                  if (event.isPopular)
-                    Positioned(
-                      top: 12,
-                      left: 12,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(colors: [Colors.orange, Colors.deepOrange]),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.star, color: Colors.white, size: 10),
-                            SizedBox(width: 4),
-                            Text(
-                              'POPÜLER',
-                              style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 40,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Colors.black.withOpacity(0.6)],
-                        ),
+                ),
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
+                        stops: const [0.5, 1.0],
                       ),
                     ),
                   ),
+                ),
+                if (event.isPopular)
                   Positioned(
-                    bottom: 8,
-                    right: 12,
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [Colors.orange, Colors.deepOrange]),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.star, color: Colors.white, size: 10),
+                          SizedBox(width: 4),
+                          Text(
+                            'POPÜLER',
+                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.flash_on, color: Colors.amber, size: 14),
                         const SizedBox(width: 4),
@@ -127,91 +127,80 @@ class EventCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  // Attendee "Candy Machine" Avatars - Animated
-                  Positioned(
-                    top: 10,
-                    left: 140,
-                    right: 10,
-                    bottom: 35,
-                    child: CandyMachineAvatars(attendees: event.attendees),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.all(12.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            event.title,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: AppColors.secondary.withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.secondary.withOpacity(0.5)),
-                              ),
-                              child: Text(
-                                event.category,
-                                style: TextStyle(
-                                  color: AppColors.secondary,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 14),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            event.location,
-                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined, color: AppColors.textSecondary, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          dateStr,
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ),
-            ],
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  right: 16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              event.title,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.secondary.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              event.category,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(Icons.location_on_outlined, color: Colors.white70, size: 16),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              event.location,
+                              style: const TextStyle(color: Colors.white70, fontSize: 13),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_outlined, color: Colors.white70, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            dateStr,
+                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

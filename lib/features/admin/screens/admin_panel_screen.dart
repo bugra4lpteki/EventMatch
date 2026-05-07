@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart' as fp;
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import 'event_form_screen.dart';
@@ -12,6 +13,28 @@ class AdminPanelScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text('Yönetim Paneli', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.file_upload, color: AppColors.primary),
+            tooltip: 'Excel\'den Yükle',
+            onPressed: () async {
+              fp.FilePickerResult? result = await fp.FilePicker.pickFiles(
+                type: fp.FileType.custom,
+                allowedExtensions: ['xlsx'],
+                withData: true,
+              );
+
+              if (result != null && result.files.single.bytes != null) {
+                if (context.mounted) {
+                  context.read<MockEventService>().importEventsFromExcel(result.files.single.bytes!);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Etkinlikler başarıyla eklendi!')),
+                  );
+                }
+              }
+            },
+          ),
+        ],
       ),
       body: Consumer<MockEventService>(
         builder: (context, eventService, child) {

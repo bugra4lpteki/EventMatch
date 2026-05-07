@@ -130,7 +130,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
             else
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 12.0),
                   child: AppinioSwiper(
                     key: ValueKey(isDoubleDate), // Rebuild swiper on mode change
                     controller: _swiperController,
@@ -149,23 +149,49 @@ class _SwipeScreenState extends State<SwipeScreen> {
               ),
             // Action Buttons
             Padding(
-              padding: const EdgeInsets.only(bottom: 32.0),
+              padding: const EdgeInsets.only(bottom: 32.0, top: 8.0, left: 16.0, right: 16.0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  _buildActionButton(
+                    icon: Icons.replay,
+                    color: Colors.amber,
+                    onPressed: () => _swiperController.unswipe(),
+                    size: 24,
+                    padding: 12,
+                  ),
                   _buildActionButton(
                     icon: Icons.close,
                     color: Colors.redAccent,
-                    onPressed: () {
-                      _swiperController.swipeLeft();
-                    },
+                    onPressed: () => _swiperController.swipeLeft(),
+                    size: 38,
+                    padding: 18,
+                  ),
+                  _buildActionButton(
+                    icon: Icons.star,
+                    color: Colors.blueAccent,
+                    onPressed: () => _swiperController.swipeUp(),
+                    size: 28,
+                    padding: 14,
                   ),
                   _buildActionButton(
                     icon: Icons.favorite,
                     color: Colors.greenAccent,
+                    onPressed: () => _swiperController.swipeRight(),
+                    size: 38,
+                    padding: 18,
+                  ),
+                  _buildActionButton(
+                    icon: Icons.bolt,
+                    color: Colors.purpleAccent,
                     onPressed: () {
-                      _swiperController.swipeRight();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Profiliniz 30 dakika boyunca öne çıkarıldı! ⚡')),
+                      );
                     },
+                    size: 24,
+                    padding: 12,
                   ),
                 ],
               ),
@@ -436,6 +462,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
     required IconData icon,
     required Color color,
     required VoidCallback onPressed,
+    double size = 36,
+    double padding = 16,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -443,16 +471,16 @@ class _SwipeScreenState extends State<SwipeScreen> {
         color: AppColors.surface,
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.2),
-            blurRadius: 10,
+            color: color.withOpacity(0.3),
+            blurRadius: size / 2,
             spreadRadius: 2,
           ),
         ],
       ),
       child: IconButton(
-        icon: Icon(icon, color: color, size: 36),
+        icon: Icon(icon, color: color, size: size),
         onPressed: onPressed,
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(padding),
       ),
     );
   }
