@@ -13,8 +13,15 @@ import '../../events/models/user_model.dart';
 import 'settings_screen.dart';
 import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  int _currentPhotoIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +41,7 @@ class ProfileScreen extends StatelessWidget {
     final recentVenues = pastEvents.take(5).toList();
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: CustomScrollView(
         slivers: [
           // ── Hero Profile Card ──────────────────────────────────────────
@@ -50,37 +57,53 @@ class ProfileScreen extends StatelessWidget {
                     children: [
                       // Background images (PageView)
                       if (displayPhotos.isEmpty)
-                        _defaultHeroBg()
+                        _defaultHeroBg(context)
                       else
                         PageView.builder(
+                          scrollBehavior: ScrollConfiguration.of(context).copyWith(
+                            dragDevices: {
+                              PointerDeviceKind.touch,
+                              PointerDeviceKind.mouse,
+                              PointerDeviceKind.trackpad,
+                            },
+                          ),
                           itemCount: displayPhotos.length,
+                          onPageChanged: (index) {
+                            setState(() {
+                              _currentPhotoIndex = index;
+                            });
+                          },
                           itemBuilder: (context, index) {
                             final photoUrl = displayPhotos[index];
-                            if (photoUrl.isEmpty) return _defaultHeroBg();
+                            if (photoUrl.isEmpty) return _defaultHeroBg(context);
                             if (photoUrl.startsWith('http') || kIsWeb) {
-                              return Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg());
+                              return Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg(context));
                             } else {
-                              return Image.file(File(photoUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg());
+                              return Image.file(File(photoUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg(context));
                             }
                           },
                         ),
                       // Top shadow
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.center,
-                            colors: [Colors.black38, Colors.transparent],
+                      IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.center,
+                              colors: [Theme.of(context).scaffoldBackgroundColor.withOpacity(0.6), Colors.transparent],
+                            ),
                           ),
                         ),
                       ),
                       // Bottom shadow
-                      Container(
-                        decoration: const BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.center,
-                            colors: [Colors.black54, Colors.transparent],
+                      IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.center,
+                              colors: [Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8), Colors.transparent],
+                            ),
                           ),
                         ),
                       ),
@@ -90,19 +113,23 @@ class ProfileScreen extends StatelessWidget {
                           bottom: 16,
                           left: 0,
                           right: 0,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: List.generate(displayPhotos.length, (index) {
-                              return Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 4),
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.8),
-                                  shape: BoxShape.circle,
-                                ),
-                              );
-                            }),
+                          child: IgnorePointer(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(displayPhotos.length, (index) {
+                                final isActive = _currentPhotoIndex == index;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  width: isActive ? 24 : 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: isActive ? AppColors.textPrimary : AppColors.textPrimary.withOpacity(0.3),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                );
+                              }),
+                            ),
                           ),
                         ),
                     ],
@@ -137,8 +164,8 @@ class ProfileScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     user.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
+                                    style: TextStyle(
+                                      color: AppColors.textPrimary,
                                       fontSize: 24,
                                       fontWeight: FontWeight.bold,
                                       letterSpacing: -0.4,
@@ -161,7 +188,7 @@ class ProfileScreen extends StatelessWidget {
                               Text(
                                 '${user.age ?? '26'} • İstanbul',
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: AppColors.textPrimary.withOpacity(0.7),
                                   fontSize: 14,
                                 ),
                               ),
@@ -204,7 +231,7 @@ class ProfileScreen extends StatelessWidget {
                     child: Text(
                       user.aboutMe!,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.9),
+                        color: AppColors.textPrimary.withOpacity(0.9),
                         fontSize: 15,
                         height: 1.4,
                       ),
@@ -244,12 +271,12 @@ class ProfileScreen extends StatelessWidget {
                 ],
 
                 // ── Popüler Mekanlar ve Etkinlikler ───────────────────────────────────
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Text(
                     'Popüler Mekanlar ve Etkinlikler',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
                       letterSpacing: -0.2,
@@ -357,10 +384,10 @@ class ProfileScreen extends StatelessWidget {
                                       color: radarService.isRadarActive ? AppColors.primary : Colors.grey,
                                     ),
                                     const SizedBox(width: 10),
-                                    const Text(
+                                    Text(
                                       'Konum Radarı',
                                       style: TextStyle(
-                                        color: Colors.white,
+                                        color: AppColors.textPrimary,
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -378,7 +405,7 @@ class ProfileScreen extends StatelessWidget {
                               const SizedBox(height: 16),
                               Text(
                                 'Tarama Yarıçapı: ${radarService.radarDistanceKm.toInt()} km',
-                                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                style: TextStyle(color: AppColors.textPrimary.withOpacity(0.7), fontSize: 14),
                               ),
                               Slider(
                                 value: radarService.radarDistanceKm,
@@ -429,16 +456,17 @@ class ProfileScreen extends StatelessWidget {
 
   Widget _getSocialIcon(String url) {
     final lUrl = url.toLowerCase();
-    if (lUrl.contains('instagram')) return const FaIcon(FontAwesomeIcons.instagram, color: Colors.white70, size: 22);
-    if (lUrl.contains('twitter') || lUrl.contains('x.com')) return const FaIcon(FontAwesomeIcons.xTwitter, color: Colors.white70, size: 22);
-    if (lUrl.contains('linkedin')) return const FaIcon(FontAwesomeIcons.linkedin, color: Colors.white70, size: 22);
-    if (lUrl.contains('tiktok')) return const FaIcon(FontAwesomeIcons.tiktok, color: Colors.white70, size: 22);
-    if (lUrl.contains('facebook')) return const FaIcon(FontAwesomeIcons.facebook, color: Colors.white70, size: 22);
-    if (lUrl.contains('youtube')) return const FaIcon(FontAwesomeIcons.youtube, color: Colors.white70, size: 22);
-    if (lUrl.contains('github')) return const FaIcon(FontAwesomeIcons.github, color: Colors.white70, size: 22);
-    if (lUrl.contains('snapchat')) return const FaIcon(FontAwesomeIcons.snapchat, color: Colors.white70, size: 22);
-    if (lUrl.contains('spotify')) return const FaIcon(FontAwesomeIcons.spotify, color: Colors.white70, size: 22);
-    return const FaIcon(FontAwesomeIcons.link, color: Colors.white70, size: 22);
+    final iconColor = AppColors.textPrimary.withOpacity(0.7);
+    if (lUrl.contains('instagram')) return FaIcon(FontAwesomeIcons.instagram, color: iconColor, size: 22);
+    if (lUrl.contains('twitter') || lUrl.contains('x.com')) return FaIcon(FontAwesomeIcons.xTwitter, color: iconColor, size: 22);
+    if (lUrl.contains('linkedin')) return FaIcon(FontAwesomeIcons.linkedin, color: iconColor, size: 22);
+    if (lUrl.contains('tiktok')) return FaIcon(FontAwesomeIcons.tiktok, color: iconColor, size: 22);
+    if (lUrl.contains('facebook')) return FaIcon(FontAwesomeIcons.facebook, color: iconColor, size: 22);
+    if (lUrl.contains('youtube')) return FaIcon(FontAwesomeIcons.youtube, color: iconColor, size: 22);
+    if (lUrl.contains('github')) return FaIcon(FontAwesomeIcons.github, color: iconColor, size: 22);
+    if (lUrl.contains('snapchat')) return FaIcon(FontAwesomeIcons.snapchat, color: iconColor, size: 22);
+    if (lUrl.contains('spotify')) return FaIcon(FontAwesomeIcons.spotify, color: iconColor, size: 22);
+    return FaIcon(FontAwesomeIcons.link, color: iconColor, size: 22);
   }
 
   String _getSocialPrefix(String url) {
@@ -455,11 +483,14 @@ class ProfileScreen extends StatelessWidget {
     return '';
   }
 
-  static Widget _defaultHeroBg() {
+  Widget _defaultHeroBg(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF1A0A2E), Color(0xFF0D0D0D)],
+          colors: [
+            AppColors.primary.withOpacity(0.15),
+            Theme.of(context).scaffoldBackgroundColor,
+          ],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -528,8 +559,8 @@ class _VenueCard extends StatelessWidget {
               children: [
                 Text(
                   event.title,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
                   ),

@@ -35,7 +35,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _aboutController = TextEditingController(text: user.aboutMe ?? '');
     _tagsController = TextEditingController(text: user.tags.join(', '));
     _socialControllers = user.socialLinks.map((link) => TextEditingController(text: link)).toList();
-    _selectedGender = user.gender;
+    _selectedGender = ['Kadın', 'Erkek', 'Belirtmek İstemiyorum'].contains(user.gender) ? user.gender : null;
     if (user.avatarUrls.isNotEmpty) {
       _avatarPaths = List.from(user.avatarUrls);
     } else if (user.avatarUrl.isNotEmpty) {
@@ -99,43 +99,76 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     showDialog(
       context: context,
       builder: (context) {
+        String searchQuery = '';
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final filteredEvents = allEvents.where((e) {
+              return e.title.toLowerCase().contains(searchQuery) ||
+                     e.category.toLowerCase().contains(searchQuery);
+            }).toList();
+
             return AlertDialog(
               backgroundColor: AppColors.surface,
-              title: const Text('Geçmiş Etkinlikleri Seç', style: TextStyle(color: Colors.white)),
+              title: Text('Geçmiş Etkinlikleri Seç', style: TextStyle(color: AppColors.textPrimary)),
               content: SizedBox(
                 width: double.maxFinite,
                 height: 400,
-                child: ListView.builder(
-                  itemCount: allEvents.length,
-                  itemBuilder: (context, index) {
-                    final event = allEvents[index];
-                    final isSelected = _selectedPastEvents.contains(event.id);
-                    return CheckboxListTile(
-                      activeColor: AppColors.primary,
-                      checkColor: Colors.black,
-                      title: Text(event.title, style: const TextStyle(color: Colors.white)),
-                      subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary)),
-                      value: isSelected,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Etkinlik Ara...',
+                        hintStyle: TextStyle(color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      ),
+                      style: TextStyle(color: AppColors.textPrimary),
                       onChanged: (val) {
                         setDialogState(() {
-                          if (val == true) {
-                            _selectedPastEvents.add(event.id);
-                          } else {
-                            _selectedPastEvents.remove(event.id);
-                          }
+                          searchQuery = val.toLowerCase();
                         });
-                        setState(() {});
                       },
-                    );
-                  },
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filteredEvents.length,
+                        itemBuilder: (context, index) {
+                          final event = filteredEvents[index];
+                          final isSelected = _selectedPastEvents.contains(event.id);
+                          return CheckboxListTile(
+                            activeColor: AppColors.primary,
+                            checkColor: Colors.black,
+                            title: Text(event.title, style: TextStyle(color: AppColors.textPrimary)),
+                            subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary)),
+                            value: isSelected,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                if (val == true) {
+                                  _selectedPastEvents.add(event.id);
+                                } else {
+                                  _selectedPastEvents.remove(event.id);
+                                }
+                              });
+                              setState(() {});
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('TAMAM', style: TextStyle(color: Colors.white)),
+                  child: Text('TAMAM', style: TextStyle(color: AppColors.textPrimary)),
                 ),
               ],
             );
@@ -150,10 +183,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Profili Düzenle', style: TextStyle(color: Colors.white)),
+        title: Text('Profili Düzenle', style: TextStyle(color: AppColors.textPrimary)),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: AppColors.textPrimary),
         actions: [
           IconButton(
             icon: const Icon(Icons.check),
@@ -241,11 +274,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     value: _selectedGender,
                     hint: const Text('Cinsiyet Seçin', style: TextStyle(color: Colors.grey)),
                     isExpanded: true,
-                    icon: const Icon(Icons.arrow_drop_down, color: Colors.white),
+                    icon: Icon(Icons.arrow_drop_down, color: AppColors.textPrimary),
                     items: ['Kadın', 'Erkek', 'Belirtmek İstemiyorum'].map((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
-                        child: Text(value, style: const TextStyle(color: Colors.white)),
+                        child: Text(value, style: TextStyle(color: AppColors.textPrimary)),
                       );
                     }).toList(),
                     onChanged: (val) {
@@ -326,9 +359,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     children: [
                       Text(
                         _selectedPastEvents.isEmpty ? 'Etkinlik Seç' : '${_selectedPastEvents.length} etkinlik seçildi',
-                        style: const TextStyle(color: Colors.white),
+                        style: TextStyle(color: AppColors.textPrimary),
                       ),
-                      const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+                      Icon(Icons.arrow_forward_ios, color: AppColors.textPrimary, size: 16),
                     ],
                   ),
                 ),
@@ -359,7 +392,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxLines: maxLines,
         maxLength: maxLength,
         keyboardType: keyboardType,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.grey),
