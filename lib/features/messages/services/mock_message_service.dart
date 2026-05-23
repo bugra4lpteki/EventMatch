@@ -1,155 +1,120 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
-import '../../events/models/event_model.dart';
 import '../../events/services/mock_event_service.dart';
 
 class MockMessageService extends ChangeNotifier {
   final MockEventService _eventService;
+  final SupabaseClient _supabase = Supabase.instance.client;
+  
+  String get currentUserId => _supabase.auth.currentUser?.id ?? 'user_1';
   
   MockMessageService(this._eventService) {
-    _initializeMockData();
+    _loadChatsFromSupabase();
   }
 
-  final String currentUserId = 'user_1'; // Assuming logged in user is user_1
-  
   List<ChatModel> _chats = [];
 
-  List<ChatModel> get individualChats => 
-      _chats.where((c) => !c.isEventBased).toList();
+  List<ChatModel> get individualChats => _chats;
+  List<ChatModel> get eventChats => []; // Or filter based on your needs
 
-  List<ChatModel> get eventChats => 
-      _chats.where((c) => c.isEventBased).toList();
+  Future<void> _loadChatsFromSupabase() async {
+    try {
+      if (_supabase.auth.currentUser == null) return;
 
-  void _initializeMockData() {
-    // Some dummy users
-    final u2 = UserModel(id: 'u2', name: 'Ayşe Yılmaz', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100', age: '24', aboutMe: 'Sahne sanatları aşığı!', tags: ['Tiyatro', 'Müzikal']);
-    final u3 = UserModel(id: 'u3', name: 'Caner Demir', avatarUrl: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=100', age: '28', aboutMe: 'Tiyatro candır!', tags: ['Stand-up', 'Kahve', 'Gezgin']);
-    final u4 = UserModel(id: 'u4', name: 'Zeynep Kaya', avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100', age: '27', aboutMe: 'Gülmeyi çok seviyorum.', tags: ['Sinema', 'Yoga', 'Gece Hayatı']);
+      // 1. Get all matches for this user
+      final matchesRes = await _supabase.from('matches')
+          .select('*, messages(*)')
+          .eq('status', 'matched')
+          .or('user_id_1.eq.$currentUserId,user_id_2.eq.$currentUserId');
 
-    // Fetch an event from the event service safely (if exists)
-    final allAdminEvents = _eventService.getAdminEvents();
-    final ahududuEvent = allAdminEvents.firstWhere(
-      (e) => e.title.contains('Ahududu'), 
-      orElse: () => EventModel(id: 'dummy', title: 'Test Etkinlik', category: 'Tiyatro', location: 'X', dateTime: DateTime.now(), description: 'Y', imageUrl: 'assets/images/ahududu.jpeg'),
-    );
+      _chats.clear();
 
-    final kacParaEvent = allAdminEvents.firstWhere(
-      (e) => e.title.contains('Kaç Para'), 
-      orElse: () => EventModel(id: 'dummy2', title: 'Test Etkinlik 2', category: 'Tiyatro', location: 'X', dateTime: DateTime.now(), description: 'Y', imageUrl: 'assets/images/kac_para_bi_fon.jpeg'),
-    );
+      for (var match in matchesRes) {
+        final matchId = match['id'];
+        final otherUserId = match['user_id_1'] == currentUserId ? match['user_id_2'] : match['user_id_1'];
+        final eventId = match['event_id'];
 
-    _chats = [
-      // Individual Chat
-      ChatModel(
-        id: 'chat_1',
-        participant: u3,
-        isEventBased: false,
-        unreadCount: 1,
-        messages: [
-          MessageModel(id: 'm1', senderId: 'u3', text: 'Selam! Naber?', timestamp: DateTime.now().subtract(const Duration(minutes: 40))),
-          MessageModel(id: 'm2', senderId: currentUserId, text: 'İyidir senden?', timestamp: DateTime.now().subtract(const Duration(minutes: 35))),
-          MessageModel(id: 'm3', senderId: 'u3', text: 'Ben de iyiyim, hafta sonu planın var mı?', timestamp: DateTime.now().subtract(const Duration(minutes: 5))),
-        ],
-      ),
-      // Event-based Chat 1
-      ChatModel(
-        id: 'chat_2',
-        participant: u2,
-        isEventBased: true,
-        relatedEvent: ahududuEvent,
-        unreadCount: 0,
-        messages: [
-          MessageModel(id: 'm1', senderId: 'u2', text: 'Ahududu oyununa ben de bilet aldım, çok heyecanlıyım!', timestamp: DateTime.now().subtract(const Duration(days: 1))),
-          MessageModel(id: 'm2', senderId: currentUserId, text: 'Evet ben de! Belki fuayede karşılaşırız.', timestamp: DateTime.now().subtract(const Duration(hours: 2))),
-        ],
-      ),
-      // Event-based Chat 2
-      ChatModel(
-        id: 'chat_3',
-        participant: u4,
-        isEventBased: true,
-        relatedEvent: kacParaEvent,
-        unreadCount: 2,
-        messages: [
-          MessageModel(id: 'm1', senderId: 'u4', text: 'Merhaba, bu etkinliğe yalnız mı gidiyorsun?', timestamp: DateTime.now().subtract(const Duration(minutes: 10))),
-          MessageModel(id: 'm2', senderId: 'u4', text: 'Öncesinde kahve içmek istersin belki diye yazdım 😊', timestamp: DateTime.now().subtract(const Duration(minutes: 9))),
-        ],
-      ),
-    ];
-    
-    _loadPrefs();
-  }
+        // Get other user's basic info (Assuming you don't have a profiles table joined yet, we mock it)
+        // In reality: final profile = await _supabase.from('profiles').select().eq('id', otherUserId).single();
+        final participant = UserModel(
+          id: otherUserId,
+          name: 'Eşleşme $otherUserId', // Replace with real name from profile
+          avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
+        );
 
-  Future<void> _loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final messagesJson = prefs.getStringList('savedMessages');
-    if (messagesJson != null) {
-      for (var str in messagesJson) {
-        try {
-          final map = jsonDecode(str);
-          final chatId = map['chatId'];
-          final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-          if (chatIndex >= 0) {
-            // Sadece daha önce eklenmemişse ekle (id kontrolü)
-            final exists = _chats[chatIndex].messages.any((m) => m.id == map['id']);
-            if (!exists) {
-              _chats[chatIndex].messages.add(MessageModel(
-                id: map['id'],
-                senderId: map['senderId'],
-                text: map['text'],
-                timestamp: DateTime.parse(map['timestamp']),
-              ));
-            }
+        final event = _eventService.getEventById(eventId);
+
+        List<MessageModel> messages = [];
+        if (match['messages'] != null) {
+          for (var msg in match['messages']) {
+            messages.add(MessageModel(
+              id: msg['id'],
+              senderId: msg['sender_id'],
+              text: msg['content'],
+              timestamp: DateTime.parse(msg['created_at']),
+            ));
           }
-        } catch(e) {
-          // ignore parsing error
+          // Sort messages by time
+          messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         }
+
+        // Timer Logic
+        DateTime? expiresAt;
+        if (match['expires_at'] != null) {
+          expiresAt = DateTime.parse(match['expires_at']);
+        }
+
+        _chats.add(ChatModel(
+          id: matchId,
+          participant: participant,
+          isEventBased: true,
+          relatedEvent: event,
+          unreadCount: 0, // Calculate properly if needed
+          messages: messages,
+        ));
       }
-      
-      // Sohbetleri en son mesaja göre sırala
-      _chats.sort((a,b) {
+
+      // Sort chats by latest message
+      _chats.sort((a, b) {
          final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);
          final bTime = b.messages.isNotEmpty ? b.messages.last.timestamp : DateTime(2000);
          return bTime.compareTo(aTime);
       });
-      
+
       notifyListeners();
+    } catch (e) {
+      debugPrint('Load Chats Error: $e');
     }
   }
 
-  Future<void> _saveMessage(String chatId, MessageModel msg) async {
-    final prefs = await SharedPreferences.getInstance();
-    final messagesJson = prefs.getStringList('savedMessages') ?? [];
-    messagesJson.add(jsonEncode({
-      'chatId': chatId,
-      'id': msg.id,
-      'senderId': msg.senderId,
-      'text': msg.text,
-      'timestamp': msg.timestamp.toIso8601String(),
-    }));
-    await prefs.setStringList('savedMessages', messagesJson);
-  }
+  Future<void> sendMessage(String chatId, String text) async {
+    try {
+      // Insert message
+      await _supabase.from('messages').insert({
+        'match_id': chatId,
+        'sender_id': currentUserId,
+        'content': text
+      });
 
-  void sendMessage(String chatId, String text) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-    if (chatIndex >= 0) {
-      final newMessage = MessageModel(
-        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-        senderId: currentUserId,
-        text: text,
-        timestamp: DateTime.now(),
-      );
-      _chats[chatIndex].messages.add(newMessage);
-      
-      // Move this chat to the top
-      final chat = _chats.removeAt(chatIndex);
-      _chats.insert(0, chat);
-      
-      _saveMessage(chatId, newMessage);
-      notifyListeners();
+      // Check if this is the first message to trigger the 10-minute timer
+      final chatIndex = _chats.indexWhere((c) => c.id == chatId);
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        if (chat.messages.isEmpty) {
+          // It's the first message! Set expires_at
+          final expiresAt = DateTime.now().add(const Duration(minutes: 10));
+          await _supabase.from('matches').update({
+            'expires_at': expiresAt.toIso8601String()
+          }).eq('id', chatId);
+        }
+      }
+
+      // Reload chats to get the latest message (or just add locally for speed)
+      _loadChatsFromSupabase();
+    } catch (e) {
+      debugPrint('Send Message Error: $e');
     }
   }
 

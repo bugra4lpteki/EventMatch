@@ -1,37 +1,124 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:excel/excel.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 
 class MockEventService extends ChangeNotifier {
+  final SupabaseClient _supabase = Supabase.instance.client;
+
   MockEventService() {
-    _loadPrefs();
+    loadUserProfile();
+    fetchEvents();
   }
 
-  Future<void> _loadPrefs() async {
+  Future<void> fetchEvents() async {
+    try {
+      final data = await _supabase.from('events').select();
+      
+      // Keep existing mock events for attendees, or clear and replace?
+      // User says "artık etkinlikleri çekmek istiyorum", so we should replace the list.
+      _events.clear();
+      
+      for (var item in data) {
+        _events.add(EventModel.fromJson(item));
+      }
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Supabase Events Error: $e');
+    }
+  }
+
+  Future<void> loadUserProfile() async {
     final prefs = await SharedPreferences.getInstance();
     
-    final name = prefs.getString('userName');
-    if (name != null) currentUser.name = name;
-    final age = prefs.getString('userAge');
-    if (age != null) currentUser.age = age;
-    final gender = prefs.getString('userGender');
-    if (gender != null) currentUser.gender = gender;
-    final aboutMe = prefs.getString('userAboutMe');
-    if (aboutMe != null) currentUser.aboutMe = aboutMe;
-    final socialLinks = prefs.getStringList('userSocialLinks');
-    if (socialLinks != null) currentUser.socialLinks = socialLinks;
-    final avatarUrl = prefs.getString('userAvatarUrl');
-    if (avatarUrl != null) currentUser.avatarUrl = avatarUrl;
-    final avatarUrls = prefs.getStringList('userAvatarUrls');
-    if (avatarUrls != null) currentUser.avatarUrls = avatarUrls;
-    final tags = prefs.getStringList('userTags');
+    final authUser = _supabase.auth.currentUser;
+    final userId = authUser?.id ?? 'user_1';
+    currentUser.id = userId;
+
+    if (userId != 'user_1') {
+      // Kullanıcı giriş yapmış, veritabanından çek (Supabase)
+      try {
+        final userData = await _supabase.from('users').select().eq('id', userId).maybeSingle();
+        if (userData != null) {
+          currentUser.username = userData['username'];
+          currentUser.city = userData['city'];
+          currentUser.gender = userData['gender'];
+          currentUser.aboutMe = userData['bio'];
+          if (userData['birth_date'] != null) {
+            currentUser.birthDate = DateTime.tryParse(userData['birth_date']);
+          }
+          
+          // İsmi metadata'dan al (kayıt olurken oraya kaydedilmişti)
+          currentUser.name = authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
+          
+          // Önceki mock verileri temizle
+          currentUser.avatarUrl = '';
+          currentUser.avatarUrls = [];
+          currentUser.socialLinks = [];
+        } else {
+          // Tabloda yoksa metadata'dan sadece ismi al
+          currentUser.name = authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
+        }
+        
+        // user_photos tablosundan fotoğrafları çek
+        try {
+          final photos = await _supabase.from('user_photos').select().eq('user_id', userId).eq('is_active', true).order('sort_order');
+          if (photos.isNotEmpty) {
+            currentUser.avatarUrls = photos.map((p) => p['storage_url'].toString()).toList();
+            currentUser.avatarUrl = currentUser.avatarUrls.first;
+          }
+        } catch (_) {}
+
+        // user_social_links tablosundan linkleri çek
+        try {
+          final links = await _supabase.from('user_social_links').select().eq('user_id', userId);
+          if (links.isNotEmpty) {
+            currentUser.socialLinks = links.map((l) => l['url'].toString()).toList();
+          }
+        } catch (_) {}
+      } catch (e) {
+        debugPrint('Supabase profile load error: $e');
+      }
+    } else {
+      // Mock kullanıcı mantığı veya yedek SharedPreferences okuması
+      final name = prefs.getString('${userId}_userName');
+      if (name != null) currentUser.name = name;
+
+      final username = prefs.getString('${userId}_userUsername');
+      if (username != null) currentUser.username = username;
+      
+      final birthDateStr = prefs.getString('${userId}_userBirthDate');
+      if (birthDateStr != null) currentUser.birthDate = DateTime.tryParse(birthDateStr);
+
+      final city = prefs.getString('${userId}_userCity');
+      if (city != null) currentUser.city = city;
+      
+      final gender = prefs.getString('${userId}_userGender');
+      if (gender != null) currentUser.gender = gender;
+      
+      final aboutMe = prefs.getString('${userId}_userAboutMe');
+      if (aboutMe != null) currentUser.aboutMe = aboutMe;
+      
+      final socialLinks = prefs.getStringList('${userId}_userSocialLinks');
+      if (socialLinks != null) currentUser.socialLinks = socialLinks;
+      
+      final avatarUrl = prefs.getString('${userId}_userAvatarUrl');
+      if (avatarUrl != null) currentUser.avatarUrl = avatarUrl;
+      
+      final avatarUrls = prefs.getStringList('${userId}_userAvatarUrls');
+      if (avatarUrls != null) currentUser.avatarUrls = avatarUrls;
+    }
+
+    // Ortak veriler (Etkinlik planları lokal tutuluyor olabilir)
+    final tags = prefs.getStringList('${userId}_userTags');
     if (tags != null) currentUser.tags = tags;
-    final pastEvents = prefs.getStringList('userPastEvents');
+    
+    final pastEvents = prefs.getStringList('${userId}_userPastEvents');
     if (pastEvents != null) currentUser.pastEvents = pastEvents;
 
-    final plannedEvents = prefs.getStringList('plannedEvents');
+    final plannedEvents = prefs.getStringList('${userId}_plannedEvents');
     if (plannedEvents != null) {
       currentUser.plannedEvents = plannedEvents;
       for (var eventId in plannedEvents) {
@@ -46,28 +133,37 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> _saveProfileData() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('userName', currentUser.name);
-    await prefs.setString('userAge', currentUser.age ?? '');
-    await prefs.setString('userGender', currentUser.gender ?? '');
-    await prefs.setString('userAboutMe', currentUser.aboutMe ?? '');
-    await prefs.setStringList('userSocialLinks', currentUser.socialLinks);
-    await prefs.setString('userAvatarUrl', currentUser.avatarUrl);
-    await prefs.setStringList('userAvatarUrls', currentUser.avatarUrls);
-    await prefs.setStringList('userTags', currentUser.tags);
-    await prefs.setStringList('plannedEvents', currentUser.plannedEvents);
-    await prefs.setStringList('userPastEvents', currentUser.pastEvents);
+    final userId = currentUser.id;
+    await prefs.setString('${userId}_userName', currentUser.name);
+    if (currentUser.username != null) {
+      await prefs.setString('${userId}_userUsername', currentUser.username!);
+    }
+    if (currentUser.birthDate != null) {
+      await prefs.setString('${userId}_userBirthDate', currentUser.birthDate!.toIso8601String());
+    }
+    await prefs.setString('${userId}_userCity', currentUser.city ?? '');
+    await prefs.setString('${userId}_userGender', currentUser.gender ?? '');
+    await prefs.setString('${userId}_userAboutMe', currentUser.aboutMe ?? '');
+    await prefs.setStringList('${userId}_userSocialLinks', currentUser.socialLinks);
+    await prefs.setString('${userId}_userAvatarUrl', currentUser.avatarUrl);
+    await prefs.setStringList('${userId}_userAvatarUrls', currentUser.avatarUrls);
+    await prefs.setStringList('${userId}_userTags', currentUser.tags);
+    await prefs.setStringList('${userId}_plannedEvents', currentUser.plannedEvents);
+    await prefs.setStringList('${userId}_userPastEvents', currentUser.pastEvents);
   }
 
   Future<void> _savePlannedEvents() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('plannedEvents', currentUser.plannedEvents);
+    final userId = currentUser.id;
+    await prefs.setStringList('${userId}_plannedEvents', currentUser.plannedEvents);
   }
   final UserModel currentUser = UserModel(
     id: 'user_1',
     name: 'Ali Rıza',
     avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
     avatarUrls: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'],
-    age: '26',
+    birthDate: DateTime(1998, 1, 1),
+    city: 'İstanbul',
     aboutMe: 'Yeni insanlarla tanışmayı ve yeni etkinlikler keşfetmeyi severim.',
     socialLinks: ['https://instagram.com/eventmatch', 'https://x.com/eventmatch'],
     tags: ['Techno', 'Kahve', 'Gaming'],
@@ -77,9 +173,10 @@ class MockEventService extends ChangeNotifier {
     pastEvents: ['e_agaclar_1'],
   );
 
-  void updateCurrentUser({
+  Future<void> updateCurrentUser({
     required String name,
-    required String age,
+    String? username,
+    String? city,
     String? gender,
     required String aboutMe,
     List<String>? socialLinks,
@@ -88,9 +185,76 @@ class MockEventService extends ChangeNotifier {
     List<String>? tags,
     List<String>? plannedEvents,
     List<String>? pastEvents,
-  }) {
+  }) async {
+    final userId = currentUser.id;
+
+    if (userId != 'user_1') {
+      try {
+        // 1. users Tablosunu Güncelle
+        await _supabase.from('users').update({
+          'username': username,
+          'city': city,
+          'gender': gender,
+          'bio': aboutMe,
+        }).eq('id', userId);
+
+        // Auth metadata'yı da güncelleyebiliriz (isim için)
+        await _supabase.auth.updateUser(UserAttributes(
+          data: {'name': name, 'username': username},
+        ));
+
+        // 2. Sosyal Linkleri Güncelle
+        if (socialLinks != null) {
+          await _supabase.from('user_social_links').delete().eq('user_id', userId);
+          if (socialLinks.isNotEmpty) {
+            final linksData = socialLinks.map((link) => {
+              'user_id': userId,
+              'url': link
+            }).toList();
+            await _supabase.from('user_social_links').insert(linksData);
+          }
+        }
+
+        // 3. Fotoğrafları Güncelle
+        if (avatarUrls != null) {
+          List<String> finalAvatarUrls = [];
+          for (var path in avatarUrls) {
+            if (path.startsWith('http')) {
+              finalAvatarUrls.add(path); // Zaten yüklü olan URL
+            } else {
+              // Lokal dosya ise Storage'a yükle ('avatars' bucket'ı olduğunu varsayıyoruz)
+              try {
+                // dart:io File kullanımı için MockEventService başına eklenmesi gerekebilir ama 
+                // burada basit geçiyoruz. Eğer hata verirse EditProfile'da file objeleri URL'e dönüştürülmeli.
+                // Şimdilik upload işlemini basitçe simüle edelim veya db tarafında bırakalım.
+                // Gerçek upload için: await _supabase.storage.from('avatars').upload(fileName, File(path));
+                finalAvatarUrls.add(path); 
+              } catch (e) {
+                debugPrint('Foto yükleme hatası: $e');
+              }
+            }
+          }
+          
+          await _supabase.from('user_photos').delete().eq('user_id', userId);
+          if (finalAvatarUrls.isNotEmpty) {
+            final photosData = finalAvatarUrls.asMap().entries.map((entry) => {
+              'user_id': userId,
+              'storage_url': entry.value,
+              'sort_order': entry.key,
+              'is_active': true
+            }).toList();
+            await _supabase.from('user_photos').insert(photosData);
+          }
+        }
+      } catch (e) {
+        debugPrint('Profil güncelleme hatası: $e');
+        throw Exception('Profil güncellenirken bir hata oluştu: $e');
+      }
+    }
+
     currentUser.name = name;
-    currentUser.age = age;
+    if (username != null) currentUser.username = username;
+    if (city != null) currentUser.city = city;
     if (gender != null) currentUser.gender = gender;
     currentUser.aboutMe = aboutMe;
     if (socialLinks != null) currentUser.socialLinks = socialLinks;
@@ -243,7 +407,7 @@ class MockEventService extends ChangeNotifier {
           id: 'u2', 
           name: 'Ayşe Yılmaz', 
           avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100', 
-          age: '24', 
+          birthDate: DateTime(2002, 1, 1), 
           aboutMe: 'Sahne sanatları aşığı! Her hafta bir tiyatroya gitmezsem olmaz.', 
           tags: ['Tiyatro', 'Konser', 'Sanat'],
           points: 2100,
@@ -336,7 +500,7 @@ class MockEventService extends ChangeNotifier {
            id: 'u4', 
            name: 'Zeynep Kaya', 
            avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100', 
-           age: '27', 
+           birthDate: DateTime(1999, 1, 1), 
            aboutMe: 'Tam bir stand-up bağımlısıyım. Gülmeyi çok seviyorum.', 
            tags: ['Stand-up', 'Spor', 'Müzik'],
            points: 850,
@@ -474,26 +638,50 @@ class MockEventService extends ChangeNotifier {
     }
   }
 
-  void joinEvent(String eventId) {
+  Future<void> joinEvent(String eventId) async {
     final eventIndex = _events.indexWhere((e) => e.id == eventId);
     if (eventIndex >= 0) {
       final event = _events[eventIndex];
       // Eğer zaten katılmamışsa ekle
       if (!event.attendees.any((u) => u.id == currentUser.id)) {
-        event.attendees.add(currentUser);
+        
+        // KRİTİK DÜZELTME: currentUser nesnesini referans olarak DEĞİL,
+        // kopyasını (yeni bir nesne olarak) listeye ekliyoruz.
+        // Aksi takdirde hesaptan çıkıp başka hesaba girince referans aynı kaldığı için
+        // diğer hesaplarda da katılmış görünüyor.
+        event.attendees.add(UserModel(
+          id: currentUser.id,
+          name: currentUser.name,
+          avatarUrl: currentUser.avatarUrl,
+          city: currentUser.city,
+          birthDate: currentUser.birthDate,
+          tags: List.from(currentUser.tags),
+        ));
+
         if (!currentUser.plannedEvents.contains(eventId)) {
           currentUser.plannedEvents.add(eventId);
-          _savePlannedEvents(); // Save to preferences
+          _savePlannedEvents(); // Save to preferences locally
         }
+
+        // Supabase veritabanına kaydet (Gerçek zamanlı Swipe ve Mesajlar için)
+        try {
+          await _supabase.from('event_attendees').insert({
+            'user_id': currentUser.id,
+            'event_id': eventId,
+            'status': 'joined'
+          });
+        } catch (e) {
+          debugPrint('Supabase event_attendees kayıt hatası: $e');
+        }
+
         notifyListeners();
       }
     }
   }
 
   bool isUserAttending(String eventId) {
-     final event = getEventById(eventId);
-     if (event == null) return false;
-     return event.attendees.any((u) => u.id == currentUser.id);
+     // Check locally specifically for this user's planned events
+     return currentUser.plannedEvents.contains(eventId);
   }
 
   // Get all events

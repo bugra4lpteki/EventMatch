@@ -17,7 +17,8 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
-  late TextEditingController _ageController;
+  late TextEditingController _usernameController;
+  late TextEditingController _cityController;
   late TextEditingController _aboutController;
   late TextEditingController _tagsController;
   List<TextEditingController> _socialControllers = [];
@@ -25,13 +26,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _selectedGender;
   List<String> _avatarPaths = [];
   List<String> _selectedPastEvents = [];
+  bool _isLoading = false;
   
   @override
   void initState() {
     super.initState();
     final user = context.read<MockEventService>().currentUser;
     _nameController = TextEditingController(text: user.name);
-    _ageController = TextEditingController(text: user.age ?? '');
+    _usernameController = TextEditingController(text: user.username ?? '');
+    _cityController = TextEditingController(text: user.city ?? '');
     _aboutController = TextEditingController(text: user.aboutMe ?? '');
     _tagsController = TextEditingController(text: user.tags.join(', '));
     _socialControllers = user.socialLinks.map((link) => TextEditingController(text: link)).toList();
@@ -47,7 +50,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _ageController.dispose();
+    _usernameController.dispose();
+    _cityController.dispose();
     _aboutController.dispose();
     _tagsController.dispose();
     for (var controller in _socialControllers) {
@@ -59,13 +63,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
+    if (pickedFile != null && _avatarPaths.length < 3) {
       setState(() {
-        if (index < _avatarPaths.length) {
-          _avatarPaths[index] = pickedFile.path;
-        } else {
-          _avatarPaths.add(pickedFile.path);
-        }
+        _avatarPaths.add(pickedFile.path);
       });
     }
   }
@@ -76,21 +76,38 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     });
   }
 
-  void _saveProfile() {
+  void _saveProfile() async {
     if (_formKey.currentState!.validate()) {
-      final tags = _tagsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      context.read<MockEventService>().updateCurrentUser(
-        name: _nameController.text,
-        age: _ageController.text,
-        gender: _selectedGender,
-        aboutMe: _aboutController.text,
-        socialLinks: _socialControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList(),
-        avatarUrl: _avatarPaths.isNotEmpty ? _avatarPaths.first : '',
-        avatarUrls: _avatarPaths,
-        tags: tags,
-        pastEvents: _selectedPastEvents,
-      );
-      Navigator.pop(context);
+      setState(() => _isLoading = true);
+      try {
+        final tags = _tagsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+        
+        await context.read<MockEventService>().updateCurrentUser(
+          name: _nameController.text,
+          username: _usernameController.text,
+          city: _cityController.text,
+          gender: _selectedGender,
+          aboutMe: _aboutController.text,
+          socialLinks: _socialControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList(),
+          avatarUrl: _avatarPaths.isNotEmpty ? _avatarPaths.first : '',
+          avatarUrls: _avatarPaths,
+          tags: tags,
+          pastEvents: _selectedPastEvents,
+        );
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
   }
 
@@ -188,10 +205,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         elevation: 0,
         iconTheme: IconThemeData(color: AppColors.textPrimary),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.check),
-            onPressed: _saveProfile,
-          ),
+          _isLoading 
+            ? const Center(child: Padding(padding: EdgeInsets.only(right: 16), child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))))
+            : IconButton(
+                icon: const Icon(Icons.check),
+                onPressed: _saveProfile,
+              ),
         ],
       ),
       body: SingleChildScrollView(
@@ -201,35 +220,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 3 Avatar Slots
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(3, (index) {
-                  final hasImage = index < _avatarPaths.length;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: GestureDetector(
-                      onTap: () => _pickImage(index),
-                      child: Stack(
-                        children: [
-                          Container(
-                            width: 80,
-                            height: 100,
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: hasImage
-                                ? (_avatarPaths[index].startsWith('http') || kIsWeb
+              // Profil Fotoğrafları (Max 3, Sürükle-Bırak)
+              _buildLabel('Profil Fotoğrafları (Sürükleyip sıralayabilirsiniz)'),
+              SizedBox(
+                height: 120,
+                child: ReorderableListView(
+                  scrollDirection: Axis.horizontal,
+                  onReorder: (oldIndex, newIndex) {
+                    setState(() {
+                      if (oldIndex < newIndex) {
+                        newIndex -= 1;
+                      }
+                      final item = _avatarPaths.removeAt(oldIndex);
+                      _avatarPaths.insert(newIndex, item);
+                    });
+                  },
+                  children: [
+                    for (int index = 0; index < _avatarPaths.length; index++)
+                      Padding(
+                        key: ValueKey(_avatarPaths[index]),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 80,
+                              height: 100,
+                              decoration: BoxDecoration(
+                                color: AppColors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: _avatarPaths[index].startsWith('http') || kIsWeb
                                     ? Image.network(_avatarPaths[index], fit: BoxFit.cover)
-                                    : Image.file(File(_avatarPaths[index]), fit: BoxFit.cover))
-                                : const Icon(Icons.add_a_photo, color: Colors.grey, size: 30),
+                                    : Image.file(File(_avatarPaths[index]), fit: BoxFit.cover),
+                              ),
                             ),
-                          ),
-                          if (hasImage)
                             Positioned(
                               top: -5,
                               right: -5,
@@ -244,21 +272,52 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ),
                               ),
                             ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                  );
-                }),
+                  ],
+                ),
               ),
+              if (_avatarPaths.length < 3)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: Icon(Icons.add_a_photo, color: AppColors.primary),
+                    label: Text('Fotoğraf Ekle', style: TextStyle(color: AppColors.primary)),
+                    onPressed: () => _pickImage(_avatarPaths.length),
+                  ),
+                ),
               const SizedBox(height: 30),
               
               // İsim
               _buildLabel('İsim'),
               _buildTextField(_nameController, 'İsminiz'),
+
+              // Kullanıcı Adı
+              _buildLabel('Kullanıcı Adı'),
+              _buildTextField(_usernameController, 'Kullanıcı Adı'),
               
-              // Yaş
+              // Yaş (Sadece Gösterim)
               _buildLabel('Yaş'),
-              _buildTextField(_ageController, 'Yaşınız', keyboardType: TextInputType.number),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    context.read<MockEventService>().currentUser.age ?? 'Belirtilmedi',
+                    style: TextStyle(color: AppColors.textPrimary.withOpacity(0.7), fontSize: 16),
+                  ),
+                ),
+              ),
+
+              // Şehir
+              _buildLabel('Şehir'),
+              _buildTextField(_cityController, 'Yaşadığınız Şehir'),
               
               // Cinsiyet
               _buildLabel('Cinsiyet'),

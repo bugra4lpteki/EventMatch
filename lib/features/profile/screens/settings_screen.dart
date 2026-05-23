@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../auth/services/mock_auth_service.dart';
+import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
 import 'themes_screen.dart';
 import '../../admin/screens/admin_login_screen.dart';
@@ -97,7 +97,7 @@ class SettingsScreen extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: () {
-              context.read<MockAuthService>().logout();
+              context.read<AuthService>().logout();
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (context) => const LoginScreen()),

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/mock_auth_service.dart';
+import '../services/auth_service.dart';
 import 'register_screen.dart';
+import '../../home/screens/home_screen.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../events/services/mock_event_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    final success = await context.read<MockAuthService>().login(
+    final errorMessage = await context.read<AuthService>().login(
       _emailController.text.trim(),
       _passwordController.text,
     );
@@ -36,12 +38,22 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (!success) {
+    if (errorMessage != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Giriş başarısız. Bilgileri kontrol edin.'),
+          content: Text(errorMessage == 'Email not confirmed' 
+              ? 'Lütfen e-posta adresinizi onaylayın.' 
+              : 'Giriş başarısız: $errorMessage'),
           backgroundColor: AppColors.error,
         ),
+      );
+    } else {
+      context.read<MockEventService>().loadUserProfile();
+      
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        (route) => false,
       );
     }
   }

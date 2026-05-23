@@ -1,11 +1,13 @@
 class UserModel {
-  final String id;
+  String id;
   String name;
+  String? username;
   String avatarUrl;
   List<String> avatarUrls;
-  String? age;
+  String? city;
   String? gender;
   String? aboutMe;
+  DateTime? birthDate;
   List<String> socialLinks;
   double? latitude;
   double? longitude;
@@ -19,10 +21,12 @@ class UserModel {
   UserModel({
     required this.id,
     required this.name,
+    this.username,
     required this.avatarUrl,
-    this.age,
+    this.city,
     this.gender,
     this.aboutMe,
+    this.birthDate,
     this.socialLinks = const [],
     this.latitude,
     this.longitude,
@@ -38,4 +42,10 @@ class UserModel {
         avatarUrls = avatarUrls ?? [],
         plannedEvents = plannedEvents ?? [],
         pastEvents = pastEvents ?? [];
+
+  String? get age {
+    if (birthDate == null) return null;
+    final yearDiff = DateTime.now().year - birthDate!.year;
+    return yearDiff.toString();
+  }
 }

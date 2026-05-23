@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import 'home_screen.dart';
 
+import '../../auth/screens/auth_wrapper.dart';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -14,12 +16,12 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // 1.5 saniye bekleyip su gibi dökülme animasyonuyla HomeScreen'e geç
+    // 1.5 saniye bekleyip su gibi dökülme animasyonuyla AuthWrapper'a geç
     Future.delayed(const Duration(milliseconds: 1500), () {
       if (mounted) {
         Navigator.pushReplacement(
           context,
-          LiquidPageRoute(page: const HomeScreen()),
+          LiquidPageRoute(page: const AuthWrapper()),
         );
       }
     });

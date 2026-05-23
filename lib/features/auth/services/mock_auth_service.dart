@@ -20,11 +20,11 @@ class MockAuthService extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> register(String email, String password, DateTime dob) async {
+  Future<bool> register(String name, String email, String password) async {
     // Simüle edilmiş bekleme süresi
     await Future.delayed(const Duration(seconds: 2));
     
-    if (email.isNotEmpty && password.length >= 6) {
+    if (name.isNotEmpty && email.isNotEmpty && password.length >= 6) {
       _isAuthenticated = true;
       _currentUserEmail = email;
       notifyListeners();
