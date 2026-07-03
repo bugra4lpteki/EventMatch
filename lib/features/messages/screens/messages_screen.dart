@@ -56,6 +56,8 @@ class MessagesScreen extends StatelessWidget {
         final chat = chats[index];
         final lastMsg = chat.lastMessage;
         
+        final isExpired = chat.expiresAt != null && chat.expiresAt!.isBefore(DateTime.now());
+
         return ListTile(
           onTap: () {
             service.markAsRead(chat.id);
@@ -63,16 +65,23 @@ class MessagesScreen extends StatelessWidget {
               builder: (_) => ChatDetailScreen(chat: chat)
             ));
           },
-          leading: CircleAvatar(
-            radius: 26,
-            backgroundImage: NetworkImage(chat.participant.avatarUrl),
+          leading: Opacity(
+            opacity: isExpired ? 0.6 : 1.0,
+            child: CircleAvatar(
+              radius: 26,
+              backgroundImage: NetworkImage(chat.participant.avatarUrl),
+            ),
           ),
           title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 chat.participant.name,
-                style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                style: TextStyle(
+                  color: isExpired ? AppColors.textSecondary : AppColors.textPrimary,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
               ),
               if (lastMsg != null)
                 Text(
@@ -80,7 +89,7 @@ class MessagesScreen extends StatelessWidget {
                   style: TextStyle(
                     color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
                     fontSize: 12,
-                    fontWeight: chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal
+                    fontWeight: chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
             ],
@@ -91,33 +100,55 @@ class MessagesScreen extends StatelessWidget {
               if (chat.isEventBased && chat.relatedEvent != null)
                 Text(
                   chat.relatedEvent!.title,
-                  style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-              if (lastMsg != null)
-                Text(
-                  lastMsg.text,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: chat.unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary,
-                    fontWeight: chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                    color: isExpired ? AppColors.textSecondary.withOpacity(0.5) : AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+              Row(
+                children: [
+                  if (isExpired) ...[
+                    Icon(Icons.lock_outline, size: 14, color: Colors.redAccent),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Süre Doldu - ',
+                      style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                  if (lastMsg != null)
+                    Expanded(
+                      child: Text(
+                        lastMsg.text,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isExpired 
+                              ? AppColors.textSecondary.withOpacity(0.6) 
+                              : (chat.unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary),
+                          fontWeight: chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
-          trailing: chat.unreadCount > 0
-              ? Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    chat.unreadCount.toString(),
-                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                )
-              : null,
+          trailing: isExpired
+              ? Icon(Icons.lock_outline, color: Colors.grey, size: 20)
+              : (chat.unreadCount > 0
+                  ? Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        chat.unreadCount.toString(),
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    )
+                  : null),
         );
       },
     );

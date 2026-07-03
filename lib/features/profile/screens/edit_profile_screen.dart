@@ -24,7 +24,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   List<TextEditingController> _socialControllers = [];
   
   String? _selectedGender;
-  List<String> _avatarPaths = [];
+  List<dynamic> _avatarImages = [];
   List<String> _selectedPastEvents = [];
   bool _isLoading = false;
   
@@ -40,9 +40,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _socialControllers = user.socialLinks.map((link) => TextEditingController(text: link)).toList();
     _selectedGender = ['Kadın', 'Erkek', 'Belirtmek İstemiyorum'].contains(user.gender) ? user.gender : null;
     if (user.avatarUrls.isNotEmpty) {
-      _avatarPaths = List.from(user.avatarUrls);
+      _avatarImages = List.from(user.avatarUrls);
     } else if (user.avatarUrl.isNotEmpty) {
-      _avatarPaths = [user.avatarUrl];
+      _avatarImages = [user.avatarUrl];
     }
     _selectedPastEvents = List.from(user.pastEvents);
   }
@@ -63,17 +63,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null && _avatarPaths.length < 3) {
+    if (pickedFile != null && _avatarImages.length < 3) {
       setState(() {
-        _avatarPaths.add(pickedFile.path);
+        _avatarImages.add(pickedFile);
       });
     }
   }
 
-  void _removeImage(int index) {
-    setState(() {
-      _avatarPaths.removeAt(index);
-    });
+  void _removeImage(int index) async {
+    final image = _avatarImages[index];
+    if (image is String && image.startsWith('http')) {
+      setState(() => _isLoading = true);
+      try {
+        await context.read<MockEventService>().deleteUploadedPhoto(image);
+        setState(() {
+          _avatarImages.removeAt(index);
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fotoğraf başarıyla silindi.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Fotoğraf silinemedi: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } else {
+      setState(() {
+        _avatarImages.removeAt(index);
+      });
+    }
   }
 
   void _saveProfile() async {
@@ -89,8 +115,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           gender: _selectedGender,
           aboutMe: _aboutController.text,
           socialLinks: _socialControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList(),
-          avatarUrl: _avatarPaths.isNotEmpty ? _avatarPaths.first : '',
-          avatarUrls: _avatarPaths,
+          avatarUrl: _avatarImages.isNotEmpty
+              ? (_avatarImages.first is String ? _avatarImages.first as String : '')
+              : '',
+          avatarImages: _avatarImages,
           tags: tags,
           pastEvents: _selectedPastEvents,
         );
@@ -195,6 +223,124 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
+  static const List<String> _turkiyeSehirleri = [
+    'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Aksaray', 'Amasya', 'Ankara', 'Antalya', 'Ardahan', 'Artvin',
+    'Aydın', 'Balıkesir', 'Bartın', 'Batman', 'Bayburt', 'Bilecik', 'Bingöl', 'Bitlis', 'Bolu', 'Burdur',
+    'Bursa', 'Çanakkale', 'Çankırı', 'Çorum', 'Denizli', 'Diyarbakır', 'Düzce', 'Edirne', 'Elazığ', 'Erzincan',
+    'Erzurum', 'Eskişehir', 'Gaziantep', 'Giresun', 'Gümüşhane', 'Hakkari', 'Hatay', 'Iğdır', 'Isparta', 'İstanbul',
+    'İzmir', 'Kahramanmaraş', 'Karabük', 'Karaman', 'Kars', 'Kastamonu', 'Kayseri', 'Kilis', 'Kırıkkale', 'Kırklareli',
+    'Kırşehir', 'Kocaeli', 'Konya', 'Kütahya', 'Malatya', 'Manisa', 'Mardin', 'Mersin', 'Muğla', 'Muş',
+    'Nevşehir', 'Niğde', 'Ordu', 'Osmaniye', 'Rize', 'Sakarya', 'Samsun', 'Şanlıurfa', 'Siirt', 'Sinop',
+    'Sivas', 'Şırnak', 'Tekirdağ', 'Tokat', 'Trabzon', 'Tunceli', 'Uşak', 'Van', 'Yalova', 'Yozgat',
+    'Zonguldak'
+  ];
+
+  void _showCityPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredCities = _turkiyeSehirleri.where((sehir) {
+              final query = searchQuery.toLowerCase();
+              return sehir.toLowerCase().contains(query) ||
+                     sehir.toLowerCase().replaceAll('i', 'ı').replaceAll('ı', 'i').contains(query);
+            }).toList();
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      Text(
+                        'Şehir Seçiniz',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Şehir Ara...',
+                          hintStyle: TextStyle(color: AppColors.textSecondary),
+                          prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
+                          filled: true,
+                          fillColor: AppColors.surface,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                        ),
+                        style: TextStyle(color: AppColors.textPrimary),
+                        onChanged: (val) {
+                          setDialogState(() {
+                            searchQuery = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: filteredCities.length,
+                          itemBuilder: (context, index) {
+                            final sehir = filteredCities[index];
+                            final isSelected = _cityController.text == sehir;
+                            return ListTile(
+                              title: Text(
+                                sehir,
+                                style: TextStyle(
+                                  color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                              trailing: isSelected 
+                                  ? Icon(Icons.check, color: AppColors.primary) 
+                                  : null,
+                              onTap: () {
+                                setState(() {
+                                  _cityController.text = sehir;
+                                });
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -231,14 +377,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       if (oldIndex < newIndex) {
                         newIndex -= 1;
                       }
-                      final item = _avatarPaths.removeAt(oldIndex);
-                      _avatarPaths.insert(newIndex, item);
+                      final item = _avatarImages.removeAt(oldIndex);
+                      _avatarImages.insert(newIndex, item);
                     });
                   },
                   children: [
-                    for (int index = 0; index < _avatarPaths.length; index++)
+                    for (int index = 0; index < _avatarImages.length; index++)
                       Padding(
-                        key: ValueKey(_avatarPaths[index]),
+                        key: ValueKey(_avatarImages[index]),
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                         child: Stack(
                           clipBehavior: Clip.none,
@@ -253,9 +399,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: _avatarPaths[index].startsWith('http') || kIsWeb
-                                    ? Image.network(_avatarPaths[index], fit: BoxFit.cover)
-                                    : Image.file(File(_avatarPaths[index]), fit: BoxFit.cover),
+                                child: _avatarImages[index] is String
+                                    ? Image.network(_avatarImages[index] as String, fit: BoxFit.cover)
+                                    : (kIsWeb
+                                        ? Image.network((_avatarImages[index] as XFile).path, fit: BoxFit.cover)
+                                        : Image.file(File((_avatarImages[index] as XFile).path), fit: BoxFit.cover)),
                               ),
                             ),
                             Positioned(
@@ -278,13 +426,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ],
                 ),
               ),
-              if (_avatarPaths.length < 3)
+              if (_avatarImages.length < 3)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
                     icon: Icon(Icons.add_a_photo, color: AppColors.primary),
                     label: Text('Fotoğraf Ekle', style: TextStyle(color: AppColors.primary)),
-                    onPressed: () => _pickImage(_avatarPaths.length),
+                    onPressed: () => _pickImage(_avatarImages.length),
                   ),
                 ),
               const SizedBox(height: 30),
@@ -317,7 +465,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
               // Şehir
               _buildLabel('Şehir'),
-              _buildTextField(_cityController, 'Yaşadığınız Şehir'),
+              _buildTextField(
+                _cityController,
+                'Yaşadığınız Şehir',
+                readOnly: true,
+                onTap: _showCityPicker,
+              ),
               
               // Cinsiyet
               _buildLabel('Cinsiyet'),
@@ -443,7 +596,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType? keyboardType, int? maxLength}) {
+  Widget _buildTextField(TextEditingController controller, String hint, {int maxLines = 1, TextInputType? keyboardType, int? maxLength, bool readOnly = false, VoidCallback? onTap}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
@@ -451,6 +604,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         maxLines: maxLines,
         maxLength: maxLength,
         keyboardType: keyboardType,
+        readOnly: readOnly,
+        onTap: onTap,
         style: TextStyle(color: AppColors.textPrimary),
         decoration: InputDecoration(
           hintText: hint,

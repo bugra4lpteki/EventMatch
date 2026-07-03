@@ -12,6 +12,14 @@ class MockMessageService extends ChangeNotifier {
   
   MockMessageService(this._eventService) {
     _loadChatsFromSupabase();
+    _supabase.auth.onAuthStateChange.listen((data) {
+      if (data.session != null) {
+        _loadChatsFromSupabase();
+      } else {
+        _chats.clear();
+        notifyListeners();
+      }
+    });
   }
 
   List<ChatModel> _chats = [];
@@ -23,7 +31,7 @@ class MockMessageService extends ChangeNotifier {
     try {
       if (_supabase.auth.currentUser == null) return;
 
-      // 1. Get all matches for this user
+      // 1. matches tablosundan status = matched ve user_id_1 veya user_id_2 senin ID'n olan kayıtları çek
       final matchesRes = await _supabase.from('matches')
           .select('*, messages(*)')
           .eq('status', 'matched')
@@ -31,17 +39,63 @@ class MockMessageService extends ChangeNotifier {
 
       _chats.clear();
 
+      // 2. Her eşleşme için karşı kişinin ID'sini bul
+      final otherUserIds = matchesRes.map((match) {
+        return match['user_id_1'] == currentUserId ? match['user_id_2'] : match['user_id_1'];
+      }).map((id) => id.toString()).toList();
+
+      Map<String, Map<String, dynamic>> profilesMap = {};
+      Map<String, String> photosMap = {};
+
+      if (otherUserIds.isNotEmpty) {
+        // 3. O ID ile user_profiles view'ından isim ve kullanıcı adını al
+        // Kolon yapısını otomatik tespit et
+        List<Map<String, dynamic>> profilesResList = [];
+        String idCol = 'id';
+        try {
+          final sample = await _supabase.from('user_profiles').select().limit(1);
+          if (sample.isNotEmpty) {
+            final cols = sample.first.keys.toList();
+            if (!cols.contains('id') && cols.contains('user_id')) {
+              idCol = 'user_id';
+            }
+          }
+          profilesResList = await _supabase.from('user_profiles')
+              .select('$idCol, name, username')
+              .inFilter(idCol, otherUserIds);
+        } catch (_) {}
+        
+        for (var p in profilesResList) {
+          profilesMap[p[idCol].toString()] = p;
+        }
+
+        // 4. Aynı ID ile user_photos tablosuna istek at, sadece sort_order = 0 olan ilk fotoğrafı al
+        final photosRes = await _supabase.from('user_photos')
+            .select('user_id, storage_url')
+            .inFilter('user_id', otherUserIds)
+            .eq('sort_order', 0);
+        
+        for (var photo in photosRes) {
+          photosMap[photo['user_id'].toString()] = photo['storage_url'].toString();
+        }
+      }
+
       for (var match in matchesRes) {
         final matchId = match['id'];
         final otherUserId = match['user_id_1'] == currentUserId ? match['user_id_2'] : match['user_id_1'];
         final eventId = match['event_id'];
 
-        // Get other user's basic info (Assuming you don't have a profiles table joined yet, we mock it)
-        // In reality: final profile = await _supabase.from('profiles').select().eq('id', otherUserId).single();
+        final profile = profilesMap[otherUserId];
+        final name = profile?['name'] ?? 'Kullanıcı $otherUserId';
+        final username = profile?['username'];
+
+        final avatarUrl = photosMap[otherUserId] ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100';
+
         final participant = UserModel(
           id: otherUserId,
-          name: 'Eşleşme $otherUserId', // Replace with real name from profile
-          avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
+          name: name,
+          username: username,
+          avatarUrl: avatarUrl,
         );
 
         final event = _eventService.getEventById(eventId);
@@ -73,6 +127,7 @@ class MockMessageService extends ChangeNotifier {
           relatedEvent: event,
           unreadCount: 0, // Calculate properly if needed
           messages: messages,
+          expiresAt: expiresAt,
         ));
       }
 

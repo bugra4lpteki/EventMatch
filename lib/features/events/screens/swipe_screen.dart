@@ -29,9 +29,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
   void _loadMatches() {
     final matchService = context.read<MockMatchService>();
-    setState(() {
-      _potentialMatches = matchService.getPotentialMatches();
-    });
+    // Supabase'den güncel verileri çek
+    matchService.loadPotentialMatches();
   }
 
   @override

@@ -186,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '${user.age ?? '26'} • İstanbul',
+                                '${user.age ?? '26'} • ${user.city != null && user.city!.isNotEmpty ? user.city : 'İstanbul'}',
                                 style: TextStyle(
                                   color: AppColors.textPrimary.withOpacity(0.7),
                                   fontSize: 14,
@@ -205,7 +205,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   const SizedBox(width: 6),
                                   const Text(
-                                    'Aktif',
+                                    'Çevrimiçi',
                                     style: TextStyle(
                                       color: Color(0xFF4CAF50),
                                       fontSize: 13,

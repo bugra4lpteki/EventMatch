@@ -22,6 +22,7 @@ class ChatModel {
   final EventModel? relatedEvent;
   final List<MessageModel> messages;
   int unreadCount;
+  final DateTime? expiresAt;
 
   ChatModel({
     required this.id,
@@ -30,6 +31,7 @@ class ChatModel {
     this.relatedEvent,
     required this.messages,
     this.unreadCount = 0,
+    this.expiresAt,
   });
 
   MessageModel? get lastMessage {

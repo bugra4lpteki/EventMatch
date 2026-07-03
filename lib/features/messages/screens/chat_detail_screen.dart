@@ -25,10 +25,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _sendMessage() {
+    final msgService = context.read<MockMessageService>();
+    final currentChat = msgService.individualChats.followedBy(msgService.eventChats)
+        .firstWhere((c) => c.id == widget.chat.id, orElse: () => widget.chat);
+    final isExpired = currentChat.expiresAt != null && currentChat.expiresAt!.isBefore(DateTime.now());
+    if (isExpired) return;
+
     final text = _messageController.text.trim();
     if (text.isNotEmpty) {
       HapticFeedback.lightImpact();
-      context.read<MockMessageService>().sendMessage(widget.chat.id, text);
+      msgService.sendMessage(widget.chat.id, text);
       _messageController.clear();
     }
   }
@@ -116,8 +122,27 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             }
           }
 
+          final isExpired = currentChat.expiresAt != null && currentChat.expiresAt!.isBefore(DateTime.now());
+
           return Column(
             children: [
+              if (isExpired)
+                Container(
+                  color: Colors.redAccent.withOpacity(0.15),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.lock_clock, color: Colors.redAccent, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Bu sohbetin süresi dolmuştur.',
+                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
               if (matchInsightTitle != null)
                 Container(
                   margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -155,7 +180,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   },
                 ),
               ),
-              _buildMessageComposer(),
+              _buildMessageComposer(isExpired),
             ],
           );
         },
@@ -193,7 +218,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _buildMessageComposer() {
+  Widget _buildMessageComposer(bool isExpired) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12).copyWith(
         bottom: MediaQuery.of(context).padding.bottom + 12,
@@ -207,9 +232,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           Expanded(
             child: TextField(
               controller: _messageController,
-              style: TextStyle(color: AppColors.textPrimary),
+              enabled: !isExpired,
+              style: TextStyle(color: isExpired ? AppColors.textSecondary : AppColors.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Mesaj yaz...',
+                hintText: isExpired ? 'Sohbet süresi doldu' : 'Mesaj yaz...',
                 hintStyle: TextStyle(color: AppColors.textSecondary),
                 filled: true,
                 fillColor: AppColors.background,
@@ -223,11 +249,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: _sendMessage,
+            onTap: isExpired ? null : _sendMessage,
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary,
+                color: isExpired ? Colors.grey : AppColors.primary,
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.send, color: Colors.white, size: 20),
