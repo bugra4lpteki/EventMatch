@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../models/event_model.dart';
-import '../models/user_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
@@ -118,10 +117,8 @@ class EventDetailScreen extends StatelessWidget {
                   InkWell(
                     onTap: () async {
                       if (event.latitude != null && event.longitude != null) {
-                        final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}');
-                        if (await canLaunchUrl(url)) {
-                          await launchUrl(url, mode: LaunchMode.externalApplication);
-                        }
+                        final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}';
+                        await UrlLauncherHelper.launchURL(mapsUrl);
                       }
                     },
                     child: Row(
@@ -143,44 +140,80 @@ class EventDetailScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   Text("Hakkında", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
                   const SizedBox(height: 8),
-                  Text(event.description, style: TextStyle(color: AppColors.textSecondary, height: 1.5)),
+                  Text(
+                    event.cleanDescription.isNotEmpty ? event.cleanDescription : event.description,
+                    style: TextStyle(color: AppColors.textSecondary, height: 1.5),
+                  ),
                   const SizedBox(height: 40),
                   
                   // Ben de Buradayım Button
                   Consumer<MockEventService>(
                     builder: (context, eventService, child) {
                       final isAttending = eventService.isUserAttending(event.id);
-                      return SizedBox(
-                        width: double.infinity,
-                        height: 56,
-                        child: ElevatedButton(
-                          onPressed: isAttending ? null : () {
-                            HapticFeedback.lightImpact();
-                            eventService.joinEvent(event.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Etkinliğe katıldın! Artık listedesin.'),
-                                backgroundColor: AppColors.primary,
-                              )
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: isAttending ? AppColors.surface : AppColors.primary,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                            disabledBackgroundColor: AppColors.surface,
-                            shadowColor: isAttending ? Colors.transparent : AppColors.primary,
-                            elevation: isAttending ? 0 : 10,
-                          ),
-                          child: Text(
-                            isAttending ? 'BURADASIN' : 'BEN DE BURADAYIM!',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: isAttending ? AppColors.textSecondary : Colors.white,
-                              letterSpacing: 1.5,
+                      return Column(
+                        children: [
+                          SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: isAttending ? null : () {
+                                HapticFeedback.lightImpact();
+                                eventService.joinEvent(event.id);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Etkinliğe katıldın! Artık listedesin.'),
+                                    backgroundColor: AppColors.primary,
+                                  )
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isAttending ? AppColors.surface : AppColors.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+                                disabledBackgroundColor: AppColors.surface,
+                                shadowColor: isAttending ? Colors.transparent : AppColors.primary,
+                                elevation: isAttending ? 0 : 10,
+                              ),
+                              child: Text(
+                                isAttending ? 'BURADASIN' : 'BEN DE BURADAYIM!',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isAttending ? AppColors.textSecondary : Colors.white,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 14),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 52,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                final targetUrl = event.effectiveTicketUrl;
+                                await UrlLauncherHelper.launchURL(targetUrl);
+                              },
+                              icon: const Icon(Icons.confirmation_number, color: Colors.white),
+                              label: Text(
+                                event.ticketProvider != null && event.ticketProvider!.isNotEmpty
+                                    ? "${event.ticketProvider!.toUpperCase()}'DEN BİLET AL"
+                                    : 'BİLETIX\'TEN BİLET AL',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  letterSpacing: 1.2,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.secondary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                                elevation: 6,
+                                shadowColor: AppColors.secondary.withOpacity(0.5),
+                              ),
+                            ),
+                          ),
+                        ],
                       );
                     },
                   ),

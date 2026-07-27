@@ -4,13 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
-import '../../events/models/user_model.dart';
-import 'settings_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -28,10 +26,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final eventService = context.watch<MockEventService>();
     final user = eventService.currentUser;
 
-    final plannedEvents = user.plannedEvents
-        .map((id) => eventService.getEventById(id))
-        .whereType<EventModel>()
-        .toList();
     final pastEvents = user.pastEvents
         .map((id) => eventService.getEventById(id))
         .whereType<EventModel>()
@@ -445,13 +439,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         finalUrl = 'https://$prefix$finalUrl';
       }
     }
-    
-    final Uri url = Uri.parse(finalUrl);
-    try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      debugPrint('Could not launch $url');
-    }
+    await UrlLauncherHelper.launchURL(finalUrl);
   }
 
   Widget _getSocialIcon(String url) {

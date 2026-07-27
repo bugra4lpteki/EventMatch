@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
+import 'external_event_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -16,18 +17,38 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> fetchEvents() async {
     try {
-      final data = await _supabase.from('events').select();
-      
-      // Keep existing mock events for attendees, or clear and replace?
-      // User says "artık etkinlikleri çekmek istiyorum", so we should replace the list.
       _events.clear();
-      
-      for (var item in data) {
-        _events.add(EventModel.fromJson(item));
+      final now = DateTime.now();
+
+      // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden bilet linkleri olan etkinlikleri çek
+      try {
+        final liveEvents = await ExternalEventService().fetchLiveTicketmasterEvents();
+        for (var live in liveEvents) {
+          _events.add(live);
+        }
+        debugPrint('[EventService] 🎟️ Biletix API canlı etkinlikleri eklendi: ${_events.length}');
+      } catch (e) {
+        debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
+
+      // 2. Supabase veritabanındaki etkinlikleri çek ve birleştir
+      try {
+        final data = await _supabase.from('events').select();
+        for (var item in data) {
+          final event = EventModel.fromJson(item);
+          if (event.dateTime.isAfter(now.subtract(const Duration(hours: 6)))) {
+            if (!_events.any((e) => e.id == event.id || e.title.toLowerCase() == event.title.toLowerCase())) {
+              _events.add(event);
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('[EventService] Supabase Events Error: $e');
+      }
+
       notifyListeners();
     } catch (e) {
-      debugPrint('Supabase Events Error: $e');
+      debugPrint('Events fetch error: $e');
     }
   }
 
@@ -38,7 +59,7 @@ class MockEventService extends ChangeNotifier {
     final userId = authUser?.id ?? 'user_1';
     currentUser.id = userId;
 
-    // Reset to clean slate first (prevent carryover from previous accounts)
+    // Reset to clean slate first
     currentUser.username = null;
     currentUser.city = null;
     currentUser.gender = null;
@@ -52,7 +73,6 @@ class MockEventService extends ChangeNotifier {
     currentUser.pastEvents = [];
 
     if (userId != 'user_1') {
-      // Kullanıcı giriş yapmış, veritabanından çek (Supabase)
       try {
         final userData = await _supabase.from('users').select().eq('id', userId).maybeSingle();
         if (userData != null) {
@@ -66,15 +86,11 @@ class MockEventService extends ChangeNotifier {
           if (userData['interests'] != null) {
             currentUser.tags = List<String>.from(userData['interests'] as List);
           }
-          
-          // Öncelikli olarak veritabanındaki ismi al, yoksa metadata'dan al
           currentUser.name = userData['name'] ?? authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
         } else {
-          // Tabloda yoksa metadata'dan sadece ismi al
           currentUser.name = authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
         }
         
-        // user_photos tablosundan fotoğrafları çek
         try {
           final photos = await _supabase.from('user_photos').select().eq('user_id', userId).eq('is_active', true).order('sort_order');
           if (photos.isNotEmpty) {
@@ -83,14 +99,13 @@ class MockEventService extends ChangeNotifier {
           }
         } catch (_) {}
 
-        // user_social_links tablosundan linkleri çek
         try {
           final links = await _supabase.from('user_social_links').select().eq('user_id', userId);
           if (links.isNotEmpty) {
             currentUser.socialLinks = links.map((l) => l['url'].toString()).toList();
           }
         } catch (_) {}
-        // event_attendees tablosundan katıldığı etkinlikleri çek
+
         try {
           final attendedRes = await _supabase.from('event_attendees')
               .select('event_id')
@@ -105,7 +120,6 @@ class MockEventService extends ChangeNotifier {
         debugPrint('Supabase profile load error: $e');
       }
     } else {
-      // Mock kullanıcı mantığı veya yedek SharedPreferences okuması
       currentUser.name = prefs.getString('${userId}_userName') ?? 'Ali Rıza';
       currentUser.username = prefs.getString('${userId}_userUsername') ?? 'aliriza';
       
@@ -114,84 +128,55 @@ class MockEventService extends ChangeNotifier {
 
       currentUser.city = prefs.getString('${userId}_userCity') ?? 'İstanbul';
       currentUser.gender = prefs.getString('${userId}_userGender') ?? 'Erkek';
-      currentUser.aboutMe = prefs.getString('${userId}_userAboutMe') ?? 'Yeni insanlarla tanışmayı ve yeni etkinlikler keşfetmeyi severim.';
-      
-      currentUser.socialLinks = prefs.getStringList('${userId}_userSocialLinks') ?? ['https://instagram.com/eventmatch', 'https://x.com/eventmatch'];
-      currentUser.avatarUrl = prefs.getString('${userId}_userAvatarUrl') ?? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100';
-      currentUser.avatarUrls = prefs.getStringList('${userId}_userAvatarUrls') ?? ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'];
+      currentUser.aboutMe = prefs.getString('${userId}_userAbout') ?? 'Konser ve festival sever 🎸';
+      currentUser.avatarUrl = prefs.getString('${userId}_userAvatarUrl') ?? 'assets/images/user_avatar.jpg';
+      currentUser.avatarUrls = prefs.getStringList('${userId}_userAvatarUrls') ?? [currentUser.avatarUrl];
+      currentUser.tags = prefs.getStringList('${userId}_userTags') ?? ['Konser', 'Müzik', 'Tiyatro'];
+      currentUser.socialLinks = prefs.getStringList('${userId}_userSocialLinks') ?? [];
+      currentUser.plannedEvents = prefs.getStringList('${userId}_userPlannedEvents') ?? ['1'];
+      currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
     }
 
-    // Ortak veriler (Etkinlik planları lokal tutuluyor olabilir)
-    if (userId == 'user_1') {
-      final tags = prefs.getStringList('${userId}_userTags');
-      if (tags != null) currentUser.tags = tags;
-
-      final plannedEvents = prefs.getStringList('${userId}_plannedEvents');
-      if (plannedEvents != null) {
-        currentUser.plannedEvents = plannedEvents;
-      }
-    }
-    
-    final pastEvents = prefs.getStringList('${userId}_userPastEvents');
-    if (pastEvents != null) currentUser.pastEvents = pastEvents;
-
-    // Etkinliklere katılımcı olarak kendimizi ekleme (UI ve yerel verilerin senkronize olması için)
-    for (var eventId in currentUser.plannedEvents) {
-      final event = getEventById(eventId);
-      if (event != null && !event.attendees.any((u) => u.id == currentUser.id)) {
-        event.attendees.add(UserModel(
-          id: currentUser.id,
-          name: currentUser.name,
-          avatarUrl: currentUser.avatarUrl,
-          city: currentUser.city,
-          birthDate: currentUser.birthDate,
-          tags: List.from(currentUser.tags),
-        ));
-      }
-    }
     notifyListeners();
   }
 
-  Future<void> _saveProfileData() async {
+  void _saveProfileData() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = currentUser.id;
-    await prefs.setString('${userId}_userName', currentUser.name);
-    if (currentUser.username != null) {
-      await prefs.setString('${userId}_userUsername', currentUser.username!);
-    }
-    if (currentUser.birthDate != null) {
-      await prefs.setString('${userId}_userBirthDate', currentUser.birthDate!.toIso8601String());
-    }
-    await prefs.setString('${userId}_userCity', currentUser.city ?? '');
-    await prefs.setString('${userId}_userGender', currentUser.gender ?? '');
-    await prefs.setString('${userId}_userAboutMe', currentUser.aboutMe ?? '');
-    await prefs.setStringList('${userId}_userSocialLinks', currentUser.socialLinks);
-    await prefs.setString('${userId}_userAvatarUrl', currentUser.avatarUrl);
-    await prefs.setStringList('${userId}_userAvatarUrls', currentUser.avatarUrls);
-    await prefs.setStringList('${userId}_userTags', currentUser.tags);
-    await prefs.setStringList('${userId}_plannedEvents', currentUser.plannedEvents);
-    await prefs.setStringList('${userId}_userPastEvents', currentUser.pastEvents);
+
+    prefs.setString('${userId}_userName', currentUser.name);
+    if (currentUser.username != null) prefs.setString('${userId}_userUsername', currentUser.username!);
+    if (currentUser.city != null) prefs.setString('${userId}_userCity', currentUser.city!);
+    if (currentUser.gender != null) prefs.setString('${userId}_userGender', currentUser.gender!);
+    if (currentUser.aboutMe != null) prefs.setString('${userId}_userAbout', currentUser.aboutMe!);
+    if (currentUser.birthDate != null) prefs.setString('${userId}_userBirthDate', currentUser.birthDate!.toIso8601String());
+    
+    prefs.setString('${userId}_userAvatarUrl', currentUser.avatarUrl);
+    prefs.setStringList('${userId}_userAvatarUrls', currentUser.avatarUrls);
+    prefs.setStringList('${userId}_userTags', currentUser.tags);
+    prefs.setStringList('${userId}_userSocialLinks', currentUser.socialLinks);
+    prefs.setStringList('${userId}_userPlannedEvents', currentUser.plannedEvents);
+    prefs.setStringList('${userId}_userPastEvents', currentUser.pastEvents);
   }
 
-  Future<void> _savePlannedEvents() async {
+  void _savePlannedEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final userId = currentUser.id;
-    await prefs.setStringList('${userId}_plannedEvents', currentUser.plannedEvents);
+    prefs.setStringList('${userId}_userPlannedEvents', currentUser.plannedEvents);
   }
-  final UserModel currentUser = UserModel(
+
+  UserModel currentUser = UserModel(
     id: 'user_1',
     name: 'Ali Rıza',
-    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100',
-    avatarUrls: ['https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'],
-    birthDate: DateTime(1998, 1, 1),
+    avatarUrl: 'assets/images/user_avatar.jpg',
+    avatarUrls: ['assets/images/user_avatar.jpg'],
+    aboutMe: 'Konser ve festival sever 🎸',
     city: 'İstanbul',
-    aboutMe: 'Yeni insanlarla tanışmayı ve yeni etkinlikler keşfetmeyi severim.',
-    socialLinks: ['https://instagram.com/eventmatch', 'https://x.com/eventmatch'],
-    tags: ['Techno', 'Kahve', 'Gaming'],
-    points: 1250,
-    badges: ['Sahne Tozu Yutmuş', 'Müzik Tutkunu'],
-    plannedEvents: ['e_kacpara_1', 'e_baturay_2'],
-    pastEvents: ['e_agaclar_1'],
+    gender: 'Erkek',
+    birthDate: DateTime(1998, 1, 1),
+    tags: ['Konser', 'Müzik', 'Tiyatro'],
+    plannedEvents: ['1'],
+    pastEvents: ['2', '3'],
   );
 
   Future<void> updateCurrentUser({
@@ -222,7 +207,6 @@ class MockEventService extends ChangeNotifier {
 
     if (userId != 'user_1') {
       try {
-        // 1. users Tablosunu Güncelle (İsim alanı varsa orayı da güncelleriz, yoksa sadece diğer alanları güncelleriz)
         try {
           await _supabase.from('users').update({
             'name': name,
@@ -233,8 +217,6 @@ class MockEventService extends ChangeNotifier {
             if (tags != null) 'interests': tags,
           }).eq('id', userId);
         } catch (e) {
-          debugPrint('users tablosuna name yazılamadı, name kolonu olmayabilir. Hata: $e');
-          // 'name' kolonunun olmadığını varsayarak name parametresiz tekrar deniyoruz
           await _supabase.from('users').update({
             'username': username,
             'city': city,
@@ -244,12 +226,10 @@ class MockEventService extends ChangeNotifier {
           }).eq('id', userId);
         }
 
-        // Auth metadata'yı da güncelleyebiliriz (isim için)
         await _supabase.auth.updateUser(UserAttributes(
           data: {'name': name, 'username': username},
         ));
 
-        // 2. Sosyal Linkleri Güncelle
         if (socialLinks != null) {
           await _supabase.from('user_social_links').delete().eq('user_id', userId);
           if (socialLinks.isNotEmpty) {
@@ -261,7 +241,6 @@ class MockEventService extends ChangeNotifier {
           }
         }
 
-        // 3. Fotoğrafları Güncelle
         if (avatarImages != null) {
           finalAvatarUrls.clear();
           int photoIndex = 0;
@@ -273,7 +252,6 @@ class MockEventService extends ChangeNotifier {
                 final pathInBucket = '${userId}/foto_${DateTime.now().millisecondsSinceEpoch}_$photoIndex.jpg';
                 final bytes = await item.readAsBytes();
                 
-                // 1. Önce Storage'a yükle
                 await _supabase.storage.from('avatars').uploadBinary(
                   pathInBucket,
                   bytes,
@@ -284,18 +262,15 @@ class MockEventService extends ChangeNotifier {
                   ),
                 );
                 
-                // 2. Public URL al
                 final publicUrl = _supabase.storage.from('avatars').getPublicUrl(pathInBucket);
                 finalAvatarUrls.add(publicUrl);
               } catch (e) {
-                debugPrint('Foto yükleme hatası: $e');
                 finalAvatarUrls.add(item.path);
               }
             }
             photoIndex++;
           }
           
-          // 3. Sonra user_photos'a kaydet (Eski fotoğrafları silip sırayla ekliyoruz)
           await _supabase.from('user_photos').delete().eq('user_id', userId);
           if (finalAvatarUrls.isNotEmpty) {
             final photosData = finalAvatarUrls.asMap().entries.map((entry) => {
@@ -308,7 +283,6 @@ class MockEventService extends ChangeNotifier {
           }
         }
       } catch (e) {
-        debugPrint('Profil güncelleme hatası: $e');
         throw Exception('Profil güncellenirken bir hata oluştu: $e');
       }
     }
@@ -328,15 +302,9 @@ class MockEventService extends ChangeNotifier {
         currentUser.avatarUrl = '';
       }
     }
-    if (tags != null) {
-      currentUser.tags = tags;
-    }
-    if (plannedEvents != null) {
-      currentUser.plannedEvents = plannedEvents;
-    }
-    if (pastEvents != null) {
-      currentUser.pastEvents = pastEvents;
-    }
+    if (tags != null) currentUser.tags = tags;
+    if (plannedEvents != null) currentUser.plannedEvents = plannedEvents;
+    if (pastEvents != null) currentUser.pastEvents = pastEvents;
     _saveProfileData();
     notifyListeners();
   }
@@ -345,10 +313,8 @@ class MockEventService extends ChangeNotifier {
     final userId = currentUser.id;
     if (userId != 'user_1') {
       try {
-        // 1. Önce user_photos'tan sil
         await _supabase.from('user_photos').delete().eq('storage_url', url).eq('user_id', userId);
         
-        // 2. Storage yolunu parse et (Query parametrelerini ve URL encoding'i temizle)
         String? storagePath;
         final bucketKeyword = '/avatars/';
         if (url.contains(bucketKeyword)) {
@@ -360,18 +326,14 @@ class MockEventService extends ChangeNotifier {
           storagePath = Uri.decodeComponent(pathPart);
         }
         
-        // 3. Storage'dan sil
         if (storagePath != null) {
-          debugPrint('Storage silme isteği atılıyor, dosya yolu: $storagePath');
           await _supabase.storage.from('avatars').remove([storagePath]);
         }
       } catch (e) {
-        debugPrint('Fotoğraf silme hatası: $e');
         throw Exception('Fotoğraf silinirken hata oluştu: $e');
       }
     }
     
-    // Yerel verileri güncelle
     currentUser.avatarUrls.remove(url);
     if (currentUser.avatarUrl == url) {
       currentUser.avatarUrl = currentUser.avatarUrls.isNotEmpty ? currentUser.avatarUrls.first : '';
@@ -381,7 +343,6 @@ class MockEventService extends ChangeNotifier {
   }
 
   void scatterMockUsersAround(double baseLat, double baseLng) {
-    // Bu özellik 'Radar' özelliği test edilebilsin diye diğer kullanıcıları sizin 300-600m çevrenize dağıtır.
     for (var event in _events) {
       for (int i = 0; i < event.attendees.length; i++) {
         double offsetLat = (i % 2 == 0) ? 0.002 : 0.006; 
@@ -397,15 +358,23 @@ class MockEventService extends ChangeNotifier {
   final List<String> activityFeed = [];
 
   List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];
+  List<String> cities = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana', 'Gaziantep', 'Mersin'];
   String _selectedCategory = 'Tümü';
+  String _selectedCity = 'Tüm Şehirler';
   String _searchQuery = '';
 
   String get selectedCategory => _selectedCategory;
+  String get selectedCity => _selectedCity;
   String get searchQuery => _searchQuery;
   List<EventModel> getAdminEvents() => [..._events];
 
   void setCategory(String category) {
     _selectedCategory = category;
+    notifyListeners();
+  }
+
+  void setCity(String city) {
+    _selectedCity = city;
     notifyListeners();
   }
 
@@ -437,24 +406,19 @@ class MockEventService extends ChangeNotifier {
   Future<void> importEventsFromExcel(List<int> bytes) async {
     var excel = Excel.decodeBytes(bytes);
     for (var table in excel.tables.keys) {
-      var sheet = excel.tables[table];
-      if (sheet == null) continue;
-
-      // Skip header row
-      for (int i = 1; i < sheet.maxRows; i++) {
-        var row = sheet.row(i);
+      var sheet = excel.tables[table]!;
+      for (var i = 1; i < sheet.rows.length; i++) {
+        var row = sheet.rows[i];
         if (row.isEmpty) continue;
-        
         try {
-          final title = row[0]?.value?.toString() ?? '';
-          if (title.isEmpty || title == 'null') continue;
+          final title = row[0]?.value?.toString() ?? 'İsimsiz Etkinlik';
+          final category = row.length > 1 ? row[1]?.value?.toString() ?? 'Genel' : 'Genel';
+          final location = row.length > 2 ? row[2]?.value?.toString() ?? 'İstanbul' : 'İstanbul';
           
-          final category = row.length > 1 ? row[1]?.value?.toString() ?? 'Diğer' : 'Diğer';
-          final location = row.length > 2 ? row[2]?.value?.toString() ?? 'Bilinmeyen Konum' : 'Bilinmeyen Konum';
-          
-          DateTime dateTime = DateTime.now().add(const Duration(days: 7));
+          DateTime dateTime = DateTime.now().add(Duration(days: i));
           if (row.length > 3 && row[3]?.value != null) {
-            dateTime = DateTime.tryParse(row[3]!.value.toString()) ?? dateTime;
+            final parsedDate = DateTime.tryParse(row[3]!.value.toString());
+            if (parsedDate != null) dateTime = parsedDate;
           }
 
           final description = row.length > 4 ? row[4]?.value?.toString() ?? '' : '';
@@ -493,213 +457,46 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  final List<EventModel> _events = [
-    // Ahududu
-    EventModel(
-      id: 'e_ahududu_1',
-      title: 'Ahududu',
-      category: 'Tiyatro',
-      location: 'İstanbul - Sancaktepe Sahnesi',
-      dateTime: DateTime(2026, 6, 8, 20, 0),
-      description: 'Türk tiyatrosunun en sevilen komedilerinden Ahududu, usta oyuncu kadrosuyla karşınızda.',
-      imageUrl: 'assets/images/ahududu.jpeg',
-      latitude: 41.015,
-      longitude: 29.023,
-      atmosphere: '🔥 Çok Hareketli',
-      isPopular: true,
-      attendees: [
-        UserModel(
-          id: 'u2', 
-          name: 'Ayşe Yılmaz', 
-          avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100', 
-          birthDate: DateTime(2002, 1, 1), 
-          aboutMe: 'Sahne sanatları aşığı! Her hafta bir tiyatroya gitmezsem olmaz.', 
-          tags: ['Tiyatro', 'Konser', 'Sanat'],
-          points: 2100,
-          badges: ['Sahne Tozu Yutmuş'],
-          plannedEvents: ['e_kacpara_2'], 
-          pastEvents: ['e_agaclar_1']
-        ),
-      ],
-    ),
-    // Kaç Para Bi Fön
-    EventModel(
-      id: 'e_kacpara_1',
-      title: 'Kaç Para Bi Fön',
-      category: 'Tiyatro',
-      location: 'İstanbul - Fişekhane',
-      dateTime: DateTime(2026, 4, 11, 20, 0),
-      description: 'İlişkisini al gel! Çıkışta konuşacak çok şeyiniz olacak.',
-      imageUrl: 'assets/images/kac_para_bi_fon.jpeg',
-      latitude: 40.985,
-      longitude: 28.930,
-      atmosphere: '✨ Eğlenceli',
-      isPopular: false,
-      attendees: [
-        UserModel(id: 'u10', name: 'Zeynep', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100'),
-        UserModel(id: 'u11', name: 'Murat', avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=100'),
-        UserModel(id: 'u12', name: 'Selin', avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100'),
-        UserModel(id: 'u13', name: 'Hakan', avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=100'),
-      ],
-    ),
-    EventModel(
-      id: 'e_kacpara_2',
-      title: 'Kaç Para Bi Fön',
-      category: 'Tiyatro',
-      location: 'İstanbul - Akatlar Kültür Merkezi',
-      dateTime: DateTime(2026, 4, 17, 20, 0),
-      description: 'İlişkisini al gel! Çıkışta konuşacak çok şeyiniz olacak.',
-      imageUrl: 'assets/images/kac_para_bi_fon.jpeg',
-      latitude: 41.033,
-      longitude: 29.030,
-      attendees: [],
-    ),
-    // Baturay Özdemir
-    EventModel(
-      id: 'e_baturay_1',
-      title: 'Baturay Özdemir',
-      category: 'Stand-up',
-      location: 'İstanbul - Süleyman Seba K.M.',
-      dateTime: DateTime(2026, 4, 17, 20, 30),
-      description: 'Baturay Özdemir kahkaha dolu gösterisiyle geliyor!',
-      imageUrl: 'assets/images/baturay.jpeg',
-      latitude: 41.050,
-      longitude: 28.990,
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_baturay_2',
-      title: 'Baturay Özdemir',
-      category: 'Stand-up',
-      location: 'İstanbul - DasDas Ataşehir',
-      dateTime: DateTime(2026, 4, 22, 20, 30),
-      description: 'Baturay Özdemir kahkaha dolu gösterisiyle geliyor!',
-      imageUrl: 'assets/images/baturay.jpeg',
-      latitude: 40.990,
-      longitude: 29.120,
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_baturay_3',
-      title: 'Baturay Özdemir',
-      category: 'Stand-up',
-      location: 'İstanbul - Moi Sahne',
-      dateTime: DateTime(2026, 4, 24, 20, 30),
-      description: 'Baturay Özdemir kahkaha dolu gösterisiyle geliyor!',
-      imageUrl: 'assets/images/baturay.jpeg',
-      attendees: [],
-    ),
-    // Bir Baba Hamlet
-    EventModel(
-      id: 'e_hamlet_1',
-      title: 'Bir Baba Hamlet',
-      category: 'Tiyatro',
-      location: 'İstanbul - Süleyman Seba K.M.',
-      dateTime: DateTime(2026, 4, 24, 20, 0),
-      description: 'Şevket Çoruh ve Murat Akkoyunlu\'nun performansıyla muhteşem komedi!',
-      imageUrl: 'assets/images/bir_baba_hamlet.jpeg',
-      latitude: 41.045,
-      longitude: 28.980,
-      attendees: [
-         UserModel(
-           id: 'u4', 
-           name: 'Zeynep Kaya', 
-           avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=100', 
-           birthDate: DateTime(1999, 1, 1), 
-           aboutMe: 'Tam bir stand-up bağımlısıyım. Gülmeyi çok seviyorum.', 
-           tags: ['Stand-up', 'Spor', 'Müzik'],
-           points: 850,
-           badges: ['Sinema Sever'],
-           plannedEvents: ['e_hamlet_2', 'e_baturay_3'], 
-           pastEvents: ['e_diyemedim_2']
-         ),
-      ],
-    ),
-    EventModel(
-      id: 'e_hamlet_2',
-      title: 'Bir Baba Hamlet',
-      category: 'Tiyatro',
-      location: 'İstanbul - Mall Of İstanbul',
-      dateTime: DateTime(2026, 4, 25, 20, 0),
-      description: 'Şevket Çoruh ve Murat Akkoyunlu\'nun performansıyla muhteşem komedi!',
-      imageUrl: 'assets/images/bir_baba_hamlet.jpeg',
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_hamlet_3',
-      title: 'Bir Baba Hamlet',
-      category: 'Tiyatro',
-      location: 'İstanbul - Beylikdüzü AKM',
-      dateTime: DateTime(2026, 4, 26, 20, 0),
-      description: 'Şevket Çoruh ve Murat Akkoyunlu\'nun performansıyla muhteşem komedi!',
-      imageUrl: 'assets/images/bir_baba_hamlet.jpeg',
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_hamlet_4',
-      title: 'Bir Baba Hamlet',
-      category: 'Tiyatro',
-      location: 'İstanbul - Süleyman Seba K.M.',
-      dateTime: DateTime(2026, 5, 14, 20, 0),
-      description: 'Şevket Çoruh ve Murat Akkoyunlu\'nun performansıyla muhteşem komedi!',
-      imageUrl: 'assets/images/bir_baba_hamlet.jpeg',
-      attendees: [],
-    ),
-    // Diyemedim
-    EventModel(
-      id: 'e_diyemedim_1',
-      title: 'Diyemedim',
-      category: 'Tiyatro',
-      location: 'Adana - 01 Burda PGM Sahne',
-      dateTime: DateTime(2026, 5, 15, 20, 0),
-      description: 'Diyemedim adlı oyun, etkileyici hikayesiyle izleyiciyle buluşuyor.',
-      imageUrl: 'assets/images/diyemedim.jpeg',
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_diyemedim_2',
-      title: 'Diyemedim',
-      category: 'Tiyatro',
-      location: 'Hatay - İskenderun Ted Koleji',
-      dateTime: DateTime(2026, 5, 16, 20, 0),
-      description: 'Diyemedim adlı oyun, etkileyici hikayesiyle izleyiciyle buluşuyor.',
-      imageUrl: 'assets/images/diyemedim.jpeg',
-      attendees: [],
-    ),
-    EventModel(
-      id: 'e_diyemedim_3',
-      title: 'Diyemedim',
-      category: 'Tiyatro',
-      location: 'Gaziantep - Şehit Kamil Bld. K.M.',
-      dateTime: DateTime(2026, 5, 17, 20, 0),
-      description: 'Diyemedim adlı oyun, etkileyici hikayesiyle izleyiciyle buluşuyor.',
-      imageUrl: 'assets/images/diyemedim.jpeg',
-      attendees: [],
-    ),
-    // Ağaçlar Ayakta Ölür
-    EventModel(
-      id: 'e_agaclar_1',
-      title: 'Ağaçlar Ayakta Ölür',
-      category: 'Tiyatro',
-      location: 'İstanbul - Kenter Tiyatrosu',
-      dateTime: DateTime(2026, 5, 20, 20, 0),
-      description: 'Ağaçlar Ayakta Ölür, klasikleşmiş metni ve güçlü rejisiyle tiyatro severlerin karşısında.',
-      imageUrl: 'assets/images/agaclar_ayakta_olur.jpeg',
-      attendees: [],
-    ),
-  ];
+  final List<EventModel> _events = [];
+
+  String _normalizeText(String input) {
+    if (input.isEmpty) return '';
+    return input
+        .replaceAll('İ', 'i')
+        .replaceAll('I', 'ı')
+        .replaceAll('Ş', 's')
+        .replaceAll('ş', 's')
+        .replaceAll('Ğ', 'g')
+        .replaceAll('ğ', 'g')
+        .replaceAll('Ü', 'u')
+        .replaceAll('ü', 'u')
+        .replaceAll('Ö', 'o')
+        .replaceAll('ö', 'o')
+        .replaceAll('Ç', 'c')
+        .replaceAll('ç', 'c')
+        .replaceAll('ı', 'i')
+        .toLowerCase()
+        .replaceAll('i̇', 'i');
+  }
 
   List<EventModel> get filteredEvents {
     final now = DateTime.now();
-    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now)).toList();
-    
-    if (_searchQuery.isNotEmpty) {
-      final query = _searchQuery.toLowerCase();
-      activeEvents = activeEvents.where((e) => 
-        e.title.toLowerCase().contains(query) || 
-        e.description.toLowerCase().contains(query) || 
-        e.location.toLowerCase().contains(query)
-      ).toList();
+    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(hours: 6)))).toList();
+
+    if (_selectedCity != 'Tüm Şehirler') {
+      final cityNorm = _normalizeText(_selectedCity);
+      activeEvents = activeEvents.where((e) => _normalizeText(e.location).contains(cityNorm)).toList();
+    }
+
+    if (_searchQuery.trim().isNotEmpty) {
+      final query = _normalizeText(_searchQuery.trim());
+      return activeEvents.where((e) {
+        final title = _normalizeText(e.title);
+        final desc = _normalizeText(e.description);
+        final loc = _normalizeText(e.location);
+        final cat = _normalizeText(e.category);
+        return title.contains(query) || desc.contains(query) || loc.contains(query) || cat.contains(query);
+      }).toList();
     }
     
     if (_selectedCategory == 'Tümü') return activeEvents;
@@ -710,21 +507,29 @@ class MockEventService extends ChangeNotifier {
     }
     
     if (_selectedCategory == '🌟 Sana Özel') {
-      // Kullanıcının ilgi alanlarına (tags) göre filtrele
       return activeEvents.where((e) {
         return currentUser.tags.any((tag) => 
-          e.category.toLowerCase().contains(tag.toLowerCase()) ||
-          e.title.toLowerCase().contains(tag.toLowerCase())
+          _normalizeText(e.category).contains(_normalizeText(tag)) ||
+          _normalizeText(e.title).contains(_normalizeText(tag))
         );
       }).toList();
     }
     
     if (_selectedCategory == '💖 Eşleşme Oranı Yüksek') {
-      // Eşleşme oranı yüksek olanları (katılımcı sayısına göre veya rastgele şimdilik) getir
       return List<EventModel>.from(activeEvents).reversed.toList();
     }
     
-    return activeEvents.where((e) => e.category == _selectedCategory).toList();
+    final selectedNorm = _normalizeText(_selectedCategory);
+    return activeEvents.where((e) {
+      final catNorm = _normalizeText(e.category);
+      if (selectedNorm == 'konser') {
+        return catNorm.contains('konser') || catNorm.contains('music') || catNorm.contains('müzik') || catNorm.contains('pop') || catNorm.contains('rock');
+      }
+      if (selectedNorm == 'tiyatro') {
+        return catNorm.contains('tiyatro') || catNorm.contains('theatre') || catNorm.contains('art');
+      }
+      return catNorm.contains(selectedNorm);
+    }).toList();
   }
 
   void toggleEventVisibility(String id) {
@@ -749,7 +554,6 @@ class MockEventService extends ChangeNotifier {
       final event = _events[eventIndex];
       bool changed = false;
 
-      // 1. Etkinliğin katılımcılar listesine ekle (yoksa)
       if (!event.attendees.any((u) => u.id == currentUser.id)) {
         event.attendees.add(UserModel(
           id: currentUser.id,
@@ -762,13 +566,11 @@ class MockEventService extends ChangeNotifier {
         changed = true;
       }
 
-      // 2. Kullanıcının planlanan etkinlikler listesine ekle (yoksa)
       if (!currentUser.plannedEvents.contains(eventId)) {
         currentUser.plannedEvents.add(eventId);
-        _savePlannedEvents(); // Save to preferences locally
+        _savePlannedEvents();
         changed = true;
 
-        // Supabase veritabanına kaydet (Gerçek zamanlı Swipe ve Mesajlar için)
         try {
           await _supabase.from('event_attendees').insert({
             'user_id': currentUser.id,
@@ -787,12 +589,10 @@ class MockEventService extends ChangeNotifier {
   }
 
   bool isUserAttending(String eventId) {
-     // Check locally specifically for this user's planned events
      return currentUser.plannedEvents.contains(eventId);
   }
 
-  // Get all events
-  List<EventModel> get allEvents => _events.where((e) => e.dateTime.isAfter(DateTime.now())).toList();
+  List<EventModel> get allEvents => _events.where((e) => e.dateTime.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList();
 
   bool isUserCheckedIn(String eventId) {
     return currentUser.checkedInEventId == eventId;
@@ -800,7 +600,6 @@ class MockEventService extends ChangeNotifier {
 
   void checkIn(String eventId) {
     currentUser.checkedInEventId = eventId;
-    // Puan ekle
     currentUser.points += 50;
     notifyListeners();
   }
@@ -833,38 +632,31 @@ class MockEventService extends ChangeNotifier {
     int score = 0;
     List<String> commonalities = [];
 
-    // Tag matching
     final commonTags = currentUser.tags.where((tag) => targetUser.tags.contains(tag)).toList();
     score += commonTags.length * 15;
     if (commonTags.isNotEmpty) {
       commonalities.add('İkiniz de ${commonTags.take(2).join(' ve ')} seviyorsunuz!');
     }
 
-    // Planned events matching
     final commonEvents = currentUser.plannedEvents.where((e) => targetUser.plannedEvents.contains(e)).toList();
-    score += commonEvents.length * 20;
+    score += commonEvents.length * 30;
     if (commonEvents.isNotEmpty) {
-      commonalities.add('İkiniz de aynı etkinliğe gitmeyi planlıyorsunuz!');
+      commonalities.add('Aynı etkinliğe gitmeyi planlıyorsunuz!');
     }
 
-    // Past events simulation (Dummy)
-    if (targetUser.id.hashCode % 3 == 0) {
-      score += 25;
-      commonalities.add('Son bir ayda 3 kez aynı tiyatroya gittiniz!');
+    if (currentUser.city != null && targetUser.city != null && currentUser.city == targetUser.city) {
+      score += 10;
+      commonalities.add('İkiniz de ${currentUser.city}\'desiniz.');
     }
 
-    // Favorite place simulation (Dummy)
-    if (targetUser.name.length % 2 == 0) {
-      score += 15;
-      commonalities.add('Favori mekanınız aynı halı saha!');
+    score = score.clamp(35, 98);
+    if (commonalities.isEmpty) {
+      commonalities.add('Ortak ilgi alanlarınız var, tanışmak için harika bir fırsat!');
     }
-
-    // Cap score at 99
-    if (score > 99) score = 99;
-    if (score < 40) score = 40 + (targetUser.id.hashCode % 30); // Minimum vibe
 
     return {
       'score': score,
       'commonalities': commonalities,
     };
-  }}
+  }
+}

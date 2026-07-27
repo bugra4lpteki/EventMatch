@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
-import '../../events/models/event_model.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});

@@ -7,6 +7,10 @@ import '../models/user_model.dart';
 import '../models/group_model.dart';
 import '../widgets/vibe_check_widget.dart';
 import '../services/mock_event_service.dart';
+import '../widgets/match_dialog.dart';
+import '../../profile/screens/user_profile_screen.dart';
+import '../../messages/services/mock_message_service.dart';
+import '../../messages/screens/chat_detail_screen.dart';
 
 class SwipeScreen extends StatefulWidget {
   const SwipeScreen({super.key});
@@ -18,6 +22,7 @@ class SwipeScreen extends StatefulWidget {
 class _SwipeScreenState extends State<SwipeScreen> {
   final AppinioSwiperController _swiperController = AppinioSwiperController();
   List<UserModel> _potentialMatches = [];
+  int _refreshCount = 0;
 
   @override
   void initState() {
@@ -48,81 +53,161 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
         return Column(
           children: [
-            // Mode Toggle
+            // Mode Toggle & Refresh Button
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => isDoubleDate ? matchService.toggleDoubleDateMode() : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: !isDoubleDate ? AppColors.primary : Colors.transparent,
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          child: Center(
-                            child: Text(
-                              'Tekli',
-                              style: TextStyle(
-                                color: !isDoubleDate ? Colors.white : AppColors.textSecondary,
-                                fontWeight: FontWeight.bold,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(30),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => isDoubleDate ? matchService.toggleDoubleDateMode() : null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: !isDoubleDate ? AppColors.primary : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(26),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Tekli',
+                                    style: TextStyle(
+                                      color: !isDoubleDate ? Colors.white : AppColors.textSecondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: () => !isDoubleDate ? matchService.toggleDoubleDateMode() : null,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          decoration: BoxDecoration(
-                            color: isDoubleDate ? AppColors.primary : Colors.transparent,
-                            borderRadius: BorderRadius.circular(26),
-                          ),
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.group,
-                                  size: 16,
-                                  color: isDoubleDate ? Colors.white : AppColors.textSecondary,
+                          Expanded(
+                            child: GestureDetector(
+                              onTap: () => !isDoubleDate ? matchService.toggleDoubleDateMode() : null,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: isDoubleDate ? AppColors.primary : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(26),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Double Date',
-                                  style: TextStyle(
-                                    color: isDoubleDate ? Colors.white : AppColors.textSecondary,
-                                    fontWeight: FontWeight.bold,
+                                child: Center(
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.group,
+                                        size: 16,
+                                        color: isDoubleDate ? Colors.white : AppColors.textSecondary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Double Date',
+                                        style: TextStyle(
+                                          color: isDoubleDate ? Colors.white : AppColors.textSecondary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
-                        ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      shape: BoxShape.circle,
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.refresh_rounded, color: AppColors.primary),
+                      tooltip: 'Profilleri Yenile',
+                      onPressed: () async {
+                        await matchService.loadPotentialMatches();
+                        if (mounted) {
+                          setState(() {
+                            _refreshCount++;
+                          });
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Profiller yenilendi! 🔄'),
+                              duration: Duration(seconds: 1),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
 
             if (items.isEmpty)
               Expanded(
                 child: Center(
-                  child: Text(
-                    'Şu an için yeni eşleşme bulunamadı.',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.style_outlined, size: 64, color: AppColors.surface),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Şu an için yeni eşleşme bulunamadı.',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              await matchService.loadPotentialMatches();
+                              if (mounted) {
+                                setState(() {
+                                  _refreshCount++;
+                                });
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.surface,
+                            ),
+                            icon: const Icon(Icons.refresh, color: Colors.white),
+                            label: const Text('Yenile', style: TextStyle(color: Colors.white)),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () async {
+                              await matchService.resetSwipes();
+                              if (mounted) {
+                                setState(() {
+                                  _refreshCount++;
+                                });
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Test etkileşimleri sıfırlandı! Profiller yeniden yüklendi. 🔄'),
+                                  ),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                            ),
+                            icon: const Icon(Icons.restore, color: Colors.white),
+                            label: const Text('Sıfırla & Yeniden Yükle', style: TextStyle(color: Colors.white)),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -131,7 +216,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 12.0),
                   child: AppinioSwiper(
-                    key: ValueKey(isDoubleDate), // Rebuild swiper on mode change
+                    key: ValueKey('${isDoubleDate}_${_refreshCount}_${items.length}'),
                     controller: _swiperController,
                     cardCount: items.length,
                     onSwipeEnd: (prev, target, activity) => _onSwipeEnd(prev, target, activity, items),
@@ -306,6 +391,10 @@ class _SwipeScreenState extends State<SwipeScreen> {
   }
 
   Widget _buildUserCard(UserModel user) {
+    final String photoUrl = user.avatarUrl.isNotEmpty
+        ? user.avatarUrl
+        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
@@ -320,13 +409,23 @@ class _SwipeScreenState extends State<SwipeScreen> {
       ),
       child: Stack(
         children: [
-          // Avatar Image
+          // Avatar / Profile Photo Image
           Positioned.fill(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(24),
-              child: user.avatarUrl.startsWith('http')
-                  ? Image.network(user.avatarUrl, fit: BoxFit.cover)
-                  : Container(color: AppColors.background), // Fallback
+              child: photoUrl.startsWith('http')
+                  ? Image.network(
+                      photoUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: AppColors.surface,
+                        child: Icon(Icons.person, size: 80, color: AppColors.primary),
+                      ),
+                    )
+                  : Container(
+                      color: AppColors.surface,
+                      child: Icon(Icons.person, size: 80, color: AppColors.primary),
+                    ),
             ),
           ),
           // Gradient Overlay
@@ -338,9 +437,33 @@ class _SwipeScreenState extends State<SwipeScreen> {
                   colors: [Colors.transparent, Colors.black87],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  stops: [0.5, 1.0],
+                  stops: [0.4, 1.0],
                 ),
               ),
+            ),
+          ),
+          // Info Button Top Right
+          Positioned(
+            top: 16,
+            right: 16,
+            child: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.4),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 22),
+              ),
+              tooltip: 'Profili Görüntüle',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfileScreen(user: user),
+                  ),
+                );
+              },
             ),
           ),
           // User Info
@@ -348,19 +471,28 @@ class _SwipeScreenState extends State<SwipeScreen> {
             bottom: 24,
             left: 24,
             right: 24,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      user.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => UserProfileScreen(user: user),
+                  ),
+                );
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        user.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
                     const SizedBox(width: 8),
                     // Badge Icons
                     ...user.badges.map((badge) => Padding(
@@ -452,6 +584,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
               ],
             ),
           ),
+          ),
         ],
       ),
     );
@@ -522,7 +655,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
     }
   }
 
-  void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<dynamic> items) {
+  void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<dynamic> items) async {
     final matchService = context.read<MockMatchService>();
     final item = items[previousIndex];
     final itemName = item is UserModel ? item.name : (item as GroupModel).name;
@@ -530,13 +663,29 @@ class _SwipeScreenState extends State<SwipeScreen> {
     if (activity is Swipe) {
       if (activity.direction == AxisDirection.right) {
         if (item is UserModel) {
-          matchService.swipeRight(item);
-        } else {
-          // Group match logic could be added here
+          final isMutualMatch = await matchService.swipeRight(item);
+          if (isMutualMatch && mounted) {
+            final msgService = context.read<MockMessageService>();
+            final chat = msgService.createOrGetChatForUser(item);
+            await msgService.reloadChats();
+            
+            MatchDialog.show(
+              context,
+              matchedUser: item,
+              onSendMessage: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => ChatDetailScreen(chat: chat),
+                  ),
+                );
+              },
+            );
+          } else if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$itemName kişisine eşleşme isteği gönderildi!')),
+            );
+          }
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$itemName kişisine eşleşme isteği gönderildi!')),
-        );
       } else if (activity.direction == AxisDirection.left) {
         if (item is UserModel) {
           matchService.swipeLeft(item);

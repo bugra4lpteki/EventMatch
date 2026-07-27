@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
-import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../models/event_model.dart';
-import '../services/mock_event_service.dart';
 
 class EventCard extends StatelessWidget {
   final EventModel event;
@@ -11,197 +9,240 @@ class EventCard extends StatelessWidget {
 
   const EventCard({super.key, required this.event, required this.onTap});
 
+  String _formatTurkishDate(DateTime dt) {
+    const months = [
+      'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+      'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+    ];
+    return "${dt.day} ${months[dt.month - 1]} ${dt.year}";
+  }
+
+  IconData _getCategoryIcon(String category) {
+    final lower = category.toLowerCase();
+    if (lower.contains('konser') || lower.contains('müzik') || lower.contains('music')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('tiyatro') || lower.contains('sahne')) {
+      return Icons.theater_comedy_rounded;
+    } else if (lower.contains('stand-up') || lower.contains('komedi')) {
+      return Icons.emoji_emotions_rounded;
+    } else if (lower.contains('spor')) {
+      return Icons.sports_soccer_rounded;
+    }
+    return Icons.event_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final dateStr = "${event.dateTime.day.toString().padLeft(2, '0')}.${event.dateTime.month.toString().padLeft(2, '0')}.${event.dateTime.year} - ${event.dateTime.hour.toString().padLeft(2, '0')}:${event.dateTime.minute.toString().padLeft(2, '0')}";
+    final formattedDate = _formatTurkishDate(event.dateTime);
+    final ticketUrlStr = event.effectiveTicketUrl;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
-          color: AppColors.surface.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1),
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
+          ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 10,
-              spreadRadius: 1,
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(20),
-          child: AspectRatio(
-            aspectRatio: 3 / 4,
-            child: Stack(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Üst Bölüm: 16:9 Banner Görseli
+            Stack(
               children: [
-                Positioned.fill(
-                  child: Hero(
-                    tag: 'event_image_${event.id}',
-                    child: event.imageUrl.startsWith('http')
-                        ? Image.network(
-                            event.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: AppColors.surface,
-                              child: Center(
-                                child: Icon(Icons.broken_image, color: AppColors.primary, size: 32),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  child: SizedBox(
+                    height: 190,
+                    width: double.infinity,
+                    child: Hero(
+                      tag: 'event_image_${event.id}',
+                      child: event.imageUrl.startsWith('http')
+                          ? Image.network(
+                              event.imageUrl,
+                              cacheWidth: 800,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.center,
+                              errorBuilder: (context, error, stackTrace) => Container(
+                                color: AppColors.surface,
+                                child: Center(
+                                  child: Icon(Icons.broken_image, color: AppColors.primary, size: 36),
+                                ),
                               ),
+                            )
+                          : Image.asset(
+                              event.imageUrl,
+                              fit: BoxFit.cover,
+                              alignment: Alignment.center,
                             ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Shimmer.fromColors(
-                                baseColor: AppColors.surface,
-                                highlightColor: AppColors.primary.withOpacity(0.3),
-                                child: Container(color: Colors.white),
-                              );
-                            },
-                          )
-                        : Image.asset(
-                            event.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: AppColors.surface,
-                              child: Center(
-                                child: Icon(Icons.broken_image, color: AppColors.primary, size: 32),
-                              ),
-                            ),
-                          ),
-                  ),
-                ),
-                Positioned.fill(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black.withOpacity(0.8)],
-                        stops: const [0.5, 1.0],
-                      ),
                     ),
                   ),
                 ),
-                if (event.isPopular)
-                  Positioned(
-                    top: 12,
-                    left: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [Colors.orange, Colors.deepOrange]),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                      ),
-                      child: const Row(
-                        children: [
-                          Icon(Icons.star, color: Colors.white, size: 10),
-                          SizedBox(width: 4),
-                          Text(
-                            'POPÜLER',
-                            style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                // Üst Sağ: "YAKINDA" / "POPÜLER" Turuncu Etiket
                 Positioned(
-                  top: 12,
-                  right: 12,
+                  top: 14,
+                  right: 14,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.flash_on, color: Colors.amber, size: 14),
-                        const SizedBox(width: 4),
-                        Text(
-                          event.atmosphere,
-                          style: const TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold),
+                      color: const Color(0xFFF97316), // Turuncu badge (birebir ekran görüntüsü)
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFF97316).withValues(alpha: 0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
                         ),
                       ],
                     ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  right: 16,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              event.title,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: AppColors.secondary.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              event.category,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
+                    child: Text(
+                      event.isPopular ? 'POPÜLER' : 'YAKINDA',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          const Icon(Icons.location_on_outlined, color: Colors.white70, size: 16),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              event.location,
-                              style: const TextStyle(color: Colors.white70, fontSize: 13),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined, color: Colors.white70, size: 16),
-                          const SizedBox(width: 6),
-                          Text(
-                            dateStr,
-                            style: const TextStyle(color: Colors.white70, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
+            // Alt Bölüm: Detaylar Panel (Birebir Ekran Görüntüsü Düzeni)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Kategori Etiketi & Biletix Sağ Rozeti
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.1),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(_getCategoryIcon(event.category), size: 14, color: AppColors.textPrimary),
+                            const SizedBox(width: 6),
+                            Text(
+                              event.category,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'biletix',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Etkinlik Başlığı
+                  Text(
+                    event.title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                      height: 1.2,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  // Tarih ve Mekan Bilgisi (Örn: 26 Temmuz 2026 • Harbiye Cemil Topuzlu...)
+                  Text(
+                    '$formattedDate • ${event.location}',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: AppColors.textSecondary.withValues(alpha: 0.8),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 14),
+                  // biletix etiketi & Bilet bilgisi için tıkla / BİLET AL
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'biletix',
+                          style: TextStyle(
+                            color: Colors.white54,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () async {
+                          if (ticketUrlStr.isNotEmpty) {
+                            await UrlLauncherHelper.launchURL(ticketUrlStr);
+                          }
+                        },
+                        child: Row(
+                          children: [
+                            Text(
+                              'Bilet bilgisi için tıkla',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.chevron_right_rounded, color: AppColors.textPrimary, size: 18),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

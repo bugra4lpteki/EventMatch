@@ -1,25 +1,72 @@
 import 'dart:io';
+import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/widgets/vibe_check_widget.dart';
 
-class UserProfileScreen extends StatelessWidget {
+class UserProfileScreen extends StatefulWidget {
   final UserModel user;
-  final String? eventId; // Optional: If coming from an event, allow sending a match request for this event
+  final String? eventId;
 
   const UserProfileScreen({super.key, required this.user, this.eventId});
 
-  Widget _buildImage(String url) {
-    if (url.startsWith('http')) {
-      return Image.network(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.person, size: 60, color: AppColors.primary));
-    } else if (url.startsWith('/')) { // Yerel dosya yolu (Image Picker'dan gelen)
-      return Image.file(File(url), fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.person, size: 60, color: AppColors.primary));
+  @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  int _currentPhotoIndex = 0;
+
+  Widget _defaultHeroBg(BuildContext context) {
+    return Container(
+      color: AppColors.surface,
+      child: Center(
+        child: Icon(Icons.person, size: 100, color: AppColors.primary),
+      ),
+    );
+  }
+
+  Future<void> _launchUrl(String urlString, String prefix) async {
+    String finalUrl = urlString.trim();
+    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+      if (prefix.isNotEmpty && !finalUrl.contains(prefix.split('/').first)) {
+        finalUrl = 'https://$prefix$finalUrl';
+      } else {
+        finalUrl = 'https://$finalUrl';
+      }
     }
-    return Image.asset(url, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.person, size: 60, color: AppColors.primary));
+    await UrlLauncherHelper.launchURL(finalUrl);
+  }
+
+  Widget _getSocialIcon(String url) {
+    final lUrl = url.toLowerCase();
+    final iconColor = AppColors.primary;
+    if (lUrl.contains('instagram')) return FaIcon(FontAwesomeIcons.instagram, color: iconColor, size: 20);
+    if (lUrl.contains('twitter') || lUrl.contains('x.com')) return FaIcon(FontAwesomeIcons.xTwitter, color: iconColor, size: 20);
+    if (lUrl.contains('linkedin')) return FaIcon(FontAwesomeIcons.linkedin, color: iconColor, size: 20);
+    if (lUrl.contains('tiktok')) return FaIcon(FontAwesomeIcons.tiktok, color: iconColor, size: 20);
+    if (lUrl.contains('facebook')) return FaIcon(FontAwesomeIcons.facebook, color: iconColor, size: 20);
+    if (lUrl.contains('youtube')) return FaIcon(FontAwesomeIcons.youtube, color: iconColor, size: 20);
+    if (lUrl.contains('spotify')) return FaIcon(FontAwesomeIcons.spotify, color: iconColor, size: 20);
+    if (lUrl.contains('github')) return FaIcon(FontAwesomeIcons.github, color: iconColor, size: 20);
+    return FaIcon(FontAwesomeIcons.link, color: iconColor, size: 20);
+  }
+
+  String _getSocialPrefix(String url) {
+    final lUrl = url.toLowerCase();
+    if (lUrl.contains('instagram')) return 'instagram.com/';
+    if (lUrl.contains('twitter') || lUrl.contains('x.com')) return 'x.com/';
+    if (lUrl.contains('linkedin')) return 'linkedin.com/in/';
+    if (lUrl.contains('tiktok')) return 'tiktok.com/@';
+    if (lUrl.contains('spotify')) return 'open.spotify.com/user/';
+    return '';
   }
 
   Widget _buildEventList(BuildContext context, String title, List<String> eventIds, MockEventService eventService) {
@@ -29,7 +76,7 @@ class UserProfileScreen extends StatelessWidget {
         children: [
           Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
           const SizedBox(height: 8),
-          Text("Henüz etkinlik eklenmemiş.", style: TextStyle(color: AppColors.textSecondary)),
+          Text("Henüz etkinlik eklenmemiş.", style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
         ],
       );
     }
@@ -38,24 +85,25 @@ class UserProfileScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         ...eventIds.map((id) {
           final event = eventService.getEventById(id);
           if (event == null) return const SizedBox.shrink();
           return Container(
-            margin: const EdgeInsets.only(bottom: 8),
+            margin: const EdgeInsets.only(bottom: 10),
             decoration: BoxDecoration(
               color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(10),
                 child: event.imageUrl.startsWith('http')
-                    ? Image.network(event.imageUrl, width: 48, height: 48, fit: BoxFit.cover)
-                    : Image.asset(event.imageUrl, width: 48, height: 48, fit: BoxFit.cover),
+                    ? Image.network(event.imageUrl, width: 50, height: 50, fit: BoxFit.cover)
+                    : Image.asset(event.imageUrl, width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.event, color: AppColors.primary)),
               ),
-              title: Text(event.title, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+              title: Text(event.title, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
               subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
             ),
           );
@@ -64,167 +112,23 @@ class UserProfileScreen extends StatelessWidget {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final eventService = context.read<MockEventService>();
-    final matchService = context.read<MockMatchService>();
-    final hasSentReq = eventId != null ? matchService.hasSentRequest(eventId!, user.id) : false;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(user.name, style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: AppColors.textPrimary),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.primary, width: 2),
-                ),
-                child: ClipOval(
-                  child: user.avatarUrl.isNotEmpty
-                      ? _buildImage(user.avatarUrl)
-                      : Icon(Icons.person, size: 60, color: AppColors.primary),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Center(
-              child: Text(
-                "${user.name}${user.age != null && user.age!.isNotEmpty ? ', ${user.age}' : ''}",
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                "${user.points} PUAN",
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (user.badges.isNotEmpty)
-              Center(
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.center,
-                  children: user.badges.map((badge) => _buildBadgeWidget(badge)).toList(),
-                ),
-              ),
-            const SizedBox(height: 24),
-            // Vibe Check Section
-            Builder(
-              builder: (context) {
-                final vibe = eventService.calculateVibe(user);
-                return VibeCheckWidget(
-                  score: vibe['score'],
-                  commonalities: vibe['commonalities'],
-                );
-              },
-            ),
-            if (user.aboutMe != null && user.aboutMe!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              Text("Hakkımda", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-              const SizedBox(height: 8),
-              Text(
-                user.aboutMe!,
-                style: TextStyle(fontSize: 15, color: AppColors.textSecondary, height: 1.5),
-              ),
-            ],
-            const SizedBox(height: 24),
-            Text("İlgi Alanları", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-            const SizedBox(height: 8),
-            if (user.tags.isNotEmpty)
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: user.tags.map((tag) {
-                  return Chip(
-                    label: Text(tag, style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
-                    backgroundColor: AppColors.surface,
-                    side: BorderSide.none,
-                  );
-                }).toList(),
-              )
-            else
-              Text("Henüz ilgi alanı belirtilmemiş.", style: TextStyle(color: AppColors.textSecondary)),
-            const SizedBox(height: 32),
-            
-            _buildEventList(context, "Gitmeyi Düşündüğü Etkinlikler", user.plannedEvents, eventService),
-            const SizedBox(height: 24),
-            _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService),
-
-            if (eventId != null) ...[
-              const SizedBox(height: 40),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: hasSentReq
-                      ? null
-                      : () {
-                          matchService.sendRequest(eventId!, user);
-                          Navigator.pop(context); // Go back after sending request
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text("Eşleşme isteği gönderildi!"), backgroundColor: AppColors.secondary),
-                          );
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: hasSentReq ? AppColors.surface : AppColors.primary,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  ),
-                  child: Text(
-                    hasSentReq ? 'İSTEK GÖNDERİLDİ' : 'TANIŞMAK İSTER MİSİN? (İSTEK GÖNDER)',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
-                      color: hasSentReq ? AppColors.textSecondary : Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ]
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildBadgeWidget(String badge) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+        color: AppColors.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.4), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(_getBadgeIcon(badge), color: AppColors.primary, size: 16),
+          Icon(_getBadgeIcon(badge), color: AppColors.primary, size: 14),
           const SizedBox(width: 6),
           Text(
             badge,
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: AppColors.primary,
               fontSize: 11,
               fontWeight: FontWeight.bold,
             ),
@@ -245,5 +149,390 @@ class UserProfileScreen extends StatelessWidget {
       default:
         return Icons.emoji_events;
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final eventService = context.watch<MockEventService>();
+    final matchService = context.watch<MockMatchService>();
+    final user = widget.user;
+    final hasSentReq = widget.eventId != null ? matchService.hasSentRequest(widget.eventId!, user.id) : false;
+
+    final displayPhotos = user.avatarUrls.isNotEmpty
+        ? user.avatarUrls
+        : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
+
+    final ageStr = user.age != null && user.age!.isNotEmpty ? user.age : '24';
+    final cityStr = user.city != null && user.city!.isNotEmpty ? user.city! : 'İstanbul';
+
+    // Sadece kullanıcının gerçekten eklediği sosyal medya bağlantıları
+    final socialLinks = user.socialLinks;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          user.name,
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: CustomScrollView(
+        slivers: [
+          // ── Hero Profile Card ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(36),
+                child: SizedBox(
+                  height: 380,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      // Background images (PageView)
+                      if (displayPhotos.isEmpty)
+                        _defaultHeroBg(context)
+                      else
+                        PageView.builder(
+                          scrollBehavior: ScrollConfiguration.of(context).copyWith(
+                            dragDevices: {
+                              PointerDeviceKind.touch,
+                              PointerDeviceKind.mouse,
+                              PointerDeviceKind.trackpad,
+                            },
+                          ),
+                          itemCount: displayPhotos.length,
+                          onPageChanged: (index) {
+                            setState(() {
+                              _currentPhotoIndex = index;
+                            });
+                          },
+                          itemBuilder: (context, index) {
+                            final photoUrl = displayPhotos[index];
+                            if (photoUrl.isEmpty) return _defaultHeroBg(context);
+                            if (photoUrl.startsWith('http') || kIsWeb) {
+                              return Image.network(
+                                photoUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _defaultHeroBg(context),
+                              );
+                            } else {
+                              return Image.file(
+                                File(photoUrl),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _defaultHeroBg(context),
+                              );
+                            }
+                          },
+                        ),
+                      // Top gradient shadow
+                      IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.center,
+                              colors: [
+                                AppColors.background.withValues(alpha: 0.6),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Bottom gradient shadow
+                      IgnorePointer(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.bottomCenter,
+                              end: Alignment.center,
+                              colors: [
+                                AppColors.background.withValues(alpha: 0.8),
+                                Colors.transparent,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Page Indicators (-- ·)
+                      if (displayPhotos.length > 1)
+                        Positioned(
+                          bottom: 16,
+                          left: 0,
+                          right: 0,
+                          child: IgnorePointer(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(displayPhotos.length, (index) {
+                                final isActive = _currentPhotoIndex == index;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                                  width: isActive ? 24 : 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? AppColors.textPrimary
+                                        : AppColors.textPrimary.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content Sections ───────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // User Name & Social Links Row
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user.name,
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "$ageStr • $cityStr",
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Sosyal Medya İkonları
+                      Row(
+                        children: socialLinks.take(4).map((link) {
+                          if (link.isEmpty) return const SizedBox.shrink();
+                          return Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                            ),
+                            child: IconButton(
+                              icon: _getSocialIcon(link),
+                              onPressed: () => _launchUrl(link, _getSocialPrefix(link)),
+                              tooltip: link,
+                              constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                              padding: EdgeInsets.zero,
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        width: 10,
+                        height: 10,
+                        decoration: const BoxDecoration(
+                          color: Colors.greenAccent,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Çevrimiçi',
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      if (user.points > 0) ...[
+                        const SizedBox(width: 16),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${user.points} PUAN',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+
+                  // Rozetler (Badges)
+                  if (user.badges.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: user.badges.map((b) => _buildBadgeWidget(b)).toList(),
+                    ),
+                  ],
+
+                  const SizedBox(height: 20),
+
+                  // Vibe Check Section
+                  Builder(
+                    builder: (context) {
+                      final vibe = eventService.calculateVibe(user);
+                      return VibeCheckWidget(
+                        score: vibe['score'],
+                        commonalities: vibe['commonalities'],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Hakkımda Section
+                  if (user.aboutMe != null && user.aboutMe!.isNotEmpty) ...[
+                    Text(
+                      "Hakkımda",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      user.aboutMe!,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // İlgi Alanları Section
+                  Text(
+                    "İlgi Alanları",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (user.tags.isNotEmpty)
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: user.tags.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: AppColors.primary.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            tag,
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    )
+                  else
+                    Text(
+                      "Henüz ilgi alanı belirtilmemiş.",
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    ),
+                  const SizedBox(height: 28),
+
+                  // Etkinlik Listeleri
+                  _buildEventList(context, "Gitmeyi Düşündüğü Etkinlikler", user.plannedEvents, eventService),
+                  const SizedBox(height: 24),
+                  _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService),
+
+                  if (widget.eventId != null) ...[
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: hasSentReq
+                            ? null
+                            : () {
+                                matchService.sendRequest(widget.eventId!, user);
+                                Navigator.pop(context);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text("Eşleşme isteği gönderildi!"),
+                                    backgroundColor: AppColors.secondary,
+                                  ),
+                                );
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: hasSentReq ? AppColors.surface : AppColors.primary,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+                        ),
+                        child: Text(
+                          hasSentReq ? 'İSTEK GÖNDERİLDİ' : 'TANIŞMAK İSTER MİSİN? (İSTEK GÖNDER)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                            color: hasSentReq ? AppColors.textSecondary : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

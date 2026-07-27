@@ -1,8 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import 'home_screen.dart';
-
 import '../../auth/screens/auth_wrapper.dart';
 
 class SplashScreen extends StatefulWidget {

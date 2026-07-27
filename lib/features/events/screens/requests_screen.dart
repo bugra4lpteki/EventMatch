@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/mock_match_service.dart';
+import '../widgets/match_dialog.dart';
+import '../../messages/services/mock_message_service.dart';
+import '../../messages/screens/chat_detail_screen.dart';
 
 class RequestsScreen extends StatelessWidget {
   const RequestsScreen({super.key});
@@ -30,7 +33,7 @@ class RequestsScreen extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.inbox, size: 64, color: AppColors.surface),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
                     "Şu an bekleyen istek yok.",
                     style: TextStyle(
@@ -107,47 +110,28 @@ class RequestsScreen extends StatelessWidget {
                         IconButton(
                           icon: Icon(Icons.close, color: AppColors.textSecondary),
                           onPressed: () {
-                            matchService.rejectRequest(req.id);
+                            matchService.rejectRequest(req);
                           },
                         ),
                         ElevatedButton(
-                          onPressed: () {
-                            matchService.acceptRequest(req.id);
-                            showDialog(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                backgroundColor: AppColors.surface,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                                title: Text(
-                                  'Eşleşme Sağlandı! 🎉',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: AppColors.primary),
-                                ),
-                                content: Text(
-                                  '${req.fromUser.name} ile eşleştin. Şimdi mesajlaşma vakti!',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                actions: [
-                                  Center(
-                                    child: ElevatedButton(
-                                      onPressed: () => Navigator.pop(context),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                      ),
-                                      child: Text(
-                                        'Kapat',
-                                        style: TextStyle(color: Colors.white),
-                                      ),
+                          onPressed: () async {
+                            final success = await matchService.acceptRequest(req);
+                            if (success && context.mounted) {
+                              final msgService = context.read<MockMessageService>();
+                              final chat = msgService.createOrGetChatForUser(req.fromUser);
+
+                              MatchDialog.show(
+                                context,
+                                matchedUser: req.fromUser,
+                                onSendMessage: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (context) => ChatDetailScreen(chat: chat),
                                     ),
-                                  ),
-                                ],
-                              ),
-                            );
+                                  );
+                                },
+                              );
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
@@ -155,7 +139,7 @@ class RequestsScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          child: Text(
+                          child: const Text(
                             "Kabul Et",
                             style: TextStyle(color: Colors.white),
                           ),

@@ -14,8 +14,24 @@ class AuthService extends ChangeNotifier {
     });
   }
 
-  Future<String?> login(String email, String password) async {
+  Future<String?> login(String emailOrUsername, String password) async {
     try {
+      String email = emailOrUsername.trim();
+      
+      // E-posta formatında değilse kullanıcı adından e-postayı çekmeyi dene
+      if (!email.contains('@')) {
+        try {
+          final res = await _supabase
+              .from('users')
+              .select('id')
+              .eq('username', email)
+              .maybeSingle();
+          if (res != null) {
+            // Eğer username bulunduysa auth tablosundan deneyebiliriz veya kullanıcı doğrudan email girsin
+          }
+        } catch (_) {}
+      }
+
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -26,10 +42,18 @@ class AuthService extends ChangeNotifier {
       }
       return 'Oturum başlatılamadı.';
     } on AuthException catch (e) {
+      debugPrint('Login AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('invalid login credentials')) {
+        return 'Kullanıcı veya şifre hatalı. Yeni veritabanında hesabınız yoksa önce "Aramıza Katıl" sayfasından kayıt olmalısınız.';
+      }
+      if (msg.contains('email not confirmed')) {
+        return 'E-posta onaylanmamış. Supabase Authentication -> Providers -> Email ayarlarından "Confirm email" kapatılabilir.';
+      }
       return e.message;
     } catch (e) {
       debugPrint('Login Error: $e');
-      return 'Giriş sırasında bir hata oluştu.';
+      return 'Giriş sırasında hata oluştu: $e';
     }
   }
 
@@ -45,18 +69,25 @@ class AuthService extends ChangeNotifier {
         }, 
       );
       
-      return response.user != null;
+      if (response.user != null) {
+        if (response.session == null) {
+          try {
+            await _supabase.auth.signInWithPassword(email: email, password: password);
+          } catch (_) {}
+        }
+        return true;
+      }
+      return false;
     } on AuthException catch (e) {
-      if (e.message.toLowerCase().contains('unique') || e.message.toLowerCase().contains('duplicate')) {
-        throw Exception('Bu kullanıcı adı alınmış');
+      debugPrint('AuthException register error: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('unique') || msg.contains('duplicate') || msg.contains('already registered') || msg.contains('already exists')) {
+        throw Exception('Bu e-posta veya kullanıcı adı zaten kullanımda');
       }
       throw Exception(e.message);
     } catch (e) {
       debugPrint('Register Error: $e');
-      if (e.toString().toLowerCase().contains('unique') || e.toString().toLowerCase().contains('duplicate')) {
-        throw Exception('Bu kullanıcı adı alınmış');
-      }
-      return false;
+      throw Exception('Kayıt başarısız: ${e.toString().replaceAll('Exception: ', '')}');
     }
   }
 

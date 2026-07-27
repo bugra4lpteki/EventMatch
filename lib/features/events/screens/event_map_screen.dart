@@ -1,10 +1,10 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../services/mock_event_service.dart';
 import '../models/event_model.dart';
 import 'event_detail_screen.dart';
@@ -17,431 +17,372 @@ class EventMapScreen extends StatefulWidget {
 }
 
 class _EventMapScreenState extends State<EventMapScreen> {
-  GoogleMapController? _mapController;
+  late final MapController _mapController;
   Position? _currentPosition;
-  Set<Marker> _markers = {};
-  bool _isLoading = true;
+  EventModel? _selectedEvent;
+  String _selectedCategoryFilter = 'Tümü';
 
   @override
   void initState() {
     super.initState();
+    _mapController = MapController();
     _checkPermissionAndGetLocation();
   }
 
   Future<void> _checkPermissionAndGetLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return;
 
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Konum servisleri kapalı.')),
-        );
-      }
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+      LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Konum izni reddedildi.')),
-          );
-        }
-        setState(() => _isLoading = false);
-        return;
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Konum izni kalıcı olarak reddedildi.')),
+      if (permission == LocationPermission.deniedForever) return;
+
+      final position = await Geolocator.getCurrentPosition();
+      setState(() {
+        _currentPosition = position;
+      });
+
+      if (_currentPosition != null) {
+        _mapController.move(
+          LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          12.5,
         );
       }
-      setState(() => _isLoading = false);
-      return;
-    }
-
-    final position = await Geolocator.getCurrentPosition();
-    setState(() {
-      _currentPosition = position;
-      _isLoading = false;
-    });
-
-    if (_mapController != null && _currentPosition != null) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLng(
-          LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-        ),
-      );
-    }
+    } catch (_) {}
   }
 
-  EventModel? _selectedEvent;
-
-  void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
-    _loadEventMarkers();
-  }
-
-  void _loadEventMarkers() {
-    final eventService = context.read<MockEventService>();
-    final events = eventService.allEvents.where((e) => e.latitude != null && e.longitude != null);
-
-    final markers = events.map((event) {
-      return Marker(
-        markerId: MarkerId(event.id),
-        position: LatLng(event.latitude!, event.longitude!),
-        onTap: () {
-          setState(() {
-            _selectedEvent = event;
-          });
-          if (_mapController != null) {
-            _mapController!.animateCamera(
-              CameraUpdate.newLatLng(
-                LatLng(event.latitude!, event.longitude!),
-              ),
-            );
-          }
-        },
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          _getMarkerHue(event.category),
-        ),
-      );
-    }).toSet();
-
-    setState(() {
-      _markers = markers;
-    });
-  }
-
-  double _getMarkerHue(String category) {
-    switch (category.toLowerCase()) {
-      case 'tiyatro':
-        return BitmapDescriptor.hueOrange;
-      case 'konser':
-        return BitmapDescriptor.hueViolet;
-      case 'stand-up':
-        return BitmapDescriptor.hueYellow;
-      case 'festival':
-        return BitmapDescriptor.hueGreen;
-      default:
-        return BitmapDescriptor.hueRed;
+  IconData _getCategoryIcon(String category) {
+    final lower = category.toLowerCase();
+    if (lower.contains('konser') || lower.contains('müzik')) {
+      return Icons.music_note_rounded;
+    } else if (lower.contains('tiyatro') || lower.contains('sahne')) {
+      return Icons.theater_comedy_rounded;
+    } else if (lower.contains('stand-up') || lower.contains('komedi')) {
+      return Icons.emoji_emotions_rounded;
     }
+    return Icons.event_rounded;
+  }
+
+  bool _matchesCategory(String eventCategory, String filter) {
+    if (filter == 'Tümü') return true;
+    final cat = eventCategory.toLowerCase();
+    final f = filter.toLowerCase();
+
+    if (f == 'konser') {
+      return cat.contains('konser') || cat.contains('müzik') || cat.contains('music');
+    } else if (f == 'tiyatro') {
+      return cat.contains('tiyatro') || cat.contains('arts') || cat.contains('theatre') || cat.contains('sahne');
+    } else if (f == 'stand-up') {
+      return cat.contains('stand-up') || cat.contains('comedy') || cat.contains('komedi');
+    } else if (f == 'spor') {
+      return cat.contains('spor') || cat.contains('sports');
+    }
+    return cat.contains(f);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Etkinlik Haritası'),
-        backgroundColor: AppColors.background,
-        elevation: 0,
-      ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: AppColors.primary),
-            )
-          : Stack(
-              children: [
-                GoogleMap(
-                  onMapCreated: _onMapCreated,
-                  initialCameraPosition: CameraPosition(
-                    target: _currentPosition != null
-                        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-                        : LatLng(41.0082, 28.9784), // Default to Istanbul
-                    zoom: 12,
-                  ),
-                  onTap: (_) {
-                    setState(() {
-                      _selectedEvent = null;
-                    });
-                  },
-                  markers: _markers,
-                  myLocationEnabled: true,
-                  myLocationButtonEnabled: true,
-                  zoomControlsEnabled: false,
-                  mapToolbarEnabled: false,
-                  style: _mapStyle,
-                ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOutBack,
-                  bottom: _selectedEvent != null ? 32 : -200,
-                  left: 16,
-                  right: 16,
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 300),
-                    opacity: _selectedEvent != null ? 1.0 : 0.0,
-                    child: _selectedEvent != null ? _buildEventPreview(_selectedEvent!) : const SizedBox.shrink(),
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
+    final eventService = context.watch<MockEventService>();
+    final allEvents = eventService.allEvents;
 
-  Widget _buildEventPreview(EventModel event) {
-    return Container(
-      height: 140,
-      decoration: BoxDecoration(
-        color: AppColors.surface.withOpacity(0.9),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: AppColors.primary.withOpacity(0.4), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.15),
-            blurRadius: 25,
-            spreadRadius: 2,
-          ),
-        ],
+    // Koordinatları olan etkinlikler
+    List<EventModel> mapEvents = allEvents.where((e) => e.latitude != null && e.longitude != null).toList();
+
+    // Akıllı Kategori Filtreleme
+    if (_selectedCategoryFilter != 'Tümü') {
+      mapEvents = mapEvents.where((e) => _matchesCategory(e.category, _selectedCategoryFilter)).toList();
+    }
+
+    // Varsayılan Merkez: İstanbul (41.0082, 28.9784)
+    final initialCenter = _currentPosition != null
+        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+        : (mapEvents.isNotEmpty
+            ? LatLng(mapEvents.first.latitude!, mapEvents.first.longitude!)
+            : const LatLng(41.0082, 28.9784));
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text(
+          'Etkinlik Haritası',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
+        backgroundColor: AppColors.surface,
+        elevation: 0,
+        centerTitle: true,
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Row(
+      body: Stack(
+        children: [
+          // 1. Kesintisiz 100% Ücretsiz Harita Katmanı (OpenStreetMap / Carto Voyager)
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: initialCenter,
+              initialZoom: 11.5,
+              minZoom: 4,
+              maxZoom: 19,
+              onTap: (tapPosition, point) {
+                setState(() {
+                  _selectedEvent = null;
+                });
+              },
+            ),
             children: [
-              // Event Image with Badge
-              Stack(
-                children: [
-                  SizedBox(
-                    width: 130,
-                    height: double.infinity,
-                    child: Hero(
-                      tag: 'event_image_${event.id}',
-                      child: event.imageUrl.startsWith('http')
-                          ? Image.network(event.imageUrl, fit: BoxFit.cover)
-                          : Image.asset(event.imageUrl, fit: BoxFit.cover),
-                    ),
-                  ),
-                  if (event.isPopular)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.orange,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                        ),
-                        child: const Text(
-                          'POPÜLER',
-                          style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                ],
+              TileLayer(
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                userAgentPackageName: 'com.eventmatch.app',
+                tileProvider: NetworkTileProvider(),
+                panBuffer: 1,
+                keepBuffer: 3,
+                maxNativeZoom: 18,
               ),
-              // Event Info
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        event.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+              // Kullanıcı Konumu İkonu
+              if (_currentPosition != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                      width: 28,
+                      height: 28,
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          color: Colors.blueAccent,
+                          shape: BoxShape.circle,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                        child: Center(
+                          child: Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.flash_on, color: Colors.amber, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            event.atmosphere,
-                            style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              // Kompakt Şık Etkinlik İkonları (KÜÇÜLTÜLMÜŞ MİNİ MAVİ/KIRMIZI PINLER)
+              MarkerLayer(
+                markers: mapEvents.map((event) {
+                  final isSelected = _selectedEvent?.id == event.id;
+                  return Marker(
+                    point: LatLng(event.latitude!, event.longitude!),
+                    width: isSelected ? 36 : 28,
+                    height: isSelected ? 36 : 28,
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedEvent = event;
+                        });
+                        _mapController.move(
+                          LatLng(event.latitude!, event.longitude!),
+                          14,
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isSelected ? AppColors.primary : const Color(0xFFEF4444),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                        child: Icon(
+                          _getCategoryIcon(event.category),
+                          color: Colors.white,
+                          size: isSelected ? 18 : 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+
+          // 2. Üst Kategori Filtreleme Barı
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: ['Tümü', 'Konser', 'Tiyatro', 'Stand-up'].map((category) {
+                  final isSelected = _selectedCategoryFilter == category;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedCategoryFilter = category;
+                        _selectedEvent = null;
+                      });
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary : AppColors.surface.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          _buildMiniBadge(event.category, AppColors.primary),
-                          const SizedBox(width: 8),
-                          _buildDirectionButton(event),
-                        ],
+                      child: Text(
+                        category,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontSize: 12.5,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+
+          // 3. Konumuma Git Butonu
+          Positioned(
+            right: 16,
+            bottom: _selectedEvent != null ? 220 : 20,
+            child: FloatingActionButton.small(
+              heroTag: 'my_location_btn',
+              backgroundColor: AppColors.surface,
+              child: Icon(Icons.my_location, color: AppColors.primary),
+              onPressed: () {
+                if (_currentPosition != null) {
+                  _mapController.move(
+                    LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                    14,
+                  );
+                } else {
+                  _checkPermissionAndGetLocation();
+                }
+              },
+            ),
+          ),
+
+          // 4. Seçili Etkinlik Detay Paneli (Bottom Sheet)
+          if (_selectedEvent != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 20,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => EventDetailScreen(event: _selectedEvent!),
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: SizedBox(
+                          width: 80,
+                          height: 80,
+                          child: _selectedEvent!.imageUrl.startsWith('http')
+                              ? Image.network(_selectedEvent!.imageUrl, fit: BoxFit.cover)
+                              : Image.asset(_selectedEvent!.imageUrl, fit: BoxFit.cover),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _selectedEvent!.title,
+                              style: TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.location_on_outlined, color: AppColors.textSecondary, size: 13),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    _selectedEvent!.location,
+                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  '${_selectedEvent!.dateTime.day}.${_selectedEvent!.dateTime.month}.${_selectedEvent!.dateTime.year}',
+                                  style: TextStyle(color: AppColors.primary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                ),
+                                if (_selectedEvent!.effectiveTicketUrl.isNotEmpty)
+                                  GestureDetector(
+                                    onTap: () async {
+                                      await UrlLauncherHelper.launchURL(_selectedEvent!.effectiveTicketUrl);
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF2563EB),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Text(
+                                        'BİLET AL',
+                                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
-              // Go Button
-              InkWell(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => EventDetailScreen(event: event),
-                    ),
-                  );
-                },
-                child: Container(
-                  width: 50,
-                  height: double.infinity,
-                  color: AppColors.primary.withOpacity(0.1),
-                  child: Icon(Icons.chevron_right, color: AppColors.primary),
-                ),
-              ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
-
-  Widget _buildMiniBadge(String text, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.5)),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildDirectionButton(EventModel event) {
-    return InkWell(
-      onTap: () async {
-        final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}');
-        if (await canLaunchUrl(url)) {
-          await launchUrl(url, mode: LaunchMode.externalApplication);
-        }
-      },
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.1),
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.blue.withOpacity(0.3)),
-        ),
-        child: const Icon(Icons.directions, color: Colors.blue, size: 16),
-      ),
-    );
-  }
-
-  // Premium dark style for the map
-  final String _mapStyle = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [{"color": "#212121"}]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#212121"}]
-  },
-  {
-    "featureType": "administrative",
-    "elementType": "geometry",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "administrative.country",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#9e9e9e"}]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "stylers": [{"visibility": "off"}]
-  },
-  {
-    "featureType": "administrative.locality",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#bdbdbd"}]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [{"color": "#181818"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#616161"}]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.stroke",
-    "stylers": [{"color": "#1b1b1b"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry.fill",
-    "stylers": [{"color": "#2c2c2c"}]
-  },
-  {
-    "featureType": "road",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#8a8a8a"}]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [{"color": "#373737"}]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [{"color": "#3c3c3c"}]
-  },
-  {
-    "featureType": "road.highway.controlled_access",
-    "elementType": "geometry",
-    "stylers": [{"color": "#4e4e4e"}]
-  },
-  {
-    "featureType": "road.local",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#616161"}]
-  },
-  {
-    "featureType": "transit",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#757575"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [{"color": "#000000"}]
-  },
-  {
-    "featureType": "water",
-    "elementType": "labels.text.fill",
-    "stylers": [{"color": "#3d3d3d"}]
-  }
-]
-''';
 }

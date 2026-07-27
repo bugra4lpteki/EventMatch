@@ -6,6 +6,8 @@ import '../models/message_model.dart';
 import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
 
+import '../../profile/screens/user_profile_screen.dart';
+
 class ChatDetailScreen extends StatefulWidget {
   final ChatModel chat;
 
@@ -46,21 +48,46 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         titleSpacing: 0,
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundImage: NetworkImage(widget.chat.participant.avatarUrl),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.chat.participant.name,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                  ),
+        title: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UserProfileScreen(user: widget.chat.participant),
+              ),
+            );
+          },
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.primary,
+                backgroundImage: widget.chat.participant.avatarUrl.startsWith('http')
+                    ? NetworkImage(widget.chat.participant.avatarUrl)
+                    : null,
+                child: !widget.chat.participant.avatarUrl.startsWith('http')
+                    ? const Icon(Icons.person, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          widget.chat.participant.name,
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(Icons.arrow_forward_ios_rounded,
+                            size: 12, color: AppColors.primary),
+                      ],
+                    ),
                   if (widget.chat.isEventBased && widget.chat.relatedEvent != null)
                     Row(
                       children: [
@@ -99,6 +126,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ],
         ),
+      ),
       ),
       body: Consumer<MockMessageService>(
         builder: (context, messageService, child) {
