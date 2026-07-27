@@ -194,11 +194,27 @@ class MockMessageService extends ChangeNotifier {
   }
 
   /// Eşleşilen kullanıcı için sohbet döndürür veya oluşturur
-  ChatModel createOrGetChatForUser(UserModel user) {
+  ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
     final existingIndex = _chats.indexWhere((c) => c.participant.id == user.id);
     if (existingIndex >= 0) {
+      if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+        final chat = _chats[existingIndex];
+        final textTrim = initialMessage.trim();
+        if (!chat.messages.any((m) => m.text == textTrim)) {
+          chat.messages.add(MessageModel(
+            id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+            senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+            text: textTrim,
+            timestamp: DateTime.now(),
+          ));
+        }
+      }
       return _chats[existingIndex];
     }
+
+    final firstMsg = (initialMessage != null && initialMessage.trim().isNotEmpty)
+        ? initialMessage.trim()
+        : 'Harika, eşleştik! 🎉 Ne zaman etkinliğe gidiyoruz?';
 
     final newChat = ChatModel(
       id: 'chat_${user.id}_${DateTime.now().millisecondsSinceEpoch}',
@@ -208,8 +224,8 @@ class MockMessageService extends ChangeNotifier {
       messages: [
         MessageModel(
           id: 'msg_welcome_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: user.id,
-          text: 'Harika, eşleştik! 🎉 Ne zaman etkinliğe gidiyoruz?',
+          senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+          text: firstMsg,
           timestamp: DateTime.now(),
         )
       ],

@@ -21,8 +21,9 @@ class SwipeScreen extends StatefulWidget {
 
 class _SwipeScreenState extends State<SwipeScreen> {
   final AppinioSwiperController _swiperController = AppinioSwiperController();
-  List<UserModel> _potentialMatches = [];
+  final TextEditingController _messageController = TextEditingController();
   int _refreshCount = 0;
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
   @override
   void dispose() {
     _swiperController.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
@@ -231,55 +233,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
                   ),
                 ),
               ),
-            // Action Buttons
-            Padding(
-              padding: const EdgeInsets.only(bottom: 32.0, top: 8.0, left: 16.0, right: 16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildActionButton(
-                    icon: Icons.replay,
-                    color: Colors.amber,
-                    onPressed: () => _swiperController.unswipe(),
-                    size: 24,
-                    padding: 12,
-                  ),
-                  _buildActionButton(
-                    icon: Icons.close,
-                    color: Colors.redAccent,
-                    onPressed: () => _swiperController.swipeLeft(),
-                    size: 38,
-                    padding: 18,
-                  ),
-                  _buildActionButton(
-                    icon: Icons.star,
-                    color: Colors.blueAccent,
-                    onPressed: () => _swiperController.swipeUp(),
-                    size: 28,
-                    padding: 14,
-                  ),
-                  _buildActionButton(
-                    icon: Icons.favorite,
-                    color: Colors.greenAccent,
-                    onPressed: () => _swiperController.swipeRight(),
-                    size: 38,
-                    padding: 18,
-                  ),
-                  _buildActionButton(
-                    icon: Icons.bolt,
-                    color: Colors.purpleAccent,
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Profiliniz 30 dakika boyunca öne çıkarıldı! ⚡')),
-                      );
-                    },
-                    size: 24,
-                    padding: 12,
-                  ),
-                ],
-              ),
-            ),
+            // Message Input Bar (Replaces old buttons)
+            _buildMessageInputBar(items),
           ],
         );
       },
@@ -590,33 +545,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
     );
   }
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required Color color,
-    required VoidCallback onPressed,
-    double size = 36,
-    double padding = 16,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: AppColors.surface,
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: size / 2,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: color, size: size),
-        onPressed: onPressed,
-        padding: EdgeInsets.all(padding),
-      ),
-    );
-  }
-
   IconData _getTagIcon(String tag) {
     switch (tag.toLowerCase()) {
       case 'tiyatro':
@@ -655,7 +583,183 @@ class _SwipeScreenState extends State<SwipeScreen> {
     }
   }
 
+  Widget _buildMessageInputBar(List<dynamic> items) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final safeIndex = _currentIndex.clamp(0, items.length - 1);
+    final currentItem = items[safeIndex];
+    final String name = currentItem is UserModel
+        ? currentItem.name
+        : (currentItem is GroupModel ? currentItem.name : 'Kullanıcı');
+
+    return Container(
+      padding: const EdgeInsets.only(bottom: 24.0, top: 4.0, left: 16.0, right: 16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Quick Message Chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildQuickChip('🎵 Konsere birlikte gidelim mi?'),
+                const SizedBox(width: 6),
+                _buildQuickChip('☕ Bir kahve içelim mi?'),
+                const SizedBox(width: 6),
+                _buildQuickChip('✨ Harika bir profil, selam!'),
+                const SizedBox(width: 6),
+                _buildQuickChip('🎭 Etkinlikte buluşalım!'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Input & Action Row
+          Row(
+            children: [
+              // Pass Button
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.surface,
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 24),
+                  tooltip: 'Pas Geç',
+                  onPressed: () {
+                    _swiperController.swipeLeft();
+                    _messageController.clear();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Message TextField
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _messageController,
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                    maxLines: 1,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: (_) => _sendMatchMessage(currentItem),
+                    decoration: InputDecoration(
+                      hintText: '$name kişisine mesaj yaz...',
+                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Send Match Request Button
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AppColors.primary, AppColors.secondary],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.4),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  tooltip: 'Mesaj Gönder & Beğen',
+                  onPressed: () => _sendMatchMessage(currentItem),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChip(String text) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _messageController.text = text;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+
+  void _sendMatchMessage(dynamic item) async {
+    final messageText = _messageController.text.trim();
+    _messageController.clear();
+    FocusScope.of(context).unfocus();
+
+    if (item is UserModel) {
+      final matchService = context.read<MockMatchService>();
+      final isMutualMatch = await matchService.swipeRight(item, initialMessage: messageText);
+
+      if (isMutualMatch && mounted) {
+        final msgService = context.read<MockMessageService>();
+        final chat = msgService.createOrGetChatForUser(item, initialMessage: messageText);
+        await msgService.reloadChats();
+
+        MatchDialog.show(
+          context,
+          matchedUser: item,
+          onSendMessage: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ChatDetailScreen(chat: chat),
+              ),
+            );
+          },
+        );
+      } else if (mounted) {
+        final textMsg = messageText.isNotEmpty
+            ? '${item.name} kişisine mesajın gönderildi! 📩 Karşı taraf da seni beğenirse mesaj kutunuza düşecek.'
+            : '${item.name} kişisine eşleşme isteği gönderildi! Karşı taraf da beğendiğinde mesaj kutunuza düşecek.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(textMsg),
+            backgroundColor: AppColors.primary,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        _swiperController.swipeRight();
+      }
+    } else if (item is GroupModel) {
+      _swiperController.swipeRight();
+    }
+  }
+
   void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<dynamic> items) async {
+    setState(() {
+      _currentIndex = targetIndex;
+    });
     final matchService = context.read<MockMatchService>();
     final item = items[previousIndex];
     final itemName = item is UserModel ? item.name : (item as GroupModel).name;

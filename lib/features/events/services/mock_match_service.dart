@@ -324,7 +324,7 @@ class MockMatchService extends ChangeNotifier {
 
   // --- SWIPE / MATCH LOGIC ---
 
-  Future<bool> swipeRight(UserModel targetUser) async {
+  Future<bool> swipeRight(UserModel targetUser, {String? initialMessage}) async {
     bool isMutualMatch = false;
 
     try {
@@ -372,6 +372,18 @@ class MockMatchService extends ChangeNotifier {
             await _supabase.from('matches').insert(matchData);
           }
 
+          if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+            try {
+              await _supabase.from('messages').insert({
+                'match_id': matchRowId,
+                'sender_id': currentId,
+                'content': initialMessage.trim(),
+              });
+            } catch (e) {
+              debugPrint('[MatchService] initialMessage kaydetme hatası: $e');
+            }
+          }
+
           isMutualMatch = true;
           debugPrint('[MatchService] 🎉 Karşılıklı Eşleşme Başarılı! Match ID: $matchRowId');
         } else {
@@ -382,8 +394,20 @@ class MockMatchService extends ChangeNotifier {
           };
           if (eventId != null) matchData['event_id'] = eventId;
 
-          await _supabase.from('matches').insert(matchData);
-          debugPrint('[MatchService] 👍 Beğeni kaydedildi: $currentId -> ${targetUser.id}');
+          try {
+            final insertedMatch = await _supabase.from('matches').insert(matchData).select().maybeSingle();
+            if (initialMessage != null && initialMessage.trim().isNotEmpty && insertedMatch != null) {
+              await _supabase.from('messages').insert({
+                'match_id': insertedMatch['id'],
+                'sender_id': currentId,
+                'content': initialMessage.trim(),
+              });
+            }
+          } catch (e) {
+            debugPrint('[MatchService] Beğeni/Mesaj veritabanı ekleme hatası: $e');
+          }
+
+          debugPrint('[MatchService] 👍 Beğeni ve mesaj kaydedildi: $currentId -> ${targetUser.id}');
         }
       } else {
         isMutualMatch = true;
