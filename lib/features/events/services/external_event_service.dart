@@ -73,14 +73,10 @@ class ExternalEventService {
               }
             }
 
-            // 1. ÖNCELİK: Biletix İnternet Sitesinin Doğrudan Orijinal CDN Afiş Resmi
+            // 1. ÖNCELİK: Biletix İnternet Sayfasındaki Gerçek Orijinal Afiş Resmi (og:image meta html scraping)
             String imageUrl = '';
-            final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);
-            if (match != null) {
-              final code = match.group(1);
-              if (code != null && code.isNotEmpty) {
-                imageUrl = 'https://www.biletix.com/static/images/live/event/eventimages/$code.png';
-              }
+            if (ticketUrl.contains('biletix.com')) {
+              imageUrl = await fetchBiletixSiteImage(ticketUrl) ?? '';
             }
 
             // 2. ÖNCELİK: API HD Afiş Listesi
@@ -260,5 +256,44 @@ class ExternalEventService {
     } catch (e) {
       debugPrint('❌ Supabase senkronizasyon hatası: $e');
     }
+  }
+
+  /// 🌐 Biletix Web Sayfasından (biletix.com/performance/...) Orijinal og:image Afiş URL'sini Canlı Çekme
+  static Future<String?> fetchBiletixSiteImage(String biletixUrl) async {
+    try {
+      if (!biletixUrl.contains('biletix.com')) return null;
+
+      final response = await http.get(
+        Uri.parse(biletixUrl),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'tr-TR,tr;q=0.9',
+        },
+      ).timeout(const Duration(seconds: 3));
+
+      if (response.statusCode == 200) {
+        final html = response.body;
+
+        // 1. og:image / twitter:image Meta Etiketlerini Yakalama
+        final ogMatch = RegExp(r'<meta\s+property="og:image"\s+content="([^"]+)"', caseSensitive: false).firstMatch(html) ??
+                        RegExp(r'<meta\s+name="twitter:image"\s+content="([^"]+)"', caseSensitive: false).firstMatch(html);
+        if (ogMatch != null) {
+          final imgUrl = ogMatch.group(1);
+          if (imgUrl != null && imgUrl.startsWith('http')) {
+            debugPrint('[BiletixScraper] 🖼️ Biletix Orijinal Afiş Bulundu: $imgUrl');
+            return imgUrl;
+          }
+        }
+
+        // 2. Biletix CDN Statik Resim Adresi
+        final staticMatch = RegExp(r'https://www\.biletix\.com/static/images/live/event/eventimages/[^\s"'\x27>]+').firstMatch(html);
+        if (staticMatch != null) {
+          return staticMatch.group(0);
+        }
+      }
+    } catch (e) {
+      debugPrint('[BiletixScraper] Görsel çekme hatası ($biletixUrl): $e');
+    }
+    return null;
   }
 }
