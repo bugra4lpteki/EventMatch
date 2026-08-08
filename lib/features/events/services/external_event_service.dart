@@ -73,22 +73,35 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti (en yüksek çözünürlüklü HD afişi seçme & Akıllı Sanatçı Doğrulama)
-            String imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
+            // Görsel tespiti (Biletix 16:9 Resmi Etkinlik Afişini Seçme)
+            String imageUrl = '';
             if (item['images'] != null && (item['images'] as List).isNotEmpty) {
               final imagesList = List<Map<String, dynamic>>.from(item['images']);
-              imagesList.sort((a, b) {
-                int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                return wB.compareTo(wA);
-              });
-              imageUrl = imagesList.first['url'] ?? imageUrl;
+              
+              // 1. Öncelik: 16:9 Geniş Resmi Etkinlik Afişi
+              final banners169 = imagesList.where((img) => img['ratio']?.toString() == '16_9').toList();
+              if (banners169.isNotEmpty) {
+                banners169.sort((a, b) {
+                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                  return wB.compareTo(wA);
+                });
+                imageUrl = banners169.first['url']?.toString() ?? '';
+              }
+
+              // 2. Öncelik: En yüksek çözünürlüklü alternatif afiş
+              if (imageUrl.isEmpty) {
+                imagesList.sort((a, b) {
+                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                  return wB.compareTo(wA);
+                });
+                imageUrl = imagesList.first['url']?.toString() ?? '';
+              }
             }
 
-            // Akıllı Görsel Düzeltme (Ticketmaster Global İsim Çakışmalarını Engelleme)
-            final titleLower = title.toLowerCase();
-            if (titleLower.contains('mavi')) {
-              imageUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1000&auto=format&fit=crop';
+            if (imageUrl.isEmpty) {
+              imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
             }
 
             // Açıklama
