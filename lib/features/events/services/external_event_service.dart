@@ -107,7 +107,7 @@ class ExternalEventService {
             }
 
             if (imageUrl.isEmpty) {
-              imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
+              imageUrl = _getCategoryFallbackImage(category, title);
             }
 
             // Açıklama
@@ -309,5 +309,22 @@ class ExternalEventService {
       debugPrint('[BiletixScraper] Görsel çekme hatası ($biletixUrl): $e');
     }
     return null;
+  }
+
+  /// Katategoriye Göre Akıllı Görsel Belirleyici (Stand Up, Tiyatro, Konser, Spor vb.)
+  static String _getCategoryFallbackImage(String category, String title) {
+    final catLower = category.toLowerCase();
+    final titleLower = title.toLowerCase();
+
+    if (catLower.contains('theatre') || catLower.contains('tiyatro') || catLower.contains('arts') || titleLower.contains('stand up') || titleLower.contains('gösteri')) {
+      return 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop';
+    } else if (catLower.contains('sports') || catLower.contains('spor') || titleLower.contains('maç')) {
+      return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop';
+    } else if (catLower.contains('film') || catLower.contains('sinema')) {
+      return 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=1200&auto=format&fit=crop';
+    } else if (catLower.contains('fest') || titleLower.contains('fest')) {
+      return 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=1200&auto=format&fit=crop';
+    }
+    return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop';
   }
 }

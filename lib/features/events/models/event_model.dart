@@ -33,10 +33,30 @@ class EventModel {
     this.atmosphere = 'Sakin',
     this.isPopular = false,
     List<UserModel>? attendees,
-  })  : imageUrl = (imageUrl.contains('a0f0fa47') || title.toLowerCase().contains('mavi'))
-            ? 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop'
-            : imageUrl,
+  })  : imageUrl = _sanitizeImageUrl(imageUrl, title, category),
         attendees = attendees ?? [];
+
+  static String _sanitizeImageUrl(String url, String title, String category) {
+    final titleLower = title.toLowerCase();
+    final catLower = category.toLowerCase();
+
+    if (url.contains('a0f0fa47') || titleLower.contains('mavi')) {
+      return 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop';
+    }
+
+    if (url.isEmpty || url.contains('photo-1470225620780-dba8ba36b745')) {
+      if (catLower.contains('theatre') || catLower.contains('tiyatro') || catLower.contains('arts') || titleLower.contains('stand up') || titleLower.contains('gösteri')) {
+        return 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop';
+      } else if (catLower.contains('sports') || catLower.contains('spor') || titleLower.contains('maç')) {
+        return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop';
+      } else if (catLower.contains('film') || catLower.contains('sinema')) {
+        return 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?q=80&w=1200&auto=format&fit=crop';
+      }
+      return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop';
+    }
+
+    return url;
+  }
 
   final String atmosphere;
   final bool isPopular;
