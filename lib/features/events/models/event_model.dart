@@ -24,7 +24,7 @@ class EventModel {
     required this.location,
     required this.dateTime,
     required this.description,
-    required this.imageUrl,
+    required String imageUrl,
     this.latitude,
     this.longitude,
     this.ticketUrl,
@@ -33,7 +33,10 @@ class EventModel {
     this.atmosphere = 'Sakin',
     this.isPopular = false,
     List<UserModel>? attendees,
-  }) : attendees = attendees ?? [];
+  })  : imageUrl = (imageUrl.contains('a0f0fa47') || title.toLowerCase().contains('mavi'))
+            ? 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop'
+            : imageUrl,
+        attendees = attendees ?? [];
 
   final String atmosphere;
   final bool isPopular;
