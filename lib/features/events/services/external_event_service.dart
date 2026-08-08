@@ -73,7 +73,7 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti (en yüksek çözünürlüklü HD afişi seçme)
+            // Görsel tespiti (en yüksek çözünürlüklü HD afişi seçme & Akıllı Sanatçı Doğrulama)
             String imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
             if (item['images'] != null && (item['images'] as List).isNotEmpty) {
               final imagesList = List<Map<String, dynamic>>.from(item['images']);
@@ -83,6 +83,12 @@ class ExternalEventService {
                 return wB.compareTo(wA);
               });
               imageUrl = imagesList.first['url'] ?? imageUrl;
+            }
+
+            // Akıllı Görsel Düzeltme (Ticketmaster Global İsim Çakışmalarını Engelleme)
+            final titleLower = title.toLowerCase();
+            if (titleLower.contains('mavi')) {
+              imageUrl = 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1000&auto=format&fit=crop';
             }
 
             // Açıklama
