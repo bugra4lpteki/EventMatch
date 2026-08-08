@@ -73,22 +73,36 @@ class ExternalEventService {
               }
             }
 
-            // 1. ÖNCELİK: Biletix İnternet Sayfasındaki Gerçek Orijinal Afiş Resmi (og:image meta html scraping)
+            // Görsel tespiti: Ticketmaster / Biletix API'sinden gelen Orijinal Afişi Çekme
             String imageUrl = '';
-            if (ticketUrl.contains('biletix.com')) {
-              imageUrl = await fetchBiletixSiteImage(ticketUrl) ?? '';
-            }
-
-            // 2. ÖNCELİK: API HD Afiş Listesi
-            if (imageUrl.isEmpty && item['images'] != null && item['images'] is List) {
+            if (item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                rawList.sort((a, b) {
-                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                  return wB.compareTo(wA);
-                });
-                imageUrl = rawList.first['url']?.toString() ?? '';
+                // 1. Önce 16:9 oranındaki geniş resmi Biletix afişini bul
+                final banners169 = rawList.where((img) {
+                  final ratio = img['ratio']?.toString() ?? '';
+                  final u = img['url']?.toString() ?? '';
+                  return ratio == '16_9' || u.contains('16_9') || u.contains('TABLET_LANDSCAPE');
+                }).toList();
+
+                if (banners169.isNotEmpty) {
+                  banners169.sort((a, b) {
+                    int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                    int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                    return wB.compareTo(wA);
+                  });
+                  imageUrl = banners169.first['url']?.toString() ?? '';
+                }
+
+                // 2. Yoksa en yüksek çözünürlüklü alternatif görseli al
+                if (imageUrl.isEmpty) {
+                  rawList.sort((a, b) {
+                    int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                    int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                    return wB.compareTo(wA);
+                  });
+                  imageUrl = rawList.first['url']?.toString() ?? '';
+                }
               }
             }
 
