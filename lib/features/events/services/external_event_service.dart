@@ -286,7 +286,7 @@ class ExternalEventService {
         }
 
         // 2. Biletix CDN Statik Resim Adresi
-        final staticMatch = RegExp(r'https://www\.biletix\.com/static/images/live/event/eventimages/[^\s"'\x27>]+').firstMatch(html);
+        final staticMatch = RegExp(r'https://www\.biletix\.com/static/images/live/event/eventimages/[^">\s]+').firstMatch(html);
         if (staticMatch != null) {
           return staticMatch.group(0);
         }
