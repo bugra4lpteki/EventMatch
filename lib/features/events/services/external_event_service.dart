@@ -73,32 +73,35 @@ class ExternalEventService {
               }
             }
 
-            // 1. ÖNCELİK: Biletix Linkini Decode Et ve Performans Kodundan Orijinal Biletix Afişini Proxy İle Çek
+            // Görsel tespiti: Ticketmaster / Biletix Resmi 16:9 HD Afişini Çekme
             String imageUrl = '';
-            final decodedUrl = Uri.decodeFull(ticketUrl.toString());
-            final codeMatch = RegExp(r'performance/([A-Za-z0-9]+)', caseSensitive: false).firstMatch(decodedUrl) ??
-                              RegExp(r'event\.htm\?id=([A-Za-z0-9]+)', caseSensitive: false).firstMatch(decodedUrl);
-
-            if (codeMatch != null) {
-              final code = codeMatch.group(1);
-              if (code != null && code.isNotEmpty) {
-                imageUrl = 'https://images.weserv.nl/?url=www.biletix.com/static/images/live/event/eventimages/$code.png';
-              }
-            }
-
-            // 2. ÖNCELİK: API'den Gelen HD Afiş Resmini Weserv Proxy İle Çek
-            if (imageUrl.isEmpty && item['images'] != null && item['images'] is List) {
+            if (item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                rawList.sort((a, b) {
-                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                  return wB.compareTo(wA);
-                });
-                final rawUrl = rawList.first['url']?.toString() ?? '';
-                if (rawUrl.startsWith('http')) {
-                  final cleanUrl = rawUrl.replaceAll('https://', '').replaceAll('http://', '');
-                  imageUrl = 'https://images.weserv.nl/?url=$cleanUrl';
+                // 1. Önce 16:9 oranındaki geniş resmi Biletix afişini bul
+                final banners169 = rawList.where((img) {
+                  final ratio = img['ratio']?.toString() ?? '';
+                  final u = img['url']?.toString() ?? '';
+                  return ratio == '16_9' || u.contains('16_9') || u.contains('TABLET_LANDSCAPE');
+                }).toList();
+
+                if (banners169.isNotEmpty) {
+                  banners169.sort((a, b) {
+                    int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                    int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                    return wB.compareTo(wA);
+                  });
+                  imageUrl = banners169.first['url']?.toString() ?? '';
+                }
+
+                // 2. Yoksa en yüksek çözünürlüklü alternatif görseli al
+                if (imageUrl.isEmpty) {
+                  rawList.sort((a, b) {
+                    int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                    int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                    return wB.compareTo(wA);
+                  });
+                  imageUrl = rawList.first['url']?.toString() ?? '';
                 }
               }
             }
