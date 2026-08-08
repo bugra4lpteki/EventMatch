@@ -139,6 +139,7 @@ class ExternalEventService {
   List<EventModel> parseBiletixEvents(String rawJson) {
     try {
       final List<dynamic> list = jsonDecode(rawJson);
+      return list.map((item) {
         final ticketUrl = item['url'] ?? item['ticketUrl'] ?? 'https://www.biletix.com';
         String imageUrl = '';
         final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);
