@@ -3,15 +3,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/app_colors.dart';
 
 enum AppThemeType {
-  neonCyberpunk,
+  electricViolet,
+  cyberGold,
+  emeraldLuma,
   sunsetFire,
-  slateIndigo,
-  premiumCharcoal,
+  midnightCobalt,
 }
 
 class ThemeService extends ChangeNotifier {
   static const String _themeKey = 'selected_theme';
-  AppThemeType _currentTheme = AppThemeType.premiumCharcoal;
+  AppThemeType _currentTheme = AppThemeType.electricViolet;
 
   AppThemeType get currentTheme => _currentTheme;
 
@@ -40,55 +41,71 @@ class ThemeService extends ChangeNotifier {
 
   void _applyThemeColors(AppThemeType theme) {
     switch (theme) {
-      case AppThemeType.neonCyberpunk:
-        AppColors.background = Color(0xFF0D0D12);
-        AppColors.surface = Color(0xFF1A1A24);
-        AppColors.primary = Color(0xFFD900FF);
-        AppColors.primaryVariant = Color(0xFF9000FF);
-        AppColors.secondary = Color(0xFF00F0FF);
+      case AppThemeType.electricViolet:
+        AppColors.background = const Color(0xFF08080C);
+        AppColors.surface = const Color(0xFF12131F);
+        AppColors.primary = const Color(0xFF8B5CF6);
+        AppColors.primaryVariant = const Color(0xFFA78BFA);
+        AppColors.secondary = const Color(0xFFEC4899);
+        AppColors.accent = const Color(0xFF06B6D4);
         AppColors.textPrimary = Colors.white;
-        AppColors.textSecondary = Colors.white60;
-        AppColors.error = Color(0xFFFF3366);
+        AppColors.textSecondary = const Color(0xFF94A3B8);
         break;
+
+      case AppThemeType.cyberGold:
+        AppColors.background = const Color(0xFF06090E);
+        AppColors.surface = const Color(0xFF0F172A);
+        AppColors.primary = const Color(0xFF06B6D4);
+        AppColors.primaryVariant = const Color(0xFF38BDF8);
+        AppColors.secondary = const Color(0xFFF59E0B);
+        AppColors.accent = const Color(0xFF3B82F6);
+        AppColors.textPrimary = Colors.white;
+        AppColors.textSecondary = const Color(0xFF94A3B8);
+        break;
+
+      case AppThemeType.emeraldLuma:
+        AppColors.background = const Color(0xFF040D0A);
+        AppColors.surface = const Color(0xFF0A1F18);
+        AppColors.primary = const Color(0xFF10B981);
+        AppColors.primaryVariant = const Color(0xFF34D399);
+        AppColors.secondary = const Color(0xFF059669);
+        AppColors.accent = const Color(0xFF2DD4BF);
+        AppColors.textPrimary = Colors.white;
+        AppColors.textSecondary = const Color(0xFF94A3B8);
+        break;
+
       case AppThemeType.sunsetFire:
-        AppColors.background = Color(0xFF2A0325);
-        AppColors.surface = Color(0xFF640D5F);
-        AppColors.primary = Color(0xFFD91656);
-        AppColors.primaryVariant = Color(0xFFEB5B00);
-        AppColors.secondary = Color(0xFFFFB200);
+        AppColors.background = const Color(0xFF0D0608);
+        AppColors.surface = const Color(0xFF1C0D13);
+        AppColors.primary = const Color(0xFFFF5722);
+        AppColors.primaryVariant = const Color(0xFFFF8A65);
+        AppColors.secondary = const Color(0xFFFFC107);
+        AppColors.accent = const Color(0xFFE91E63);
         AppColors.textPrimary = Colors.white;
-        AppColors.textSecondary = Colors.white70;
-        AppColors.error = Color(0xFFFF4C4C);
+        AppColors.textSecondary = const Color(0xFF94A3B8);
         break;
-      case AppThemeType.slateIndigo:
-        AppColors.background = Color(0xFF0F172A);
-        AppColors.surface = Color(0xFF1E293B);
-        AppColors.primary = Color(0xFF6366F1);
-        AppColors.primaryVariant = Color(0xFF818CF8);
-        AppColors.secondary = Color(0xFF38BDF8);
-        AppColors.textPrimary = Color(0xFFF8FAFC);
-        AppColors.textSecondary = Color(0xFF94A3B8);
-        AppColors.error = Color(0xFFF43F5E);
-        break;
-      case AppThemeType.premiumCharcoal:
-        AppColors.background = Color(0xFF121212);
-        AppColors.surface = Color(0xFF1E1E1E);
-        AppColors.primary = Color(0xFFD4AF37);
-        AppColors.primaryVariant = Color(0xFFFDE047);
-        AppColors.secondary = Color(0xFFE5E5E5);
-        AppColors.textPrimary = Color(0xFFFFFFFF);
-        AppColors.textSecondary = Color(0xFFA3A3A3);
-        AppColors.error = Color(0xFFEF4444);
+
+      case AppThemeType.midnightCobalt:
+        AppColors.background = const Color(0xFF070B14);
+        AppColors.surface = const Color(0xFF0F172A);
+        AppColors.primary = const Color(0xFF2563EB);
+        AppColors.primaryVariant = const Color(0xFF60A5FA);
+        AppColors.secondary = const Color(0xFF38BDF8);
+        AppColors.accent = const Color(0xFF2DD4BF);
+        AppColors.textPrimary = Colors.white;
+        AppColors.textSecondary = const Color(0xFF94A3B8);
         break;
     }
   }
 
   String getThemeName(AppThemeType theme) {
     switch (theme) {
-      case AppThemeType.neonCyberpunk: return 'Neon Cyberpunk';
-      case AppThemeType.sunsetFire: return 'Sunset Ateş';
-      case AppThemeType.slateIndigo: return 'Sade İndigo';
-      case AppThemeType.premiumCharcoal: return 'Premium Kömür';
+      case AppThemeType.electricViolet: return 'Electric Violet & Pink 🔮';
+      case AppThemeType.cyberGold: return 'Siber Mavi & Kehribar Altını ⚡';
+      case AppThemeType.emeraldLuma: return 'Zümrüt Yeşili & Nane (Luma Style) 🟢';
+      case AppThemeType.sunsetFire: return 'Gün Batımı Alevi & Kırmızı 🌅';
+      case AppThemeType.midnightCobalt: return 'Gece Kobaltı & Buz Mavisi 🧊';
     }
   }
 }
+

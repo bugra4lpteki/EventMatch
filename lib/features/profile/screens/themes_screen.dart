@@ -96,14 +96,17 @@ class ThemesScreen extends StatelessWidget {
 
   Color _getThemePreviewColor(AppThemeType theme) {
     switch (theme) {
-      case AppThemeType.neonCyberpunk:
-        return const Color(0xFFD900FF);
+      case AppThemeType.electricViolet:
+        return const Color(0xFF8B5CF6);
+      case AppThemeType.cyberGold:
+        return const Color(0xFF06B6D4);
+      case AppThemeType.emeraldLuma:
+        return const Color(0xFF10B981);
       case AppThemeType.sunsetFire:
-        return const Color(0xFFD91656);
-      case AppThemeType.slateIndigo:
-        return const Color(0xFF6366F1);
-      case AppThemeType.premiumCharcoal:
-        return const Color(0xFFD4AF37);
+        return const Color(0xFFFF5722);
+      case AppThemeType.midnightCobalt:
+        return const Color(0xFF2563EB);
     }
   }
 }
+

@@ -458,10 +458,14 @@ class MockEventService extends ChangeNotifier {
   }
 
   final List<EventModel> _events = [];
+  final Map<String, String> _normalizedTextCache = {};
 
   String _normalizeText(String input) {
     if (input.isEmpty) return '';
-    return input
+    if (_normalizedTextCache.containsKey(input)) {
+      return _normalizedTextCache[input]!;
+    }
+    final normalized = input
         .replaceAll('İ', 'i')
         .replaceAll('I', 'ı')
         .replaceAll('Ş', 's')
@@ -477,6 +481,11 @@ class MockEventService extends ChangeNotifier {
         .replaceAll('ı', 'i')
         .toLowerCase()
         .replaceAll('i̇', 'i');
+    if (_normalizedTextCache.length > 1000) {
+      _normalizedTextCache.clear();
+    }
+    _normalizedTextCache[input] = normalized;
+    return normalized;
   }
 
   List<EventModel> get filteredEvents {
@@ -644,14 +653,16 @@ class MockEventService extends ChangeNotifier {
       commonalities.add('Aynı etkinliğe gitmeyi planlıyorsunuz!');
     }
 
-    if (currentUser.city != null && targetUser.city != null && currentUser.city == targetUser.city) {
+    if (currentUser.city != null && targetUser.city != null &&
+        currentUser.city!.trim().isNotEmpty && targetUser.city!.trim().isNotEmpty &&
+        currentUser.city!.trim().toLowerCase() == targetUser.city!.trim().toLowerCase()) {
       score += 10;
-      commonalities.add('İkiniz de ${currentUser.city}\'desiniz.');
+      commonalities.add('İkiniz de ${currentUser.city!.trim()}\'desiniz.');
     }
 
     score = score.clamp(35, 98);
     if (commonalities.isEmpty) {
-      commonalities.add('Ortak ilgi alanlarınız var, tanışmak için harika bir fırsat!');
+      commonalities.add('Ortak müzik ve etkinlik zevkleriniz var!');
     }
 
     return {

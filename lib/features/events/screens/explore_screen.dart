@@ -7,6 +7,8 @@ import '../widgets/popular_events_carousel.dart';
 import '../models/event_model.dart';
 import 'event_detail_screen.dart';
 
+import 'dart:ui';
+
 class ExploreScreen extends StatefulWidget {
   const ExploreScreen({super.key});
 
@@ -25,9 +27,17 @@ class _ExploreScreenState extends State<ExploreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+        },
+      ),
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        slivers: [
         SliverToBoxAdapter(
           child: Column(
             children: [
@@ -200,8 +210,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
         ),
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
-    );
-  }
+    ),
+  );
+}
 
   void _showFilterDialog(BuildContext context) {
     final eventService = context.read<MockEventService>();

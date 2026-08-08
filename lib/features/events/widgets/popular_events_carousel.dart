@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../models/event_model.dart';
 import '../screens/event_detail_screen.dart';
 
@@ -91,22 +92,10 @@ class _PopularEventsCarouselState extends State<PopularEventsCarousel> {
                     child: Stack(
                       children: [
                         Positioned.fill(
-                          child: event.imageUrl.startsWith('http')
-                              ? Image.network(
-                                  event.imageUrl,
-                                  cacheWidth: 800,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.topCenter,
-                                  errorBuilder: (context, error, stackTrace) => Container(
-                                    color: AppColors.surface,
-                                    child: const Icon(Icons.broken_image, color: Colors.white, size: 48),
-                                  ),
-                                )
-                              : Image.asset(
-                                  event.imageUrl,
-                                  fit: BoxFit.cover,
-                                  alignment: Alignment.topCenter,
-                                ),
+                          child: AppImageWidget(
+                            imageUrl: event.imageUrl,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         // Dark Gradient Overlay
                         Positioned.fill(

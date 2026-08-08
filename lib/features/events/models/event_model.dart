@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:geolocator/geolocator.dart';
 import 'user_model.dart';
 
 class EventModel {
@@ -144,5 +145,15 @@ class EventModel {
     desc = desc.replaceAll(RegExp(r'Bilet\s+Satış\s+Sayfası:\s*https?://[^\s]+', caseSensitive: false), '');
     desc = desc.replaceAll(RegExp(r'https?://[^\s]+'), '');
     return desc.trim();
+  }
+
+  double? getDistanceInKm(double userLat, double userLng) {
+    if (latitude == null || longitude == null) return null;
+    try {
+      final distanceInMeters = Geolocator.distanceBetween(userLat, userLng, latitude!, longitude!);
+      return (distanceInMeters / 1000.0);
+    } catch (_) {
+      return null;
+    }
   }
 }

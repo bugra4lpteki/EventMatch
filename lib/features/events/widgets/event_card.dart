@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../models/event_model.dart';
 
 class EventCard extends StatelessWidget {
@@ -42,72 +43,78 @@ class EventCard extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 20),
         decoration: BoxDecoration(
           color: AppColors.surface,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(26),
           border: Border.all(
-            color: Colors.white.withValues(alpha: 0.08),
-            width: 1,
+            color: Colors.white.withOpacity(0.12),
+            width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Üst Bölüm: 16:9 Banner Görseli
+            // Banner Image
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
                   child: SizedBox(
-                    height: 190,
+                    height: 200,
                     width: double.infinity,
                     child: Hero(
                       tag: 'event_image_${event.id}',
-                      child: event.imageUrl.startsWith('http')
-                          ? Image.network(
-                              event.imageUrl,
-                              cacheWidth: 800,
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                              errorBuilder: (context, error, stackTrace) => Container(
-                                color: AppColors.surface,
-                                child: Center(
-                                  child: Icon(Icons.broken_image, color: AppColors.primary, size: 36),
-                                ),
-                              ),
-                            )
-                          : Image.asset(
-                              event.imageUrl,
-                              fit: BoxFit.cover,
-                              alignment: Alignment.center,
-                            ),
+                      child: AppImageWidget(
+                        imageUrl: event.imageUrl,
+                        fit: BoxFit.cover,
+                        height: 200,
+                        width: double.infinity,
+                      ),
                     ),
                   ),
                 ),
-                // Üst Sağ: "YAKINDA" / "POPÜLER" Turuncu Etiket
+                // Gradient Shadow Overlay
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withOpacity(0.3),
+                          Colors.transparent,
+                          Colors.black.withOpacity(0.8),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.4, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                // Popular / Upcoming Badge
                 Positioned(
                   top: 14,
                   right: 14,
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF97316), // Turuncu badge (birebir ekran görüntüsü)
+                      gradient: event.isPopular ? AppColors.goldGradient : AppColors.accentGradient,
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFFF97316).withValues(alpha: 0.3),
-                          blurRadius: 6,
-                          offset: const Offset(0, 2),
+                          color: (event.isPopular ? const Color(0xFFF59E0B) : const Color(0xFF06B6D4)).withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
                         ),
                       ],
                     ),
                     child: Text(
-                      event.isPopular ? 'POPÜLER' : 'YAKINDA',
+                      event.isPopular ? '🔥 POPÜLER' : '⚡ YAKINDA',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 11,
@@ -119,66 +126,65 @@ class EventCard extends StatelessWidget {
                 ),
               ],
             ),
-            // Alt Bölüm: Detaylar Panel (Birebir Ekran Görüntüsü Düzeni)
+            // Content Info Panel
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.all(18.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Kategori Etiketi & Biletix Sağ Rozeti
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.08),
+                          color: AppColors.primary.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            width: 0.8,
+                            color: AppColors.primary.withOpacity(0.3),
+                            width: 1,
                           ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(_getCategoryIcon(event.category), size: 14, color: AppColors.textPrimary),
+                            Icon(_getCategoryIcon(event.category), size: 14, color: AppColors.primaryVariant),
                             const SizedBox(width: 6),
                             Text(
                               event.category,
                               style: TextStyle(
-                                color: AppColors.textPrimary,
+                                color: AppColors.primaryVariant,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(8),
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.white10),
                         ),
                         child: const Text(
                           'biletix',
                           style: TextStyle(
-                            color: Colors.white54,
+                            color: Colors.white70,
                             fontSize: 11,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Etkinlik Başlığı
                   Text(
                     event.title,
                     style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w800,
                       color: AppColors.textPrimary,
                       height: 1.2,
                     ),
@@ -186,35 +192,28 @@ class EventCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 6),
-                  // Tarih ve Mekan Bilgisi (Örn: 26 Temmuz 2026 • Harbiye Cemil Topuzlu...)
                   Text(
                     '$formattedDate • ${event.location}',
                     style: TextStyle(
                       fontSize: 13.5,
-                      color: AppColors.textSecondary.withValues(alpha: 0.8),
+                      color: AppColors.textSecondary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 14),
-                  // biletix etiketi & Bilet bilgisi için tıkla / BİLET AL
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'biletix',
-                          style: TextStyle(
-                            color: Colors.white54,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
+                      Row(
+                        children: [
+                          Icon(Icons.people_outline, color: AppColors.accent, size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Katılanlar var',
+                            style: TextStyle(color: AppColors.accent, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
-                        ),
+                        ],
                       ),
                       GestureDetector(
                         onTap: () async {
@@ -222,19 +221,34 @@ class EventCard extends StatelessWidget {
                             await UrlLauncherHelper.launchURL(ticketUrlStr);
                           }
                         },
-                        child: Row(
-                          children: [
-                            Text(
-                              'Bilet bilgisi için tıkla',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 10,
+                                spreadRadius: 1,
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(Icons.chevron_right_rounded, color: AppColors.textPrimary, size: 18),
-                          ],
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Bilet Al',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(Icons.chevron_right_rounded, color: Colors.white, size: 16),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -248,3 +262,4 @@ class EventCard extends StatelessWidget {
     );
   }
 }
+

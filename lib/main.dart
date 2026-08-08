@@ -8,14 +8,14 @@ import 'features/home/screens/splash_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
-import 'features/events/services/notification_service.dart';
+import 'core/services/notification_service.dart';
 import 'features/messages/services/mock_message_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService.initialize();
+  await NotificationService().initialize();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,

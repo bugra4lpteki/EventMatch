@@ -25,6 +25,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _selectedGender;
   List<dynamic> _avatarImages = [];
   List<String> _selectedPastEvents = [];
+  List<String> _selectedPlannedEvents = [];
   bool _isLoading = false;
   
   @override
@@ -44,6 +45,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _avatarImages = [user.avatarUrl];
     }
     _selectedPastEvents = List.from(user.pastEvents);
+    _selectedPlannedEvents = List.from(user.plannedEvents);
   }
 
   @override
@@ -119,6 +121,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               : '',
           avatarImages: _avatarImages,
           tags: tags,
+          plannedEvents: _selectedPlannedEvents,
           pastEvents: _selectedPastEvents,
         );
         if (mounted) {
@@ -136,6 +139,90 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         }
       }
     }
+  }
+
+  void _selectPlannedEvents() {
+    final allEvents = context.read<MockEventService>().getAdminEvents();
+    showDialog(
+      context: context,
+      builder: (context) {
+        String searchQuery = '';
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final filteredEvents = allEvents.where((e) {
+              return e.title.toLowerCase().contains(searchQuery) ||
+                     e.category.toLowerCase().contains(searchQuery);
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: AppColors.surface,
+              title: Text('Gideceğim Etkinlikleri Seç 🎟️', style: TextStyle(color: AppColors.textPrimary)),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: 400,
+                child: Column(
+                  children: [
+                    TextField(
+                      decoration: InputDecoration(
+                        hintText: 'Etkinlik Ara...',
+                        hintStyle: TextStyle(color: AppColors.textSecondary),
+                        prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
+                        filled: true,
+                        fillColor: AppColors.background,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      ),
+                      style: TextStyle(color: AppColors.textPrimary),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          searchQuery = val.toLowerCase();
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: ListView.builder(
+                        itemCount: filteredEvents.length,
+                        itemBuilder: (context, index) {
+                          final event = filteredEvents[index];
+                          final isSelected = _selectedPlannedEvents.contains(event.id);
+                          return CheckboxListTile(
+                            activeColor: AppColors.primary,
+                            checkColor: Colors.black,
+                            title: Text(event.title, style: TextStyle(color: AppColors.textPrimary)),
+                            subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary)),
+                            value: isSelected,
+                            onChanged: (val) {
+                              setDialogState(() {
+                                if (val == true) {
+                                  _selectedPlannedEvents.add(event.id);
+                                } else {
+                                  _selectedPlannedEvents.remove(event.id);
+                                }
+                              });
+                              setState(() {});
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('TAMAM', style: TextStyle(color: AppColors.textPrimary)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
   }
 
   void _selectPastEvents() {
@@ -555,8 +642,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _buildLabel('Hobiler (Virgülle ayırın)'),
               _buildTextField(_tagsController, 'Örn: Müzik, Tiyatro, Doğa'),
               
+              // Gideceğim Etkinlikler
+              _buildLabel('Gideceğim Etkinlikler 🎟️'),
+              GestureDetector(
+                onTap: _selectPlannedEvents,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _selectedPlannedEvents.isEmpty ? 'Etkinlik Seç' : '${_selectedPlannedEvents.length} etkinlik seçildi',
+                        style: TextStyle(color: AppColors.textPrimary),
+                      ),
+                      Icon(Icons.arrow_forward_ios, color: AppColors.textPrimary, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
               // Geçmiş Etkinlikler
-              _buildLabel('Geçmiş Etkinlikler'),
+              _buildLabel('Geçmiş Etkinlikler 🏛️'),
               GestureDetector(
                 onTap: _selectPastEvents,
                 child: Container(

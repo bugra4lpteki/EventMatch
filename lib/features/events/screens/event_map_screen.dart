@@ -21,6 +21,17 @@ class _EventMapScreenState extends State<EventMapScreen> {
   Position? _currentPosition;
   EventModel? _selectedEvent;
   String _selectedCategoryFilter = 'Tümü';
+  String _selectedDateFilter = '🔥 Bugün';
+
+  bool _isSameDay(DateTime dt1, DateTime dt2) {
+    return dt1.year == dt2.year && dt1.month == dt2.month && dt1.day == dt2.day;
+  }
+
+  bool _isWithinDays(DateTime dt, int days) {
+    final now = DateTime.now();
+    final limit = now.add(Duration(days: days));
+    return dt.isAfter(now.subtract(const Duration(hours: 6))) && dt.isBefore(limit);
+  }
 
   @override
   void initState() {
@@ -89,9 +100,37 @@ class _EventMapScreenState extends State<EventMapScreen> {
   Widget build(BuildContext context) {
     final eventService = context.watch<MockEventService>();
     final allEvents = eventService.allEvents;
+    final now = DateTime.now();
 
-    // Koordinatları olan etkinlikler
+    // Koordinatları olan tüm etkinlikler
     List<EventModel> mapEvents = allEvents.where((e) => e.latitude != null && e.longitude != null).toList();
+
+    // Canlı GPS Mesafesine Göre Sıralama
+    if (_currentPosition != null) {
+      mapEvents.sort((a, b) {
+        final dA = a.getDistanceInKm(_currentPosition!.latitude, _currentPosition!.longitude) ?? 99999;
+        final dB = b.getDistanceInKm(_currentPosition!.latitude, _currentPosition!.longitude) ?? 99999;
+        return dA.compareTo(dB);
+      });
+    }
+
+    // Tarih & Canlı Konum Filtreleme (Varsayılan: 🔥 Bugün)
+    if (_selectedDateFilter == '🔥 Bugün') {
+      final todayEvents = mapEvents.where((e) => _isSameDay(e.dateTime, now) || _isWithinDays(e.dateTime, 1)).toList();
+      if (todayEvents.isNotEmpty) {
+        mapEvents = todayEvents;
+      }
+    } else if (_selectedDateFilter == '📍 En Yakın (< 10 km)' && _currentPosition != null) {
+      final nearby = mapEvents.where((e) {
+        final dist = e.getDistanceInKm(_currentPosition!.latitude, _currentPosition!.longitude);
+        return dist != null && dist <= 10.0;
+      }).toList();
+      if (nearby.isNotEmpty) {
+        mapEvents = nearby;
+      }
+    } else if (_selectedDateFilter == '⚡ Bu Hafta') {
+      mapEvents = mapEvents.where((e) => _isWithinDays(e.dateTime, 7)).toList();
+    }
 
     // Akıllı Kategori Filtreleme
     if (_selectedCategoryFilter != 'Tümü') {
@@ -206,50 +245,100 @@ class _EventMapScreenState extends State<EventMapScreen> {
             ],
           ),
 
-          // 2. Üst Kategori Filtreleme Barı
+          // 2. Üst Tarih & Kategori Filtreleme Barı
           Positioned(
             top: 12,
             left: 12,
             right: 12,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              child: Row(
-                children: ['Tümü', 'Konser', 'Tiyatro', 'Stand-up'].map((category) {
-                  final isSelected = _selectedCategoryFilter == category;
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedCategoryFilter = category;
-                        _selectedEvent = null;
-                      });
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary : AppColors.surface.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Tarih Filtresi
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: ['🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta', '🌐 Tüm Tarihler'].map((dateFilter) {
+                      final isSelected = _selectedDateFilter == dateFilter;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedDateFilter = dateFilter;
+                            _selectedEvent = null;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            gradient: isSelected ? AppColors.primaryGradient : null,
+                            color: isSelected ? null : AppColors.surface,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isSelected ? Colors.transparent : Colors.white12,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        category,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontSize: 12.5,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          child: Text(
+                            dateFilter,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Kategori Filtresi
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: ['Tümü', 'Konser', 'Tiyatro', 'Stand-up'].map((category) {
+                      final isSelected = _selectedCategoryFilter == category;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedCategoryFilter = category;
+                            _selectedEvent = null;
+                          });
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.primary.withOpacity(0.2) : AppColors.surface.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected ? AppColors.primary : Colors.white10,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            category,
+                            style: TextStyle(
+                              color: isSelected ? AppColors.primaryVariant : AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
             ),
           ),
 

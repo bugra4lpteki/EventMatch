@@ -264,17 +264,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 30),
                 ],
 
-                // ── Popüler Mekanlar ve Etkinlikler ───────────────────────────────────
+                // ── Gideceğim Etkinlikler ───────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(
-                    'Popüler Mekanlar ve Etkinlikler',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.2,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Gideceğim Etkinlikler 🎟️',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      Text(
+                        'Tümünü Gör',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -284,7 +297,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ? Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: Text(
-                            'Henüz etkinlik eklenmemiş.',
+                            'Henüz katılacağın bir etkinlik seçmedin.',
                             style: TextStyle(color: AppColors.textSecondary),
                           ),
                         )
