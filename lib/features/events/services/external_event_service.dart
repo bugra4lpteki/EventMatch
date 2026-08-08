@@ -73,12 +73,22 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti: Ticketmaster / Biletix API'sinden gelen Orijinal Afişi Çekme
+            // 1. ÖNCELİK: Biletix İnternet Sitesinin Orijinal Afiş Resmi (CORS Engelini Aşan Proxy)
             String imageUrl = '';
-            if (item['images'] != null && item['images'] is List) {
+            if (ticketUrl.contains('biletix.com')) {
+              final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);
+              if (match != null) {
+                final code = match.group(1);
+                if (code != null && code.isNotEmpty) {
+                  imageUrl = 'https://images.weserv.nl/?url=www.biletix.com/static/images/live/event/eventimages/$code.png';
+                }
+              }
+            }
+
+            // 2. ÖNCELİK: API Afiş Listesindeki HD Görsel
+            if (imageUrl.isEmpty && item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                // 1. Önce 16:9 oranındaki geniş resmi Biletix afişini bul
                 final banners169 = rawList.where((img) {
                   final ratio = img['ratio']?.toString() ?? '';
                   final u = img['url']?.toString() ?? '';
@@ -94,7 +104,6 @@ class ExternalEventService {
                   imageUrl = banners169.first['url']?.toString() ?? '';
                 }
 
-                // 2. Yoksa en yüksek çözünürlüklü alternatif görseli al
                 if (imageUrl.isEmpty) {
                   rawList.sort((a, b) {
                     int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
@@ -156,7 +165,7 @@ class ExternalEventService {
         if (match != null) {
           final code = match.group(1);
           if (code != null && code.isNotEmpty) {
-            imageUrl = 'https://www.biletix.com/static/images/live/event/eventimages/$code.png';
+            imageUrl = 'https://images.weserv.nl/?url=www.biletix.com/static/images/live/event/eventimages/$code.png';
           }
         }
         if (imageUrl.isEmpty) {
