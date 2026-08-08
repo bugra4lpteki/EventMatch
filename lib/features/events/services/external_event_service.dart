@@ -73,12 +73,20 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti (En Yüksek Çözünürlüklü HD Resmi Afişi Seçme)
+            // 1. ÖNCELİK: Biletix İnternet Sitesinin Doğrudan Orijinal CDN Afiş Resmi
             String imageUrl = '';
-            if (item['images'] != null && item['images'] is List) {
+            final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);
+            if (match != null) {
+              final code = match.group(1);
+              if (code != null && code.isNotEmpty) {
+                imageUrl = 'https://www.biletix.com/static/images/live/event/eventimages/$code.png';
+              }
+            }
+
+            // 2. ÖNCELİK: API HD Afiş Listesi
+            if (imageUrl.isEmpty && item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                // Çözünürlüğe göre büyükten küçüğe sırala (En kaliteli HD afiş en başa gelir)
                 rawList.sort((a, b) {
                   int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
                   int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
@@ -90,12 +98,6 @@ class ExternalEventService {
 
             if (imageUrl.isEmpty) {
               imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
-            }
-
-            // Ticketmaster İsim Çakışması Düzeltici (Mavi / Mavi Teneffüs -> US Rapper Fotoğrafını Engelleme)
-            final titleLower = title.toLowerCase();
-            if (titleLower.contains('mavi')) {
-              imageUrl = 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop';
             }
 
             // Açıklama
@@ -137,7 +139,19 @@ class ExternalEventService {
   List<EventModel> parseBiletixEvents(String rawJson) {
     try {
       final List<dynamic> list = jsonDecode(rawJson);
-      return list.map((item) {
+        final ticketUrl = item['url'] ?? item['ticketUrl'] ?? 'https://www.biletix.com';
+        String imageUrl = '';
+        final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);
+        if (match != null) {
+          final code = match.group(1);
+          if (code != null && code.isNotEmpty) {
+            imageUrl = 'https://www.biletix.com/static/images/live/event/eventimages/$code.png';
+          }
+        }
+        if (imageUrl.isEmpty) {
+          imageUrl = item['imageUrl'] ?? item['image'] ?? 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
+        }
+
         return EventModel(
           id: 'biletix_${item['id'] ?? item['code'] ?? UniqueKey().toString()}',
           title: item['name'] ?? item['title'] ?? 'Biletix Etkinliği',
@@ -147,10 +161,10 @@ class ExternalEventService {
               ? DateTime.tryParse(item['date']) ?? DateTime.now() 
               : DateTime.now(),
           description: item['summary'] ?? item['description'] ?? 'Biletix üzerinden sunulan etkinlik.',
-          imageUrl: item['imageUrl'] ?? item['image'] ?? 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745',
+          imageUrl: imageUrl,
           latitude: item['latitude'] != null ? double.tryParse(item['latitude'].toString()) : null,
           longitude: item['longitude'] != null ? double.tryParse(item['longitude'].toString()) : null,
-          ticketUrl: item['url'] ?? item['ticketUrl'] ?? 'https://www.biletix.com',
+          ticketUrl: ticketUrl,
           ticketProvider: 'Biletix',
           atmosphere: '🔥 Popüler',
           isPopular: true,
