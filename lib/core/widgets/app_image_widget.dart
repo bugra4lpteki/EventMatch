@@ -38,7 +38,6 @@ class AppImageWidget extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
-        memCacheWidth: cacheWidth,
         fadeInDuration: const Duration(milliseconds: 150),
         fadeOutDuration: const Duration(milliseconds: 150),
         placeholder: (context, url) => Container(

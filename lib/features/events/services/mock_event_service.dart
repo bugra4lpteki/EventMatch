@@ -46,6 +46,29 @@ class MockEventService extends ChangeNotifier {
         debugPrint('[EventService] Supabase Events Error: $e');
       }
 
+      // Mavi / Türk Sanatçı Görsel Sanitize İşlemi
+      for (int i = 0; i < _events.length; i++) {
+        final e = _events[i];
+        if (e.title.toLowerCase().contains('mavi')) {
+          _events[i] = EventModel(
+            id: e.id,
+            title: e.title,
+            category: e.category,
+            location: e.location,
+            dateTime: e.dateTime,
+            description: e.description,
+            imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop',
+            latitude: e.latitude,
+            longitude: e.longitude,
+            ticketUrl: e.ticketUrl,
+            ticketProvider: e.ticketProvider,
+            atmosphere: e.atmosphere,
+            isPopular: e.isPopular,
+            attendees: e.attendees,
+          );
+        }
+      }
+
       notifyListeners();
     } catch (e) {
       debugPrint('Events fetch error: $e');

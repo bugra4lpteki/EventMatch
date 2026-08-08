@@ -73,38 +73,29 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti (Biletix Resmi Etkinlik Afişini Güvenli Seçme)
+            // Görsel tespiti (En Yüksek Çözünürlüklü HD Resmi Afişi Seçme)
             String imageUrl = '';
             if (item['images'] != null && item['images'] is List) {
-              final rawList = item['images'] as List;
+              final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                // 1. Öncelik: 16:9 Geniş Resmi Etkinlik Afişi
-                for (var img in rawList) {
-                  if (img is Map && (img['ratio']?.toString() == '16_9' || img['url']?.toString().contains('16_9') == true)) {
-                    final u = img['url']?.toString();
-                    if (u != null && u.startsWith('http')) {
-                      imageUrl = u;
-                      break;
-                    }
-                  }
-                }
-                // 2. Öncelik: Herhangi bir HD resmi afiş URL'i
-                if (imageUrl.isEmpty) {
-                  for (var img in rawList) {
-                    if (img is Map) {
-                      final u = img['url']?.toString();
-                      if (u != null && u.startsWith('http')) {
-                        imageUrl = u;
-                        break;
-                      }
-                    }
-                  }
-                }
+                // Çözünürlüğe göre büyükten küçüğe sırala (En kaliteli HD afiş en başa gelir)
+                rawList.sort((a, b) {
+                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                  return wB.compareTo(wA);
+                });
+                imageUrl = rawList.first['url']?.toString() ?? '';
               }
             }
 
             if (imageUrl.isEmpty) {
               imageUrl = 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
+            }
+
+            // Ticketmaster İsim Çakışması Düzeltici (Mavi / Mavi Teneffüs -> US Rapper Fotoğrafını Engelleme)
+            final titleLower = title.toLowerCase();
+            if (titleLower.contains('mavi')) {
+              imageUrl = 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop';
             }
 
             // Açıklama
