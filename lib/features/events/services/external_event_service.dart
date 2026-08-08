@@ -73,30 +73,33 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti (Biletix 16:9 Resmi Etkinlik Afişini Seçme)
+            // Görsel tespiti (Biletix Resmi Etkinlik Afişini Güvenli Seçme)
             String imageUrl = '';
-            if (item['images'] != null && (item['images'] as List).isNotEmpty) {
-              final imagesList = List<Map<String, dynamic>>.from(item['images']);
-              
-              // 1. Öncelik: 16:9 Geniş Resmi Etkinlik Afişi
-              final banners169 = imagesList.where((img) => img['ratio']?.toString() == '16_9').toList();
-              if (banners169.isNotEmpty) {
-                banners169.sort((a, b) {
-                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                  return wB.compareTo(wA);
-                });
-                imageUrl = banners169.first['url']?.toString() ?? '';
-              }
-
-              // 2. Öncelik: En yüksek çözünürlüklü alternatif afiş
-              if (imageUrl.isEmpty) {
-                imagesList.sort((a, b) {
-                  int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                  int wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                  return wB.compareTo(wA);
-                });
-                imageUrl = imagesList.first['url']?.toString() ?? '';
+            if (item['images'] != null && item['images'] is List) {
+              final rawList = item['images'] as List;
+              if (rawList.isNotEmpty) {
+                // 1. Öncelik: 16:9 Geniş Resmi Etkinlik Afişi
+                for (var img in rawList) {
+                  if (img is Map && (img['ratio']?.toString() == '16_9' || img['url']?.toString().contains('16_9') == true)) {
+                    final u = img['url']?.toString();
+                    if (u != null && u.startsWith('http')) {
+                      imageUrl = u;
+                      break;
+                    }
+                  }
+                }
+                // 2. Öncelik: Herhangi bir HD resmi afiş URL'i
+                if (imageUrl.isEmpty) {
+                  for (var img in rawList) {
+                    if (img is Map) {
+                      final u = img['url']?.toString();
+                      if (u != null && u.startsWith('http')) {
+                        imageUrl = u;
+                        break;
+                      }
+                    }
+                  }
+                }
               }
             }
 
