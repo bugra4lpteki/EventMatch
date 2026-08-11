@@ -9,6 +9,7 @@ import '../../../core/utils/url_launcher_helper.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
+import '../../events/screens/event_detail_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -26,13 +27,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final eventService = context.watch<MockEventService>();
     final user = eventService.currentUser;
 
+    final plannedEvents = user.plannedEvents
+        .map((id) => eventService.getEventById(id))
+        .whereType<EventModel>()
+        .toList();
+
     final pastEvents = user.pastEvents
         .map((id) => eventService.getEventById(id))
         .whereType<EventModel>()
         .toList();
 
     final displayPhotos = user.avatarUrls.isNotEmpty ? user.avatarUrls : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
-    final recentVenues = pastEvents.take(5).toList();
+    final recentVenues = plannedEvents.isNotEmpty ? plannedEvents : pastEvents;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -77,26 +83,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             }
                           },
                         ),
-                      // Top shadow
-                      IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.center,
-                              colors: [Theme.of(context).scaffoldBackgroundColor.withOpacity(0.6), Colors.transparent],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Bottom shadow
+                      // Bottom subtle gradient for indicators only
                       IgnorePointer(
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.bottomCenter,
-                              end: Alignment.center,
-                              colors: [Theme.of(context).scaffoldBackgroundColor.withOpacity(0.8), Colors.transparent],
+                              end: Alignment.topCenter,
+                              colors: [Colors.black.withValues(alpha: 0.25), Colors.transparent],
+                              stops: const [0.0, 0.15],
                             ),
                           ),
                         ),
@@ -507,8 +502,18 @@ class _VenueCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 148,
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => EventDetailScreen(event: event),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 148,
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -592,6 +597,7 @@ class _VenueCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

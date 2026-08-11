@@ -10,11 +10,13 @@ class ExternalEventService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   /// 🌐 Ticketmaster / Biletix Canlı API'sinden Türkiye Etkinliklerini Çekme
-  Future<List<EventModel>> fetchLiveTicketmasterEvents({String countryCode = 'TR'}) async {
+  Future<List<EventModel>> fetchLiveTicketmasterEvents({String countryCode = 'TR', String keyword = '', int page = 0, int size = 100}) async {
     final apiKey = ApiKeys.ticketmasterApiKey;
-    final url = Uri.parse(
-      'https://app.ticketmaster.com/discovery/v2/events.json?countryCode=$countryCode&apikey=$apiKey&size=20',
-    );
+    String urlStr = 'https://app.ticketmaster.com/discovery/v2/events.json?apikey=$apiKey&countryCode=$countryCode&size=$size&page=$page';
+    if (keyword.trim().isNotEmpty && keyword.trim().toLowerCase() != 'biletix') {
+      urlStr += '&keyword=${Uri.encodeComponent(keyword.trim())}';
+    }
+    final url = Uri.parse(urlStr);
 
     try {
       final response = await http.get(url);
@@ -40,7 +42,12 @@ class ExternalEventService {
             if (item['classifications'] != null && (item['classifications'] as List).isNotEmpty) {
               final segment = item['classifications'][0]['segment'];
               if (segment != null && segment['name'] != null) {
-                category = segment['name'];
+                final segName = segment['name'].toString();
+                if (segName.contains('Music')) category = 'Konser';
+                else if (segName.contains('Arts') || segName.contains('Theatre')) category = 'Tiyatro';
+                else if (segName.contains('Comedy')) category = 'Stand-up';
+                else if (segName.contains('Sports')) category = 'Spor';
+                else category = segName;
               }
             }
 
@@ -62,14 +69,15 @@ class ExternalEventService {
               }
             }
 
-            // Tarih bilgisi
-            DateTime dateTime = DateTime.now();
+            // Tarih bilgisi (Local Timezone Güvenli Dönüşüm)
+            DateTime dateTime = DateTime.now().add(const Duration(days: 1));
             if (item['dates'] != null && item['dates']['start'] != null) {
               final start = item['dates']['start'];
               if (start['dateTime'] != null) {
-                dateTime = DateTime.tryParse(start['dateTime']) ?? dateTime;
+                dateTime = DateTime.tryParse(start['dateTime'])?.toLocal() ?? dateTime;
               } else if (start['localDate'] != null) {
-                dateTime = DateTime.tryParse(start['localDate']) ?? dateTime;
+                final timeStr = start['localTime'] ?? '20:00:00';
+                dateTime = DateTime.tryParse('${start['localDate']}T$timeStr')?.toLocal() ?? dateTime;
               }
             }
 
@@ -78,7 +86,6 @@ class ExternalEventService {
             if (item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                // 1. Önce 16:9 oranındaki geniş resmi Biletix afişini bul
                 final banners169 = rawList.where((img) {
                   final ratio = img['ratio']?.toString() ?? '';
                   final u = img['url']?.toString() ?? '';
@@ -94,7 +101,6 @@ class ExternalEventService {
                   imageUrl = banners169.first['url']?.toString() ?? '';
                 }
 
-                // 2. Yoksa en yüksek çözünürlüklü alternatif görseli al
                 if (imageUrl.isEmpty) {
                   rawList.sort((a, b) {
                     int wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
@@ -111,7 +117,7 @@ class ExternalEventService {
             }
 
             // Açıklama
-            final description = item['pleaseNote'] ?? item['info'] ?? '$title etkinliği Biletix güvencesiyle karşınızda.';
+            final description = item['pleaseNote'] ?? item['info'] ?? '$title etkinliği canlı performansı ile sahnede.';
 
             eventsList.add(EventModel(
               id: id,
@@ -133,7 +139,7 @@ class ExternalEventService {
           }
         }
 
-        debugPrint('✅ Ticketmaster/Biletix API: ${eventsList.length} canlı etkinlik çekildi.');
+        debugPrint('✅ Ticketmaster/Biletix API: ${eventsList.length} canlı etkinlik çekildi (Sayfa $page).');
         return eventsList;
       } else {
         debugPrint('❌ Ticketmaster API Hatası: ${response.statusCode} - ${response.body}');

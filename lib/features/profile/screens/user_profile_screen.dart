@@ -236,32 +236,15 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             }
                           },
                         ),
-                      // Top gradient shadow
-                      IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.center,
-                              colors: [
-                                AppColors.background.withValues(alpha: 0.6),
-                                Colors.transparent,
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      // Bottom gradient shadow
+                      // Bottom subtle gradient for indicators only
                       IgnorePointer(
                         child: Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.bottomCenter,
-                              end: Alignment.center,
-                              colors: [
-                                AppColors.background.withValues(alpha: 0.8),
-                                Colors.transparent,
-                              ],
+                              end: Alignment.topCenter,
+                              colors: [Colors.black.withValues(alpha: 0.25), Colors.transparent],
+                              stops: const [0.0, 0.15],
                             ),
                           ),
                         ),

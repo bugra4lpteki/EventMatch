@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/notification_service.dart';
-import '../models/chat_message_model.dart';
+import '../models/message_model.dart';
 
 class RealtimeMessagingService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  Stream<List<ChatMessageModel>> getChatStream(String currentUserId, String otherUserId) {
+  Stream<List<MessageModel>> getChatStream(String currentUserId, String otherUserId) {
     try {
       return _supabase
           .from('messages')
@@ -21,14 +21,11 @@ class RealtimeMessagingService {
             }).toList();
 
             return filtered.map((m) {
-              final isMe = m['sender_id']?.toString() == currentUserId;
-              return ChatMessageModel(
+              return MessageModel(
                 id: m['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
                 senderId: m['sender_id']?.toString() ?? '',
-                receiverId: m['receiver_id']?.toString() ?? '',
-                message: m['content']?.toString() ?? m['message']?.toString() ?? '',
+                text: m['content']?.toString() ?? m['message']?.toString() ?? '',
                 timestamp: m['created_at'] != null ? DateTime.parse(m['created_at']) : DateTime.now(),
-                isMe: isMe,
               );
             }).toList();
           });

@@ -20,13 +20,29 @@ class MockEventService extends ChangeNotifier {
       _events.clear();
       final now = DateTime.now();
 
-      // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden bilet linkleri olan etkinlikleri çek
+      // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden tüm turne ve kategorileri eş zamanlı çek
       try {
-        final liveEvents = await ExternalEventService().fetchLiveTicketmasterEvents();
-        for (var live in liveEvents) {
-          _events.add(live);
+        final service = ExternalEventService();
+        final results = await Future.wait([
+          service.fetchLiveTicketmasterEvents(page: 0, size: 100),
+          service.fetchLiveTicketmasterEvents(page: 1, size: 100),
+          service.fetchLiveTicketmasterEvents(keyword: 'baturay'),
+          service.fetchLiveTicketmasterEvents(keyword: 'duman'),
+          service.fetchLiveTicketmasterEvents(keyword: 'levent'),
+          service.fetchLiveTicketmasterEvents(keyword: 'teoman'),
+          service.fetchLiveTicketmasterEvents(keyword: 'tiyatro'),
+          service.fetchLiveTicketmasterEvents(keyword: 'stand up'),
+          service.fetchLiveTicketmasterEvents(keyword: 'konser'),
+        ]);
+
+        for (var list in results) {
+          for (var live in list) {
+            if (!_events.any((e) => e.id == live.id)) {
+              _events.add(live);
+            }
+          }
         }
-        debugPrint('[EventService] 🎟️ Biletix API canlı etkinlikleri eklendi: ${_events.length}');
+        debugPrint('[EventService] 🎟️ Biletix API canlı tüm turne ve etkinlikler eklendi: ${_events.length}');
       } catch (e) {
         debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
@@ -36,8 +52,8 @@ class MockEventService extends ChangeNotifier {
         final data = await _supabase.from('events').select();
         for (var item in data) {
           final event = EventModel.fromJson(item);
-          if (event.dateTime.isAfter(now.subtract(const Duration(hours: 6)))) {
-            if (!_events.any((e) => e.id == event.id || e.title.toLowerCase() == event.title.toLowerCase())) {
+          if (event.dateTime.isAfter(now.subtract(const Duration(days: 1)))) {
+            if (!_events.any((e) => e.id == event.id)) {
               _events.add(event);
             }
           }
@@ -381,6 +397,28 @@ class MockEventService extends ChangeNotifier {
   void setSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
+
+    if (query.trim().length >= 2 && query.trim().toLowerCase() != 'biletix') {
+      _searchLiveEvents(query.trim());
+    }
+  }
+
+  Future<void> _searchLiveEvents(String query) async {
+    try {
+      final liveResults = await ExternalEventService().fetchLiveTicketmasterEvents(keyword: query);
+      bool addedAny = false;
+      for (var live in liveResults) {
+        if (!_events.any((e) => e.id == live.id || e.title.toLowerCase() == live.title.toLowerCase())) {
+          _events.add(live);
+          addedAny = true;
+        }
+      }
+      if (addedAny) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[EventService] Live search error: $e');
+    }
   }
 
   void addCategory(String category) {
@@ -490,22 +528,43 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> get filteredEvents {
     final now = DateTime.now();
-    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(hours: 6)))).toList();
+    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
 
-    if (_selectedCity != 'Tüm Şehirler') {
-      final cityNorm = _normalizeText(_selectedCity);
-      activeEvents = activeEvents.where((e) => _normalizeText(e.location).contains(cityNorm)).toList();
-    }
-
+    // 1. Arama sorgusu varsa: Tüm şehirler ve tüm kategoriler genelinde arama yap ve doğrudan döndür!
     if (_searchQuery.trim().isNotEmpty) {
-      final query = _normalizeText(_searchQuery.trim());
+      final rawQuery = _searchQuery.trim();
+      final normQuery = _normalizeText(rawQuery);
+      final tokens = normQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+
       return activeEvents.where((e) {
         final title = _normalizeText(e.title);
         final desc = _normalizeText(e.description);
         final loc = _normalizeText(e.location);
         final cat = _normalizeText(e.category);
-        return title.contains(query) || desc.contains(query) || loc.contains(query) || cat.contains(query);
+        final provider = _normalizeText(e.ticketProvider ?? '');
+        final ticketUrl = _normalizeText(e.ticketUrl ?? '');
+
+        if (normQuery == 'biletix' || normQuery.contains('biletix')) {
+          if (e.id.startsWith('biletix_') || provider.contains('biletix') || ticketUrl.contains('biletix')) {
+            return true;
+          }
+        }
+
+        return tokens.every((token) {
+          return title.contains(token) || 
+                 desc.contains(token) || 
+                 loc.contains(token) || 
+                 cat.contains(token) ||
+                 provider.contains(token) ||
+                 ticketUrl.contains(token);
+        });
       }).toList();
+    }
+
+    // 2. Arama yapılmıyorsa: Seçili Şehir filtresini uygula
+    if (_selectedCity != 'Tüm Şehirler') {
+      final cityNorm = _normalizeText(_selectedCity);
+      activeEvents = activeEvents.where((e) => _normalizeText(e.location).contains(cityNorm)).toList();
     }
     
     if (_selectedCategory == 'Tümü') return activeEvents;
@@ -594,6 +653,30 @@ class MockEventService extends ChangeNotifier {
       if (changed) {
         notifyListeners();
       }
+    }
+  }
+
+  Future<void> leaveEvent(String eventId) async {
+    final eventIndex = _events.indexWhere((e) => e.id == eventId);
+    if (eventIndex >= 0) {
+      final event = _events[eventIndex];
+      event.attendees.removeWhere((u) => u.id == currentUser.id);
+      currentUser.plannedEvents.remove(eventId);
+      if (currentUser.checkedInEventId == eventId) {
+        currentUser.checkedInEventId = null;
+      }
+      _savePlannedEvents();
+
+      try {
+        await _supabase.from('event_attendees')
+            .delete()
+            .eq('user_id', currentUser.id)
+            .eq('event_id', eventId);
+      } catch (e) {
+        debugPrint('Supabase event_attendees silme hatası: $e');
+      }
+
+      notifyListeners();
     }
   }
 

@@ -115,56 +115,81 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   ),
                 ),
               ),
-              // Popüler Etkinlikler Carousel
-              Consumer<MockEventService>(
-                builder: (context, eventService, child) {
-                  final allEvents = eventService.getAdminEvents();
-                  final sortedEvents = List<EventModel>.from(allEvents)
-                    ..sort((a, b) => b.attendees.length.compareTo(a.attendees.length));
-                  final popularEvents = sortedEvents.take(5).toList();
-                  return PopularEventsCarousel(events: popularEvents);
-                },
-              ),
-              const SizedBox(height: 8),
-              // Filter Chips
-              SizedBox(
-                height: 60,
-                child: Consumer<MockEventService>(
+              // Popüler Etkinlikler Carousel & Filtre Çipleri (Arama esnasında gizle, ekranı arama sonuçlarına aç)
+              if (_searchController.text.trim().isEmpty) ...[
+                Consumer<MockEventService>(
                   builder: (context, eventService, child) {
-                    return ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      itemCount: eventService.categories.length,
-                      itemBuilder: (context, index) {
-                        final category = eventService.categories[index];
-                        final isSelected = eventService.selectedCategory == category;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 8.0),
-                          child: ChoiceChip(
-                            label: Text(category),
-                            selected: isSelected,
-                            onSelected: (selected) {
-                              if (selected) eventService.setCategory(category);
-                            },
-                            selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                            backgroundColor: AppColors.surface,
-                            labelStyle: TextStyle(
-                              color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    final allEvents = eventService.getAdminEvents();
+                    final sortedEvents = List<EventModel>.from(allEvents)
+                      ..sort((a, b) => b.attendees.length.compareTo(a.attendees.length));
+                    final popularEvents = sortedEvents.take(5).toList();
+                    return PopularEventsCarousel(events: popularEvents);
+                  },
+                ),
+                const SizedBox(height: 8),
+                // Filter Chips
+                SizedBox(
+                  height: 60,
+                  child: Consumer<MockEventService>(
+                    builder: (context, eventService, child) {
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        itemCount: eventService.categories.length,
+                        itemBuilder: (context, index) {
+                          final category = eventService.categories[index];
+                          final isSelected = eventService.selectedCategory == category;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: ChoiceChip(
+                              label: Text(category),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                if (selected) eventService.setCategory(category);
+                              },
+                              selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                              backgroundColor: AppColors.surface,
+                              labelStyle: TextStyle(
+                                color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              ),
+                              side: BorderSide(
+                                color: isSelected ? AppColors.primary : Colors.transparent,
+                                width: 1.5,
+                              ),
+                              elevation: isSelected ? 4 : 0,
+                              shadowColor: AppColors.primary.withValues(alpha: 0.3),
                             ),
-                            side: BorderSide(
-                              color: isSelected ? AppColors.primary : Colors.transparent,
-                              width: 1.5,
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ] else ...[
+                Consumer<MockEventService>(
+                  builder: (context, eventService, child) {
+                    final count = eventService.filteredEvents.length;
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.manage_search_rounded, color: AppColors.primary, size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            '"${_searchController.text.trim()}" için $count Etkinlik Bulundu',
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15,
                             ),
-                            elevation: isSelected ? 4 : 0,
-                            shadowColor: AppColors.primary.withValues(alpha: 0.3),
                           ),
-                        );
-                      },
+                        ],
+                      ),
                     );
                   },
                 ),
-              ),
+              ],
             ],
           ),
         ),

@@ -323,31 +323,39 @@ class _HomeScreenState extends State<HomeScreen> {
               children: _pages,
             ),
             bottomNavigationBar: SafeArea(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                height: 64,
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(32),
-                  border: Border.all(color: Colors.white.withOpacity(0.12), width: 1.2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 20,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(34),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      height: 68,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(34),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.25), width: 1.2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.2),
+                            blurRadius: 24,
+                            spreadRadius: 2,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      child: Row(
+                        children: [
+                          _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
+                          _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
+                          _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
+                          _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
+                          _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  children: [
-                    _buildNavItem(0, Icons.explore_outlined, Icons.explore, 'Keşfet'),
-                    _buildNavItem(1, Icons.swipe_outlined, Icons.swipe, 'Eşleş'),
-                    _buildNavItemWithBadge(2, Icons.favorite_border, Icons.favorite, 'İstekler'),
-                    _buildNavItem(3, Icons.message_outlined, Icons.message, 'Mesajlar'),
-                    _buildNavItem(4, Icons.person_outline, Icons.person, 'Profil'),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -362,40 +370,40 @@ class _HomeScreenState extends State<HomeScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          HapticFeedback.selectionClick();
+          HapticFeedback.mediumImpact();
           setState(() => _currentIndex = index);
         },
         behavior: HitTestBehavior.opaque,
         child: Center(
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: isSelected ? 12 : 8, vertical: 8),
             decoration: isSelected
                 ? BoxDecoration(
                     gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primary.withOpacity(0.35),
-                        blurRadius: 8,
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 10,
                         spreadRadius: 1,
                       ),
                     ],
                   )
                 : BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(24),
                   ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   isSelected ? activeIcon : icon,
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
+                  color: isSelected ? Colors.white : AppColors.textSecondary.withOpacity(0.7),
                   size: 20,
                 ),
                 if (isSelected) ...[
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
@@ -403,8 +411,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         label,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 11.5,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                          letterSpacing: 0.2,
                         ),
                       ),
                     ),
@@ -426,29 +435,29 @@ class _HomeScreenState extends State<HomeScreen> {
         return Expanded(
           child: GestureDetector(
             onTap: () {
-              HapticFeedback.selectionClick();
+              HapticFeedback.mediumImpact();
               setState(() => _currentIndex = index);
             },
             behavior: HitTestBehavior.opaque,
             child: Center(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
+                duration: const Duration(milliseconds: 250),
                 curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                padding: EdgeInsets.symmetric(horizontal: isSelected ? 12 : 8, vertical: 8),
                 decoration: isSelected
                     ? BoxDecoration(
                         gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(24),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withOpacity(0.35),
-                            blurRadius: 8,
+                            color: AppColors.primary.withOpacity(0.4),
+                            blurRadius: 10,
                             spreadRadius: 1,
                           ),
                         ],
                       )
                     : BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -459,12 +468,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       backgroundColor: AppColors.secondary,
                       child: Icon(
                         isSelected ? activeIcon : icon,
-                        color: isSelected ? Colors.white : AppColors.textSecondary,
+                        color: isSelected ? Colors.white : AppColors.textSecondary.withOpacity(0.7),
                         size: 20,
                       ),
                     ),
                     if (isSelected) ...[
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6),
                       Flexible(
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
@@ -472,8 +481,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             label,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              letterSpacing: 0.2,
                             ),
                           ),
                         ),
@@ -489,4 +499,3 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 }
-
