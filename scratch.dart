@@ -1,1 +1,0 @@
-// Temporary database inspector script
