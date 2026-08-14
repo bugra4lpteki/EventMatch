@@ -36,6 +36,13 @@ class SettingsScreen extends StatelessWidget {
               _showLogoutDialog(context);
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.delete_forever_outlined, color: Colors.redAccent),
+            title: const Text('Hesabımı Sil', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            onTap: () {
+              _showDeleteAccountDialog(context);
+            },
+          ),
           const Divider(color: Colors.transparent, height: 16),
           ListTile(
             leading: Icon(Icons.admin_panel_settings_outlined, color: AppColors.textSecondary),
@@ -105,6 +112,50 @@ class SettingsScreen extends StatelessWidget {
               );
             },
             child: Text('ÇIKIŞ YAP', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        title: Text('Hesabımı Kalıcı Olarak Sil', style: TextStyle(color: AppColors.error, fontWeight: FontWeight.bold)),
+        content: Text(
+          'Hesabınızı silmek üzeresiniz. Tüm profil bilgileriniz, fotoğraflarınız, eşleşmeleriniz ve mesajlarınız kalıcı olarak silinecektir. Bu işlem geri alınamaz!',
+          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text('İPTAL', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final success = await context.read<AuthService>().deleteAccount();
+              if (context.mounted) {
+                if (success) {
+                  Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
+                    (route) => false,
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Hesap silinirken bir hata oluştu.')),
+                  );
+                }
+              }
+            },
+            child: const Text('HESABIMI KALICI SİL', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         ],
       ),

@@ -6,6 +6,12 @@
 	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Profil fotoğrafınızı seçebilmeniz için fotoğraf galerinize erişim izni gerekmektedir.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Profil fotoğrafı çekebilmeniz için kameranıza erişim izni gerekmektedir.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

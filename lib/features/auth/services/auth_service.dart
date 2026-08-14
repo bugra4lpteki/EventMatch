@@ -98,6 +98,24 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> deleteAccount() async {
+    try {
+      final userId = currentUserId;
+      if (userId != null) {
+        try {
+          await _supabase.from('users').delete().eq('id', userId);
+        } catch (_) {}
+        await _supabase.auth.signOut();
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('Delete Account Error: $e');
+      return false;
+    }
+  }
+
   @override
   void dispose() {
     _authSubscription?.cancel();

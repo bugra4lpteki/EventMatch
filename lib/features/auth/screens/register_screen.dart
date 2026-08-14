@@ -96,19 +96,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        leading: const BackButton(color: Colors.white),
-      ),
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topRight,
-            radius: 1.5,
-            colors: [AppColors.surface, AppColors.background],
-          ),
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        appBar: AppBar(
+          leading: const BackButton(color: Colors.white),
         ),
+        body: Container(
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: Alignment.topRight,
+              radius: 1.5,
+              colors: [AppColors.surface, AppColors.background],
+            ),
+          ),
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
@@ -227,6 +229,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

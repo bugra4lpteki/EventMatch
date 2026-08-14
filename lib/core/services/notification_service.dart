@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -5,6 +6,8 @@ class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
+
+  static final StreamController<String?> onNotificationClick = StreamController<String?>.broadcast();
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
@@ -29,6 +32,9 @@ class NotificationService {
         initSettings,
         onDidReceiveNotificationResponse: (response) {
           debugPrint('Notification clicked: ${response.payload}');
+          if (response.payload != null) {
+            onNotificationClick.add(response.payload);
+          }
         },
       );
       _isInitialized = true;
