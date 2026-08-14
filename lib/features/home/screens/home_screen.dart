@@ -46,15 +46,38 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
       builder: (context, radarService, child) {
         if (!radarService.isRadarActive) {
           if (_controller.isAnimating) _controller.stop();
-          return Container(
-            margin: const EdgeInsets.only(right: 8),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white10),
+          return GestureDetector(
+            onTap: () async {
+              HapticFeedback.mediumImpact();
+              await radarService.toggleRadar(true);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Row(
+                      children: [
+                        Icon(Icons.radar, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text('Radar Aktifleştirildi! 📡 Yakındaki kişiler taranıyor...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    backgroundColor: AppColors.primary,
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+              ),
+              child: Icon(Icons.radar, color: AppColors.primary, size: 20),
             ),
-            child: Icon(Icons.radar, color: AppColors.textMuted, size: 20),
           );
         }
 
