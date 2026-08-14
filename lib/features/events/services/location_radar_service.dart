@@ -139,4 +139,10 @@ class LocationRadarService extends ChangeNotifier {
       _hasSentNotification = true;
     }
   }
+
+  @override
+  void dispose() {
+    _stopRadar();
+    super.dispose();
+  }
 }

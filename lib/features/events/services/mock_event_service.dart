@@ -753,4 +753,18 @@ class MockEventService extends ChangeNotifier {
       'commonalities': commonalities,
     };
   }
+
+  void clearUserData() {
+    currentUser = UserModel(
+      id: 'guest',
+      name: 'Misafir Kullanıcı',
+      avatarUrl: '',
+      avatarUrls: [],
+      pastEvents: [],
+      plannedEvents: [],
+      socialLinks: [],
+      tags: [],
+    );
+    notifyListeners();
+  }
 }

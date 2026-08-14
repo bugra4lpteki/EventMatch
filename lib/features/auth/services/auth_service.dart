@@ -1,15 +1,17 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
+  StreamSubscription<AuthState>? _authSubscription;
 
   bool get isAuthenticated => _supabase.auth.currentSession != null;
   String? get currentUserEmail => _supabase.auth.currentUser?.email;
   String? get currentUserId => _supabase.auth.currentUser?.id;
 
   AuthService() {
-    _supabase.auth.onAuthStateChange.listen((data) {
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       notifyListeners();
     });
   }
@@ -93,5 +95,12 @@ class AuthService extends ChangeNotifier {
 
   Future<void> logout() async {
     await _supabase.auth.signOut();
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
   }
 }

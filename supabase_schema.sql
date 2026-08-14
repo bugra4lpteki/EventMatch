@@ -152,17 +152,35 @@ ALTER TABLE public.event_attendees ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
--- Allow read access to all logged-in users
+-- Users policies
 CREATE POLICY "Allow read users" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Allow update users" ON public.users FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Allow insert users" ON public.users FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow insert users" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "Allow all user_photos" ON public.user_photos FOR ALL USING (true);
-CREATE POLICY "Allow all user_social_links" ON public.user_social_links FOR ALL USING (true);
-CREATE POLICY "Allow all events" ON public.events FOR ALL USING (true);
-CREATE POLICY "Allow all event_attendees" ON public.event_attendees FOR ALL USING (true);
-CREATE POLICY "Allow all matches" ON public.matches FOR ALL USING (true);
-CREATE POLICY "Allow all messages" ON public.messages FOR ALL USING (true);
+-- User photos policies
+CREATE POLICY "Allow read user_photos" ON public.user_photos FOR SELECT USING (true);
+CREATE POLICY "Allow manage own user_photos" ON public.user_photos FOR ALL USING (auth.uid() = user_id);
+
+-- User social links policies
+CREATE POLICY "Allow read user_social_links" ON public.user_social_links FOR SELECT USING (true);
+CREATE POLICY "Allow manage own user_social_links" ON public.user_social_links FOR ALL USING (auth.uid() = user_id);
+
+-- Events policies
+CREATE POLICY "Allow read events" ON public.events FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert events" ON public.events FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+CREATE POLICY "Allow authenticated update events" ON public.events FOR UPDATE USING (auth.role() = 'authenticated');
+
+-- Event attendees policies
+CREATE POLICY "Allow read event_attendees" ON public.event_attendees FOR SELECT USING (true);
+CREATE POLICY "Allow manage own event_attendees" ON public.event_attendees FOR ALL USING (auth.uid() = user_id);
+
+-- Matches policies
+CREATE POLICY "Allow read own matches" ON public.matches FOR SELECT USING (auth.uid() = user_id_1 OR auth.uid() = user_id_2);
+CREATE POLICY "Allow manage own matches" ON public.matches FOR ALL USING (auth.uid() = user_id_1 OR auth.uid() = user_id_2);
+
+-- Messages policies
+CREATE POLICY "Allow read own messages" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+CREATE POLICY "Allow insert own messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
 -- SAMPLE EVENTS DATA INSERT (Opsiyonel Örnek Veriler)
 INSERT INTO public.events (id, title, type, venue, city, date, description, image_url, lat, lng, tag)

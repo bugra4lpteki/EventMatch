@@ -560,4 +560,10 @@ class MockMatchService extends ChangeNotifier {
   bool hasSentRequest(String eventId, String toUserId) {
     return false;
   }
+
+  void clearMatchData() {
+    _potentialMatches.clear();
+    _incomingRequests.clear();
+    notifyListeners();
+  }
 }
