@@ -61,6 +61,8 @@ class EventModel {
   final String atmosphere;
   final bool isPopular;
 
+  factory EventModel.fromMap(Map<String, dynamic> map) => EventModel.fromJson(map);
+
   factory EventModel.fromJson(Map<String, dynamic> json) {
     try {
       return EventModel(

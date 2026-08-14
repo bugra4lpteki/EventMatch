@@ -1,30 +1,56 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:event_match/main.dart';
+import 'package:event_match/core/theme/theme_service.dart';
+import 'package:event_match/features/auth/services/auth_service.dart';
+import 'package:event_match/features/events/services/mock_event_service.dart';
+import 'package:event_match/features/events/services/mock_match_service.dart';
+import 'package:event_match/features/messages/services/mock_message_service.dart';
+import 'package:event_match/features/events/services/location_radar_service.dart';
+import 'package:event_match/core/constants/supabase_config.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const EventMatchApp());
+  setUpAll(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    SharedPreferences.setMockInitialValues({});
+    try {
+      await Supabase.initialize(
+        url: SupabaseConfig.url,
+        anonKey: SupabaseConfig.anonKey,
+      );
+    } catch (_) {}
+  });
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  testWidgets('EventMatchApp smoke test', (WidgetTester tester) async {
+    final eventService = MockEventService();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => ThemeService()),
+          ChangeNotifierProvider(create: (_) => AuthService()),
+          ChangeNotifierProvider(create: (_) => eventService),
+          ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
+            create: (context) => MockMatchService(eventService),
+            update: (context, es, ms) => ms ?? MockMatchService(es),
+          ),
+          ChangeNotifierProxyProvider<MockEventService, MockMessageService>(
+            create: (context) => MockMessageService(eventService),
+            update: (context, es, ms) => ms ?? MockMessageService(es),
+          ),
+          ChangeNotifierProxyProvider<MockEventService, LocationRadarService>(
+            create: (context) => LocationRadarService(eventService),
+            update: (context, es, rs) => rs ?? LocationRadarService(es),
+          ),
+        ],
+        child: const EventMatchApp(),
+      ),
+    );
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.byType(MaterialApp), findsOneWidget);
+    await tester.pump(const Duration(seconds: 3));
   });
 }
