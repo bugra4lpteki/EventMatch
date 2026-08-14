@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
+import '../widgets/image_scale_dialog.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -64,9 +65,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _pickImage(int index) async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null && _avatarImages.length < 3) {
+    if (pickedFile != null && mounted) {
+      final croppedFile = await ImageScaleDialog.show(context, pickedFile);
+      if (croppedFile != null && _avatarImages.length < 3) {
+        setState(() {
+          _avatarImages.add(croppedFile);
+        });
+      }
+    }
+  }
+
+  Future<void> _editImageScale(int index) async {
+    final currentImage = _avatarImages[index];
+    final croppedFile = await ImageScaleDialog.show(context, currentImage);
+    if (croppedFile != null && mounted) {
       setState(() {
-        _avatarImages.add(pickedFile);
+        _avatarImages[index] = croppedFile;
       });
     }
   }
@@ -475,21 +489,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         child: Stack(
                           clipBehavior: Clip.none,
                           children: [
-                            Container(
-                              width: 80,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                color: AppColors.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                            GestureDetector(
+                              onTap: () => _editImageScale(index),
+                              child: Container(
+                                width: 80,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: _avatarImages[index] is String
+                                      ? Image.network(_avatarImages[index] as String, fit: BoxFit.cover)
+                                      : (kIsWeb
+                                          ? Image.network((_avatarImages[index] as XFile).path, fit: BoxFit.cover)
+                                          : Image.file(File((_avatarImages[index] as XFile).path), fit: BoxFit.cover)),
+                                ),
                               ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: _avatarImages[index] is String
-                                    ? Image.network(_avatarImages[index] as String, fit: BoxFit.cover)
-                                    : (kIsWeb
-                                        ? Image.network((_avatarImages[index] as XFile).path, fit: BoxFit.cover)
-                                        : Image.file(File((_avatarImages[index] as XFile).path), fit: BoxFit.cover)),
+                            ),
+                            // Edit / Scale Button
+                            Positioned(
+                              bottom: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => _editImageScale(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.primary, width: 1),
+                                  ),
+                                  child: Icon(Icons.crop_rotate, size: 12, color: AppColors.primary),
+                                ),
                               ),
                             ),
                             Positioned(
