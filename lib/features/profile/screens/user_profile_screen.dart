@@ -40,20 +40,17 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     final hideLastSeenPref = prefs.getBool('${user.id}_privacy_hide_last_seen') ??
                              prefs.getBool('${user.name}_privacy_hide_last_seen') ??
-                             prefs.getBool('${user.username}_privacy_hide_last_seen') ??
-                             prefs.getBool('privacy_hide_last_seen') ??
+                             (user.username != null ? prefs.getBool('${user.username}_privacy_hide_last_seen') : null) ??
                              user.hideLastSeen;
 
     final hideEventsPref = prefs.getBool('${user.id}_privacy_hide_events') ??
                            prefs.getBool('${user.name}_privacy_hide_events') ??
-                           prefs.getBool('${user.username}_privacy_hide_events') ??
-                           prefs.getBool('privacy_hide_events') ??
+                           (user.username != null ? prefs.getBool('${user.username}_privacy_hide_events') : null) ??
                            user.hideEvents;
 
     final privateProfilePref = prefs.getBool('${user.id}_privacy_private_profile') ??
                                prefs.getBool('${user.name}_privacy_private_profile') ??
-                               prefs.getBool('${user.username}_privacy_private_profile') ??
-                               prefs.getBool('privacy_private_profile') ??
+                               (user.username != null ? prefs.getBool('${user.username}_privacy_private_profile') : null) ??
                                user.isPrivateProfile;
 
     if (mounted) {
