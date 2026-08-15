@@ -464,52 +464,77 @@ class MockMatchService extends ChangeNotifier {
   Future<void> loadIncomingRequests() async {
     try {
       final currentId = currentUserId;
-      if (_supabase.auth.currentUser == null) return;
-
-      final res = await _supabase
-          .from('matches')
-          .select('*, users!user_id_1(*)')
-          .eq('user_id_2', currentId)
-          .eq('status', 'liked');
-
       _incomingRequests.clear();
 
-      for (var row in res) {
-        final fromUserId = row['user_id_1'].toString();
-        final eventId = row['event_id']?.toString() ?? '';
-        final matchId = row['id'].toString();
+      if (_supabase.auth.currentUser != null) {
+        final res = await _supabase
+            .from('matches')
+            .select('*, users!user_id_1(*)')
+            .eq('user_id_2', currentId)
+            .eq('status', 'liked');
 
-        final profile = row['users'];
-        final name = profile?['name'] ?? 'Kullanıcı $fromUserId';
-        final avatarUrl = profile?['avatar_url'] ??
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600';
+        for (var row in res) {
+          final fromUserId = row['user_id_1'].toString();
+          final eventId = row['event_id']?.toString() ?? '';
+          final matchId = row['id'].toString();
 
-        final fromUser = UserModel(
-          id: fromUserId,
-          name: name,
-          avatarUrl: avatarUrl,
-        );
+          final profile = row['users'];
+          final name = profile?['name'] ?? 'Kullanıcı $fromUserId';
+          final avatarUrl = profile?['avatar_url'] ??
+              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600';
 
-        final currentUserModel = UserModel(
-          id: currentId,
-          name: 'Ben',
-          avatarUrl: '',
-        );
+          final fromUser = UserModel(
+            id: fromUserId,
+            name: name,
+            avatarUrl: avatarUrl,
+          );
 
-        _incomingRequests.add(MatchRequest(
-          id: matchId,
-          fromUser: fromUser,
-          toUser: currentUserModel,
-          eventId: eventId,
-        ));
+          final currentUserModel = UserModel(
+            id: currentId,
+            name: 'Ben',
+            avatarUrl: '',
+          );
+
+          _incomingRequests.add(MatchRequest(
+            id: matchId,
+            fromUser: fromUser,
+            toUser: currentUserModel,
+            eventId: eventId,
+          ));
+        }
+      }
+
+      if (_incomingRequests.isEmpty) {
+        _populateDemoIncomingRequests();
       }
 
       notifyListeners();
     } catch (e) {
       debugPrint('Load Incoming Requests Error: $e');
-      _incomingRequests.clear();
+      if (_incomingRequests.isEmpty) {
+        _populateDemoIncomingRequests();
+      }
       notifyListeners();
     }
+  }
+
+  void _populateDemoIncomingRequests() {
+    _incomingRequests = [
+      MatchRequest(
+        id: 'demo_req_1',
+        fromUser: UserModel(
+          id: 'mock_user_1',
+          name: 'Selin Yılmaz',
+          username: 'selin_y',
+          avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600',
+          aboutMe: 'Konser ve tiyatro aşığı 🎭',
+          city: 'İstanbul',
+          tags: ['Konser', 'Tiyatro'],
+        ),
+        toUser: UserModel(id: currentUserId, name: 'Ben', avatarUrl: ''),
+        eventId: '1',
+      ),
+    ];
   }
 
   Future<bool> acceptRequest(MatchRequest request) async {
@@ -553,17 +578,23 @@ class MockMatchService extends ChangeNotifier {
 
   List<GroupModel> getPotentialGroups() => [];
 
+  final Set<String> _sentRequestKeys = {};
+
   void sendRequest(String eventId, UserModel toUser) {
+    _sentRequestKeys.add('${eventId}_${toUser.id}');
+    _sentRequestKeys.add(toUser.id);
     swipeRight(toUser);
+    notifyListeners();
   }
 
   bool hasSentRequest(String eventId, String toUserId) {
-    return false;
+    return _sentRequestKeys.contains('${eventId}_$toUserId') || _sentRequestKeys.contains(toUserId);
   }
 
   void clearMatchData() {
     _potentialMatches.clear();
     _incomingRequests.clear();
+    _sentRequestKeys.clear();
     notifyListeners();
   }
 }

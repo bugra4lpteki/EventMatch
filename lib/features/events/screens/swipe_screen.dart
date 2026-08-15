@@ -515,37 +515,14 @@ class _SwipeScreenState extends State<SwipeScreen> {
     );
   }
 
-  void _sendMatchMessage(dynamic item) async {
+  String? _pendingMessage;
+
+  void _sendMatchMessage(dynamic item) {
     final messageText = _messageController.text.trim();
+    _pendingMessage = messageText.isNotEmpty ? messageText : null;
     _messageController.clear();
     FocusScope.of(context).unfocus();
-
-    if (item is UserModel) {
-      final matchService = context.read<MockMatchService>();
-      final isMutualMatch = await matchService.swipeRight(item, initialMessage: messageText);
-
-      if (isMutualMatch && mounted) {
-        final msgService = context.read<MockMessageService>();
-        final chat = msgService.createOrGetChatForUser(item, initialMessage: messageText);
-        await msgService.reloadChats();
-
-        MatchDialog.show(
-          context,
-          matchedUser: item,
-          onSendMessage: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => ChatDetailScreen(chat: chat),
-              ),
-            );
-          },
-        );
-      } else if (mounted) {
-        _swiperController.swipeRight();
-      }
-    } else if (item is GroupModel) {
-      _swiperController.swipeRight();
-    }
+    _swiperController.swipeRight();
   }
 
   void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<dynamic> items) async {
@@ -553,15 +530,18 @@ class _SwipeScreenState extends State<SwipeScreen> {
       _currentIndex = targetIndex;
     });
     final matchService = context.read<MockMatchService>();
+    if (previousIndex < 0 || previousIndex >= items.length) return;
     final item = items[previousIndex];
     
     if (activity is Swipe) {
       if (activity.direction == AxisDirection.right) {
         if (item is UserModel) {
-          final isMutualMatch = await matchService.swipeRight(item);
+          final messageToSend = _pendingMessage;
+          _pendingMessage = null;
+          final isMutualMatch = await matchService.swipeRight(item, initialMessage: messageToSend);
           if (isMutualMatch && mounted) {
             final msgService = context.read<MockMessageService>();
-            final chat = msgService.createOrGetChatForUser(item);
+            final chat = msgService.createOrGetChatForUser(item, initialMessage: messageToSend);
             await msgService.reloadChats();
             
             MatchDialog.show(
@@ -578,6 +558,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
           }
         }
       } else if (activity.direction == AxisDirection.left) {
+        _pendingMessage = null;
         if (item is UserModel) {
           matchService.swipeLeft(item);
         }

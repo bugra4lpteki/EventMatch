@@ -213,6 +213,19 @@ class MockEventService extends ChangeNotifier {
             currentUser.plannedEvents = attendedRes.map((r) => r['event_id'].toString()).toList();
           }
         } catch (_) {}
+
+        if (currentUser.avatarUrl.isEmpty) {
+          currentUser.avatarUrl = prefs.getString('${userId}_userAvatarUrl') ?? 'assets/images/user_avatar.jpg';
+          if (currentUser.avatarUrls.isEmpty) {
+            currentUser.avatarUrls = [currentUser.avatarUrl];
+          }
+        }
+        if (currentUser.aboutMe == null || currentUser.aboutMe!.isEmpty) {
+          currentUser.aboutMe = prefs.getString('${userId}_userAbout') ?? 'Konser ve festival sever 🎸';
+        }
+        if (currentUser.city == null || currentUser.city!.isEmpty) {
+          currentUser.city = prefs.getString('${userId}_userCity') ?? 'İstanbul';
+        }
       } catch (e) {
         debugPrint('Supabase profile load error: $e');
       }
