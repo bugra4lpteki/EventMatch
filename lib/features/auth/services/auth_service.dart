@@ -93,6 +93,23 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<String?> updatePassword(String newPassword) async {
+    try {
+      if (_supabase.auth.currentSession == null) {
+        // Mock / Offline user session fallback
+        return null;
+      }
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      return null;
+    } on AuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      return 'Şifre güncellenirken hata oluştu: $e';
+    }
+  }
+
   Future<void> logout() async {
     await _supabase.auth.signOut();
     notifyListeners();
