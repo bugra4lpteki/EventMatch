@@ -322,6 +322,10 @@ class MockMatchService extends ChangeNotifier {
     }
   }
 
+  bool _isValidUuid(String str) {
+    return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
+  }
+
   // --- SWIPE / MATCH LOGIC ---
 
   Future<bool> swipeRight(UserModel targetUser, {String? initialMessage}) async {
@@ -329,85 +333,92 @@ class MockMatchService extends ChangeNotifier {
 
     try {
       final currentId = currentUserId;
+      _sentRequestKeys.add(targetUser.id);
 
       debugPrint('[MatchService] ➡️ swipeRight: $currentId -> ${targetUser.id}');
 
       String? eventId;
       try {
-        final sharedEvents = await _supabase
-            .from('event_attendees')
-            .select('event_id')
-            .eq('user_id', targetUser.id)
-            .eq('status', 'joined');
+        if (_isValidUuid(targetUser.id)) {
+          final sharedEvents = await _supabase
+              .from('event_attendees')
+              .select('event_id')
+              .eq('user_id', targetUser.id)
+              .eq('status', 'joined');
 
-        if (sharedEvents.isNotEmpty) {
-          eventId = sharedEvents.first['event_id']?.toString();
+          if (sharedEvents.isNotEmpty) {
+            eventId = sharedEvents.first['event_id']?.toString();
+          }
         }
       } catch (_) {}
 
-      if (_supabase.auth.currentUser != null) {
-        final existingIncomingLikes = await _supabase
-            .from('matches')
-            .select()
-            .eq('user_id_1', targetUser.id)
-            .eq('user_id_2', currentId)
-            .eq('status', 'liked');
+      if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
+        try {
+          final existingIncomingLikes = await _supabase
+              .from('matches')
+              .select()
+              .eq('user_id_1', targetUser.id)
+              .eq('user_id_2', currentId)
+              .eq('status', 'liked');
 
-        if (existingIncomingLikes.isNotEmpty) {
-          final matchRow = existingIncomingLikes.first;
-          final matchRowId = matchRow['id'];
+          if (existingIncomingLikes.isNotEmpty) {
+            final matchRow = existingIncomingLikes.first;
+            final matchRowId = matchRow['id'];
 
-          try {
-            await _supabase
-                .from('matches')
-                .update({'status': 'matched'})
-                .eq('id', matchRowId);
-          } catch (_) {
+            try {
+              await _supabase
+                  .from('matches')
+                  .update({'status': 'matched'})
+                  .eq('id', matchRowId);
+            } catch (_) {
+              final matchData = <String, dynamic>{
+                'user_id_1': currentId,
+                'user_id_2': targetUser.id,
+                'status': 'matched',
+              };
+              if (eventId != null) matchData['event_id'] = eventId;
+              await _supabase.from('matches').insert(matchData);
+            }
+
+            if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+              try {
+                await _supabase.from('messages').insert({
+                  'match_id': matchRowId,
+                  'sender_id': currentId,
+                  'content': initialMessage.trim(),
+                });
+              } catch (e) {
+                debugPrint('[MatchService] initialMessage kaydetme hatası: $e');
+              }
+            }
+
+            isMutualMatch = true;
+            debugPrint('[MatchService] 🎉 Karşılıklı Eşleşme Başarılı! Match ID: $matchRowId');
+          } else {
             final matchData = <String, dynamic>{
               'user_id_1': currentId,
               'user_id_2': targetUser.id,
-              'status': 'matched',
+              'status': 'liked',
             };
             if (eventId != null) matchData['event_id'] = eventId;
-            await _supabase.from('matches').insert(matchData);
-          }
 
-          if (initialMessage != null && initialMessage.trim().isNotEmpty) {
             try {
-              await _supabase.from('messages').insert({
-                'match_id': matchRowId,
-                'sender_id': currentId,
-                'content': initialMessage.trim(),
-              });
+              final insertedMatch = await _supabase.from('matches').insert(matchData).select().maybeSingle();
+              if (initialMessage != null && initialMessage.trim().isNotEmpty && insertedMatch != null) {
+                await _supabase.from('messages').insert({
+                  'match_id': insertedMatch['id'],
+                  'sender_id': currentId,
+                  'content': initialMessage.trim(),
+                });
+              }
             } catch (e) {
-              debugPrint('[MatchService] initialMessage kaydetme hatası: $e');
+              debugPrint('[MatchService] Beğeni/Mesaj veritabanı ekleme hatası: $e');
             }
+
+            debugPrint('[MatchService] 👍 Beğeni ve mesaj kaydedildi: $currentId -> ${targetUser.id}');
           }
-
-          isMutualMatch = true;
-          debugPrint('[MatchService] 🎉 Karşılıklı Eşleşme Başarılı! Match ID: $matchRowId');
-        } else {
-          final matchData = <String, dynamic>{
-            'user_id_1': currentId,
-            'user_id_2': targetUser.id,
-            'status': 'liked',
-          };
-          if (eventId != null) matchData['event_id'] = eventId;
-
-          try {
-            final insertedMatch = await _supabase.from('matches').insert(matchData).select().maybeSingle();
-            if (initialMessage != null && initialMessage.trim().isNotEmpty && insertedMatch != null) {
-              await _supabase.from('messages').insert({
-                'match_id': insertedMatch['id'],
-                'sender_id': currentId,
-                'content': initialMessage.trim(),
-              });
-            }
-          } catch (e) {
-            debugPrint('[MatchService] Beğeni/Mesaj veritabanı ekleme hatası: $e');
-          }
-
-          debugPrint('[MatchService] 👍 Beğeni ve mesaj kaydedildi: $currentId -> ${targetUser.id}');
+        } catch (e) {
+          debugPrint('[MatchService] Supabase swipe hatası: $e');
         }
       } else {
         isMutualMatch = true;
@@ -426,28 +437,32 @@ class MockMatchService extends ChangeNotifier {
     try {
       final currentId = currentUserId;
 
-      if (_supabase.auth.currentUser != null) {
-        String? eventId;
+      if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
         try {
-          final sharedEvents = await _supabase
-              .from('event_attendees')
-              .select('event_id')
-              .eq('user_id', targetUser.id)
-              .eq('status', 'joined');
+          String? eventId;
+          try {
+            final sharedEvents = await _supabase
+                .from('event_attendees')
+                .select('event_id')
+                .eq('user_id', targetUser.id)
+                .eq('status', 'joined');
 
-          if (sharedEvents.isNotEmpty) {
-            eventId = sharedEvents.first['event_id']?.toString();
-          }
-        } catch (_) {}
+            if (sharedEvents.isNotEmpty) {
+              eventId = sharedEvents.first['event_id']?.toString();
+            }
+          } catch (_) {}
 
-        final matchData = <String, dynamic>{
-          'user_id_1': currentId,
-          'user_id_2': targetUser.id,
-          'status': 'rejected',
-        };
-        if (eventId != null) matchData['event_id'] = eventId;
+          final matchData = <String, dynamic>{
+            'user_id_1': currentId,
+            'user_id_2': targetUser.id,
+            'status': 'rejected',
+          };
+          if (eventId != null) matchData['event_id'] = eventId;
 
-        await _supabase.from('matches').insert(matchData);
+          await _supabase.from('matches').insert(matchData);
+        } catch (e) {
+          debugPrint('[MatchService] Swipe left Supabase hatası: $e');
+        }
       }
 
       _potentialMatches.removeWhere((u) => u.id == targetUser.id);

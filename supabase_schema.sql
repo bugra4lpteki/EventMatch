@@ -14,6 +14,12 @@ CREATE TABLE IF NOT EXISTS public.users (
   bio TEXT,
   interests JSONB DEFAULT '[]'::jsonb,
   birth_date DATE,
+  avatar_url TEXT,
+  hide_last_seen BOOLEAN DEFAULT FALSE,
+  is_private BOOLEAN DEFAULT FALSE,
+  hide_events BOOLEAN DEFAULT FALSE,
+  enable_location_sharing BOOLEAN DEFAULT TRUE,
+  points INT DEFAULT 100,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -41,7 +47,7 @@ CREATE TABLE IF NOT EXISTS public.user_social_links (
 
 -- 6. EVENTS TABLE
 CREATE TABLE IF NOT EXISTS public.events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   type TEXT DEFAULT 'Genel',
   venue TEXT,
@@ -60,19 +66,18 @@ CREATE TABLE IF NOT EXISTS public.events (
 -- 7. EVENT ATTENDEES TABLE
 CREATE TABLE IF NOT EXISTS public.event_attendees (
   id BIGSERIAL PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
+  event_id TEXT,
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
   status TEXT DEFAULT 'joined',
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(event_id, user_id)
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- 8. MATCHES TABLE
 CREATE TABLE IF NOT EXISTS public.matches (
   id BIGSERIAL PRIMARY KEY,
-  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
-  user_id_1 UUID REFERENCES public.users(id) ON DELETE CASCADE,
-  user_id_2 UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  event_id TEXT,
+  user_id_1 TEXT NOT NULL,
+  user_id_2 TEXT NOT NULL,
   action_1 TEXT,
   action_2 TEXT,
   status TEXT DEFAULT 'pending',
@@ -83,8 +88,8 @@ CREATE TABLE IF NOT EXISTS public.matches (
 CREATE TABLE IF NOT EXISTS public.messages (
   id BIGSERIAL PRIMARY KEY,
   match_id BIGINT REFERENCES public.matches(id) ON DELETE CASCADE,
-  sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-  receiver_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  sender_id TEXT NOT NULL,
+  receiver_id TEXT,
   content TEXT NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

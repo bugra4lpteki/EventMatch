@@ -105,12 +105,16 @@ class MockMessageService extends ChangeNotifier {
       Map<String, String> photosMap = {};
       Map<String, List<String>> socialLinksMap = {};
 
-      if (otherUserIds.isNotEmpty) {
+      final validUuidList = otherUserIds
+          .where((id) => RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(id))
+          .toList();
+
+      if (validUuidList.isNotEmpty) {
         try {
           final profilesResList = await _supabase
               .from('users')
               .select('id, name, username, bio, city, gender, interests')
-              .inFilter('id', otherUserIds.toList());
+              .inFilter('id', validUuidList);
 
           for (var p in profilesResList) {
             profilesMap[p['id'].toString()] = p;
@@ -123,7 +127,7 @@ class MockMessageService extends ChangeNotifier {
           final photosRes = await _supabase
               .from('user_photos')
               .select('user_id, storage_url')
-              .inFilter('user_id', otherUserIds.toList())
+              .inFilter('user_id', validUuidList)
               .eq('is_active', true);
 
           for (var photo in photosRes) {
@@ -140,7 +144,7 @@ class MockMessageService extends ChangeNotifier {
           final socialRes = await _supabase
               .from('user_social_links')
               .select('user_id, url')
-              .inFilter('user_id', otherUserIds.toList());
+              .inFilter('user_id', validUuidList);
 
           for (var link in socialRes) {
             final uId = link['user_id'].toString();
@@ -372,12 +376,16 @@ class MockMessageService extends ChangeNotifier {
         notifyListeners();
       }
 
-      if (currentId.isNotEmpty && !chatId.startsWith('chat_')) {
-        await _supabase.from('messages').insert({
-          'match_id': chatId,
-          'sender_id': currentId,
-          'content': text
-        });
+      if (currentId.isNotEmpty && int.tryParse(chatId) != null) {
+        try {
+          await _supabase.from('messages').insert({
+            'match_id': int.parse(chatId),
+            'sender_id': currentId,
+            'content': text
+          });
+        } catch (e) {
+          debugPrint('[MessageService] Supabase message insert error: $e');
+        }
       }
     } catch (e) {
       debugPrint('Send Message Error: $e');
