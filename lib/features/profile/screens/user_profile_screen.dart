@@ -394,10 +394,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      if (!hideLastSeen) ...[
+                  if (!hideLastSeen && !isPrivateProfile) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
                         Container(
                           width: 10,
                           height: 10,
@@ -415,20 +415,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ] else if (isCurrentUser) ...[
-                        Icon(Icons.visibility_off_rounded, color: AppColors.primaryVariant, size: 16),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Görünmez Mod (Çevrimiçi Gizli)',
-                          style: TextStyle(
-                            color: AppColors.primaryVariant,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                        if (user.points > 0) ...[
+                          const SizedBox(width: 16),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${user.points} PUAN',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                      if (user.points > 0) ...[
-                        const SizedBox(width: 16),
+                    ),
+                  ] else if (user.points > 0) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
@@ -445,8 +454,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                         ),
                       ],
-                    ],
-                  ),
+                    ),
+                  ],
 
                   if (isPrivateProfile) ...[
                     const SizedBox(height: 16),

@@ -181,25 +181,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              const SizedBox(height: 10),
-                              Row(
-                                children: [
-                                  Icon(
-                                    user.hideLastSeen ? Icons.visibility_off_rounded : Icons.circle,
-                                    size: user.hideLastSeen ? 15 : 9,
-                                    color: user.hideLastSeen ? AppColors.primaryVariant : const Color(0xFF4CAF50),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    user.hideLastSeen ? 'Görünmez Mod (Çevrimiçi Gizli)' : 'Çevrimiçi',
-                                    style: TextStyle(
-                                      color: user.hideLastSeen ? AppColors.primaryVariant : const Color(0xFF4CAF50),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                              if (!user.hideLastSeen && !user.isPrivateProfile) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 9,
+                                      height: 9,
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF4CAF50),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      'Çevrimiçi',
+                                      style: TextStyle(
+                                        color: Color(0xFF4CAF50),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ] else if (user.isPrivateProfile) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Gizli Hesap',
+                                      style: TextStyle(
+                                        color: AppColors.primaryVariant,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
