@@ -239,10 +239,102 @@ class _ExploreScreenState extends State<ExploreScreen> {
   );
 }
 
+  void _showCitySearchPicker(BuildContext context, MockEventService eventService, StateSetter setModalState) {
+    String searchFilter = '';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setPickerState) {
+            final filteredCities = MockEventService.allTurkishCities.where((c) {
+              if (searchFilter.isEmpty) return true;
+              return c.toLowerCase().contains(searchFilter.toLowerCase());
+            }).toList();
+
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.75,
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Şehir Seçiniz (81 İl)',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    onChanged: (val) => setPickerState(() => searchFilter = val),
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: 'Şehir ara... (Örn: Eskişehir, Muğla, Trabzon)',
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
+                      prefixIcon: Icon(Icons.search, color: AppColors.primary),
+                      filled: true,
+                      fillColor: AppColors.surface,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: filteredCities.length,
+                      itemBuilder: (context, index) {
+                        final city = filteredCities[index];
+                        final isSelected = eventService.selectedCity == city;
+                        return ListTile(
+                          title: Text(
+                            city,
+                            style: TextStyle(
+                              color: isSelected ? AppColors.primary : AppColors.textPrimary,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                          trailing: isSelected ? Icon(Icons.check_circle_rounded, color: AppColors.primary) : null,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          onTap: () {
+                            eventService.setCity(city);
+                            setModalState(() {});
+                            Navigator.pop(context);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _showFilterDialog(BuildContext context) {
     final eventService = context.read<MockEventService>();
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: AppColors.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -278,34 +370,64 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    'Şehir Seçimi',
-                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Şehir Seçimi',
+                        style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                      ),
+                      InkWell(
+                        onTap: () => _showCitySearchPicker(context, eventService, setModalState),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                          child: Row(
+                            children: [
+                              Icon(Icons.search_rounded, size: 16, color: AppColors.primary),
+                              const SizedBox(width: 4),
+                              Text(
+                                '81 İl İçinden Ara',
+                                style: TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: eventService.cities.map((city) {
-                      final isSelected = eventService.selectedCity == city;
-                      return ChoiceChip(
-                        label: Text(city),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            eventService.setCity(city);
-                            setModalState(() {});
-                          }
-                        },
-                        selectedColor: AppColors.primary.withOpacity(0.2),
+                    children: [
+                      ...eventService.cities.map((city) {
+                        final isSelected = eventService.selectedCity == city;
+                        return ChoiceChip(
+                          label: Text(city),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            if (selected) {
+                              eventService.setCity(city);
+                              setModalState(() {});
+                            }
+                          },
+                          selectedColor: AppColors.primary.withOpacity(0.2),
+                          backgroundColor: AppColors.surface,
+                          labelStyle: TextStyle(
+                            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                          side: BorderSide(color: isSelected ? AppColors.primary : Colors.transparent),
+                        );
+                      }),
+                      ActionChip(
+                        avatar: Icon(Icons.add_location_alt_rounded, size: 14, color: AppColors.primary),
+                        label: Text('Diğer Şehir...', style: TextStyle(color: AppColors.primary, fontSize: 12)),
                         backgroundColor: AppColors.surface,
-                        labelStyle: TextStyle(
-                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                        side: BorderSide(color: isSelected ? AppColors.primary : Colors.transparent),
-                      );
-                    }).toList(),
+                        side: BorderSide(color: AppColors.primary.withOpacity(0.4)),
+                        onPressed: () => _showCitySearchPicker(context, eventService, setModalState),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   Text(
