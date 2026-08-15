@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_service.dart';
 import 'features/auth/services/auth_service.dart';
@@ -15,6 +16,12 @@ import 'core/constants/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await initializeDateFormatting('tr_TR', null);
+  } catch (e) {
+    debugPrint('DateFormatting init error: $e');
+  }
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);

@@ -153,6 +153,37 @@ class MockEventService extends ChangeNotifier {
       currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
     }
 
+    currentUser.isPrivateProfile = prefs.getBool('privacy_private_profile') ?? false;
+    currentUser.hideEvents = prefs.getBool('privacy_hide_events') ?? false;
+    currentUser.hideLastSeen = prefs.getBool('privacy_hide_last_seen') ?? false;
+    currentUser.enableLocationSharing = prefs.getBool('privacy_location_sharing') ?? true;
+
+    notifyListeners();
+  }
+
+  Future<void> updatePrivacySettings({
+    bool? privateProfile,
+    bool? hideEvents,
+    bool? hideLastSeen,
+    bool? locationSharing,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (privateProfile != null) {
+      currentUser.isPrivateProfile = privateProfile;
+      await prefs.setBool('privacy_private_profile', privateProfile);
+    }
+    if (hideEvents != null) {
+      currentUser.hideEvents = hideEvents;
+      await prefs.setBool('privacy_hide_events', hideEvents);
+    }
+    if (hideLastSeen != null) {
+      currentUser.hideLastSeen = hideLastSeen;
+      await prefs.setBool('privacy_hide_last_seen', hideLastSeen);
+    }
+    if (locationSharing != null) {
+      currentUser.enableLocationSharing = locationSharing;
+      await prefs.setBool('privacy_location_sharing', locationSharing);
+    }
     notifyListeners();
   }
 

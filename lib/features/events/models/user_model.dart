@@ -17,6 +17,11 @@ class UserModel {
   int points;
   List<String> badges;
   String? checkedInEventId;
+  bool isOnline;
+  bool hideLastSeen;
+  bool isPrivateProfile;
+  bool hideEvents;
+  bool enableLocationSharing;
 
   UserModel({
     required this.id,
@@ -32,6 +37,11 @@ class UserModel {
     this.longitude,
     this.points = 0,
     this.checkedInEventId,
+    this.isOnline = true,
+    this.hideLastSeen = false,
+    this.isPrivateProfile = false,
+    this.hideEvents = false,
+    this.enableLocationSharing = true,
     List<String>? badges,
     List<String>? tags,
     List<String>? avatarUrls,

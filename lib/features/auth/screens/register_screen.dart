@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
@@ -23,6 +24,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
   DateTime? _selectedDate;
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  @override
+  void initState() {
+    super.initState();
+    initializeDateFormatting('tr_TR', null);
+  }
+
+  String _formatDate(DateTime date) {
+    try {
+      return DateFormat('d MMMM yyyy', 'tr_TR').format(date);
+    } catch (_) {
+      return DateFormat('dd.MM.yyyy').format(date);
+    }
+  }
 
   @override
   void dispose() {
@@ -413,7 +428,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                                 Text(
                                                   _selectedDate == null 
                                                       ? 'Gün / Ay / Yıl Seçin' 
-                                                      : DateFormat('d MMMM yyyy', 'tr_TR').format(_selectedDate!),
+                                                      : _formatDate(_selectedDate!),
                                                   style: GoogleFonts.outfit(
                                                     color: _selectedDate == null ? AppColors.textMuted : AppColors.textPrimary,
                                                     fontSize: 15,

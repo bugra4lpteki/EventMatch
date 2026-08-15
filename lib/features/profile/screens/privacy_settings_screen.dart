@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../events/services/mock_event_service.dart';
+import '../../auth/services/auth_service.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -23,21 +26,52 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   }
 
   Future<void> _loadPrivacySettings() async {
+    final authService = context.read<AuthService>();
+    final eventService = context.read<MockEventService>();
+    final userId = authService.currentUserId ?? eventService.currentUser.id;
+    final userName = eventService.currentUser.name;
+
     final prefs = await SharedPreferences.getInstance();
+
+    if (!mounted) return;
     setState(() {
-      _isPrivateProfile = prefs.getBool('privacy_private_profile') ?? false;
-      _hideEventActivity = prefs.getBool('privacy_hide_events') ?? false;
-      _hideLastSeen = prefs.getBool('privacy_hide_last_seen') ?? false;
-      _enableLocationSharing = prefs.getBool('privacy_location_sharing') ?? true;
+      _isPrivateProfile = prefs.getBool('${userId}_privacy_private_profile') ??
+                          prefs.getBool('${userName}_privacy_private_profile') ??
+                          prefs.getBool('privacy_private_profile') ?? false;
+      _hideEventActivity = prefs.getBool('${userId}_privacy_hide_events') ??
+                          prefs.getBool('${userName}_privacy_hide_events') ??
+                          prefs.getBool('privacy_hide_events') ?? false;
+      _hideLastSeen = prefs.getBool('${userId}_privacy_hide_last_seen') ??
+                      prefs.getBool('${userName}_privacy_hide_last_seen') ??
+                      prefs.getBool('privacy_hide_last_seen') ?? false;
+      _enableLocationSharing = prefs.getBool('${userId}_privacy_location_sharing') ??
+                               prefs.getBool('${userName}_privacy_location_sharing') ??
+                               prefs.getBool('privacy_location_sharing') ?? true;
     });
   }
 
   Future<void> _updateSetting(String key, bool value, Function(bool) updateState) async {
+    final authService = context.read<AuthService>();
+    final eventService = context.read<MockEventService>();
+    final userId = authService.currentUserId ?? eventService.currentUser.id;
+    final userName = eventService.currentUser.name;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(key, value);
+    await prefs.setBool('${userId}_$key', value);
+    await prefs.setBool('${userName}_$key', value);
+
+    if (!mounted) return;
     setState(() {
       updateState(value);
     });
+
+    eventService.updatePrivacySettings(
+      privateProfile: key == 'privacy_private_profile' ? value : null,
+      hideEvents: key == 'privacy_hide_events' ? value : null,
+      hideLastSeen: key == 'privacy_hide_last_seen' ? value : null,
+      locationSharing: key == 'privacy_location_sharing' ? value : null,
+    );
   }
 
   @override

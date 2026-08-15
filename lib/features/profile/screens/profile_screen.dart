@@ -187,16 +187,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   Container(
                                     width: 9,
                                     height: 9,
-                                    decoration: const BoxDecoration(
-                                      color: Color(0xFF4CAF50),
+                                    decoration: BoxDecoration(
+                                      color: user.hideLastSeen ? AppColors.textSecondary : const Color(0xFF4CAF50),
                                       shape: BoxShape.circle,
                                     ),
                                   ),
                                   const SizedBox(width: 6),
-                                  const Text(
-                                    'Çevrimiçi',
+                                  Text(
+                                    user.hideLastSeen ? 'Çevrimiçi (Diğer kullanıcılara gizli)' : 'Çevrimiçi',
                                     style: TextStyle(
-                                      color: Color(0xFF4CAF50),
+                                      color: user.hideLastSeen ? AppColors.textSecondary : const Color(0xFF4CAF50),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),

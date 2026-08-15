@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
@@ -23,6 +24,46 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   int _currentPhotoIndex = 0;
+  bool _targetUserHideLastSeen = false;
+  bool _targetUserHideEvents = false;
+  bool _targetUserPrivateProfile = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkTargetUserPrivacy();
+  }
+
+  Future<void> _checkTargetUserPrivacy() async {
+    final prefs = await SharedPreferences.getInstance();
+    final user = widget.user;
+
+    final hideLastSeenPref = prefs.getBool('${user.id}_privacy_hide_last_seen') ??
+                             prefs.getBool('${user.name}_privacy_hide_last_seen') ??
+                             prefs.getBool('${user.username}_privacy_hide_last_seen') ??
+                             prefs.getBool('privacy_hide_last_seen') ??
+                             user.hideLastSeen;
+
+    final hideEventsPref = prefs.getBool('${user.id}_privacy_hide_events') ??
+                           prefs.getBool('${user.name}_privacy_hide_events') ??
+                           prefs.getBool('${user.username}_privacy_hide_events') ??
+                           prefs.getBool('privacy_hide_events') ??
+                           user.hideEvents;
+
+    final privateProfilePref = prefs.getBool('${user.id}_privacy_private_profile') ??
+                               prefs.getBool('${user.name}_privacy_private_profile') ??
+                               prefs.getBool('${user.username}_privacy_private_profile') ??
+                               prefs.getBool('privacy_private_profile') ??
+                               user.isPrivateProfile;
+
+    if (mounted) {
+      setState(() {
+        _targetUserHideLastSeen = hideLastSeenPref;
+        _targetUserHideEvents = hideEventsPref;
+        _targetUserPrivateProfile = privateProfilePref;
+      });
+    }
+  }
 
   Widget _defaultHeroBg(BuildContext context) {
     return Container(
@@ -69,7 +110,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return '';
   }
 
-  Widget _buildEventList(BuildContext context, String title, List<String> eventIds, MockEventService eventService) {
+  Widget _buildEventList(BuildContext context, String title, List<String> eventIds, MockEventService eventService, {bool isHidden = false}) {
+    if (isHidden) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          const SizedBox(height: 8),
+          Text("🔒 Kullanıcı etkinlik katılımlarını gizledi.", style: TextStyle(color: AppColors.textSecondary, fontSize: 14, fontStyle: FontStyle.italic)),
+        ],
+      );
+    }
+
     if (eventIds.isEmpty) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -156,6 +208,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final eventService = context.watch<MockEventService>();
     final matchService = context.watch<MockMatchService>();
     final user = widget.user;
+    final isCurrentUser = (user.id == eventService.currentUser.id || user.name == eventService.currentUser.name);
+    final hideLastSeen = isCurrentUser ? eventService.currentUser.hideLastSeen : (_targetUserHideLastSeen || user.hideLastSeen);
+    final hideEvents = isCurrentUser ? false : (_targetUserHideEvents || user.hideEvents);
+    final isPrivateProfile = isCurrentUser ? false : (_targetUserPrivateProfile || user.isPrivateProfile);
+
     final hasSentReq = widget.eventId != null ? matchService.hasSentRequest(widget.eventId!, user.id) : false;
 
     final displayPhotos = user.avatarUrls.isNotEmpty
@@ -343,23 +400,36 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   const SizedBox(height: 10),
                   Row(
                     children: [
-                      Container(
-                        width: 10,
-                        height: 10,
-                        decoration: const BoxDecoration(
-                          color: Colors.greenAccent,
-                          shape: BoxShape.circle,
+                      if (!hideLastSeen) ...[
+                        Container(
+                          width: 10,
+                          height: 10,
+                          decoration: const BoxDecoration(
+                            color: Colors.greenAccent,
+                            shape: BoxShape.circle,
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Çevrimiçi',
-                        style: TextStyle(
-                          color: Colors.greenAccent,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Çevrimiçi',
+                          style: TextStyle(
+                            color: Colors.greenAccent,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
+                      ] else if (isCurrentUser) ...[
+                        Icon(Icons.visibility_off_rounded, color: AppColors.textSecondary, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Çevrimiçi (Diğer kullanıcılara gizli)',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                       if (user.points > 0) ...[
                         const SizedBox(width: 16),
                         Container(
@@ -380,6 +450,40 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ],
                     ],
                   ),
+
+                  if (isPrivateProfile) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.lock_rounded, color: AppColors.primary, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Gizli Profil',
+                                  style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Bu profil gizlidir. Detaylar ve etkinlik katılımları kısıtlanmıştır.',
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   // Rozetler (Badges)
                   if (user.badges.isNotEmpty) ...[
@@ -406,7 +510,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   const SizedBox(height: 20),
 
                   // Hakkımda Section
-                  if (user.aboutMe != null && user.aboutMe!.isNotEmpty) ...[
+                  if (user.aboutMe != null && user.aboutMe!.isNotEmpty && !isPrivateProfile) ...[
                     Text(
                       "Hakkımda",
                       style: TextStyle(
@@ -471,9 +575,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   const SizedBox(height: 28),
 
                   // Etkinlik Listeleri
-                  _buildEventList(context, "Gitmeyi Düşündüğü Etkinlikler", user.plannedEvents, eventService),
+                  _buildEventList(context, "Gitmeyi Düşündüğü Etkinlikler", user.plannedEvents, eventService, isHidden: hideEvents || isPrivateProfile),
                   const SizedBox(height: 24),
-                  _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService),
+                  _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService, isHidden: hideEvents || isPrivateProfile),
 
                   if (widget.eventId != null) ...[
                     const SizedBox(height: 32),
