@@ -112,7 +112,7 @@ class LocationRadarService extends ChangeNotifier {
 
     for (var event in allEvents) {
       for (var user in event.attendees) {
-        if (user.latitude != null && user.longitude != null && !addedUserIds.contains(user.id)) {
+        if (user.latitude != null && user.longitude != null && user.enableLocationSharing && !addedUserIds.contains(user.id)) {
           double distanceInMeters = Geolocator.distanceBetween(
             position.latitude,
             position.longitude,

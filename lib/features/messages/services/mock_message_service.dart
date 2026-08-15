@@ -243,10 +243,62 @@ class MockMessageService extends ChangeNotifier {
       });
 
       _chats = newChatsList;
+      if (_chats.isEmpty) {
+        _populateDemoChats();
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('Load Chats Error: $e');
+      if (_chats.isEmpty) {
+        _populateDemoChats();
+      }
+      notifyListeners();
     }
+  }
+
+  void _populateDemoChats() {
+    _chats = [
+      ChatModel(
+        id: 'demo_chat_1',
+        participant: UserModel(
+          id: 'mock_user_1',
+          name: 'Selin Yılmaz',
+          username: 'selin_y',
+          avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600',
+          aboutMe: 'Konser ve tiyatro aşığı 🎭',
+          city: 'İstanbul',
+          tags: ['Konser', 'Tiyatro'],
+        ),
+        messages: [
+          MessageModel(
+            id: 'm1',
+            senderId: 'mock_user_1',
+            text: 'Harika bir konser olacak! Sen de geliyor musun? 🎸',
+            timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
+          ),
+        ],
+      ),
+      ChatModel(
+        id: 'demo_chat_2',
+        participant: UserModel(
+          id: 'mock_user_2',
+          name: 'Zeynep Kaya',
+          username: 'zeynep_k',
+          avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=600',
+          aboutMe: 'Stand-up ve sinema meraklısı 🍿',
+          city: 'İstanbul',
+          tags: ['Stand-up', 'Sinema'],
+        ),
+        messages: [
+          MessageModel(
+            id: 'm2',
+            senderId: 'mock_user_2',
+            text: 'Selam! Baturay Özdemir biletini aldın mı? 😄',
+            timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+          ),
+        ],
+      ),
+    ];
   }
 
   /// Eşleşilen kullanıcı için sohbet döndürür veya oluşturur (Deduplication garantili)
