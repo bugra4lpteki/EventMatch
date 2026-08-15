@@ -419,12 +419,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           ),
                         ),
                       ] else if (isCurrentUser) ...[
-                        Icon(Icons.visibility_off_rounded, color: AppColors.textSecondary, size: 16),
+                        Icon(Icons.visibility_off_rounded, color: AppColors.primaryVariant, size: 16),
                         const SizedBox(width: 6),
                         Text(
-                          'Çevrimiçi (Diğer kullanıcılara gizli)',
+                          'Görünmez Mod (Çevrimiçi Gizli)',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.primaryVariant,
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
                           ),

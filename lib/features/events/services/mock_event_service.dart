@@ -153,10 +153,18 @@ class MockEventService extends ChangeNotifier {
       currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
     }
 
-    currentUser.isPrivateProfile = prefs.getBool('privacy_private_profile') ?? false;
-    currentUser.hideEvents = prefs.getBool('privacy_hide_events') ?? false;
-    currentUser.hideLastSeen = prefs.getBool('privacy_hide_last_seen') ?? false;
-    currentUser.enableLocationSharing = prefs.getBool('privacy_location_sharing') ?? true;
+    currentUser.isPrivateProfile = prefs.getBool('${userId}_privacy_private_profile') ??
+                                   prefs.getBool('${currentUser.name}_privacy_private_profile') ??
+                                   prefs.getBool('privacy_private_profile') ?? false;
+    currentUser.hideEvents = prefs.getBool('${userId}_privacy_hide_events') ??
+                             prefs.getBool('${currentUser.name}_privacy_hide_events') ??
+                             prefs.getBool('privacy_hide_events') ?? false;
+    currentUser.hideLastSeen = prefs.getBool('${userId}_privacy_hide_last_seen') ??
+                               prefs.getBool('${currentUser.name}_privacy_hide_last_seen') ??
+                               prefs.getBool('privacy_hide_last_seen') ?? false;
+    currentUser.enableLocationSharing = prefs.getBool('${userId}_privacy_location_sharing') ??
+                                         prefs.getBool('${currentUser.name}_privacy_location_sharing') ??
+                                         prefs.getBool('privacy_location_sharing') ?? true;
 
     notifyListeners();
   }

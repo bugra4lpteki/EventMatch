@@ -184,19 +184,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const SizedBox(height: 10),
                               Row(
                                 children: [
-                                  Container(
-                                    width: 9,
-                                    height: 9,
-                                    decoration: BoxDecoration(
-                                      color: user.hideLastSeen ? AppColors.textSecondary : const Color(0xFF4CAF50),
-                                      shape: BoxShape.circle,
-                                    ),
+                                  Icon(
+                                    user.hideLastSeen ? Icons.visibility_off_rounded : Icons.circle,
+                                    size: user.hideLastSeen ? 15 : 9,
+                                    color: user.hideLastSeen ? AppColors.primaryVariant : const Color(0xFF4CAF50),
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
-                                    user.hideLastSeen ? 'Çevrimiçi (Diğer kullanıcılara gizli)' : 'Çevrimiçi',
+                                    user.hideLastSeen ? 'Görünmez Mod (Çevrimiçi Gizli)' : 'Çevrimiçi',
                                     style: TextStyle(
-                                      color: user.hideLastSeen ? AppColors.textSecondary : const Color(0xFF4CAF50),
+                                      color: user.hideLastSeen ? AppColors.primaryVariant : const Color(0xFF4CAF50),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
                                     ),
