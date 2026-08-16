@@ -274,12 +274,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = [
-    const ExploreScreen(),
-    const SwipeScreen(),
-    const RequestsScreen(),
-    const MessagesScreen(),
-    const ProfileScreen(),
+  static const List<Widget> _pages = [
+    RepaintBoundary(child: ExploreScreen()),
+    RepaintBoundary(child: SwipeScreen()),
+    RepaintBoundary(child: RequestsScreen()),
+    RepaintBoundary(child: MessagesScreen()),
+    RepaintBoundary(child: ProfileScreen()),
   ];
 
   @override
@@ -305,7 +305,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
+                      color: Colors.white.withValues(alpha: 0.06),
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white10),
                     ),
@@ -319,13 +319,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-                const Center(child: RadarIconWidget()),
+                const Center(child: RepaintBoundary(child: RadarIconWidget())),
                 if (_currentIndex == 4)
                   IconButton(
                     icon: Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white10),
                       ),
@@ -346,37 +346,33 @@ class _HomeScreenState extends State<HomeScreen> {
               children: _pages,
             ),
             bottomNavigationBar: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(34),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                    child: Container(
-                      height: 68,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(34),
-                        border: Border.all(color: AppColors.primary.withOpacity(0.25), width: 1.2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.2),
-                            blurRadius: 24,
-                            spreadRadius: 2,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                      child: Row(
-                        children: [
-                          _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
-                          _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
-                          _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
-                          _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
-                          _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
-                        ],
-                      ),
+              child: RepaintBoundary(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Container(
+                    height: 68,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface.withValues(alpha: 0.96),
+                      borderRadius: BorderRadius.circular(34),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25), width: 1.2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.15),
+                          blurRadius: 16,
+                          spreadRadius: 1,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: Row(
+                      children: [
+                        _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
+                        _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
+                        _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
+                        _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
+                        _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+                      ],
                     ),
                   ),
                 ),

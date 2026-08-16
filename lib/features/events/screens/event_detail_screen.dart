@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
@@ -165,35 +166,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 children: [
                   Hero(
                     tag: 'event_image_${event.id}',
-                    child: event.imageUrl.startsWith('http')
-                        ? Image.network(
-                            event.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: AppColors.surface,
-                              child: Center(
-                                child: Icon(Icons.broken_image, color: AppColors.primary, size: 64),
-                              ),
-                            ),
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Shimmer.fromColors(
-                                baseColor: AppColors.surface,
-                                highlightColor: AppColors.primary.withOpacity(0.3),
-                                child: Container(color: Colors.white),
-                              );
-                            },
-                          )
-                        : Image.asset(
-                            event.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              color: AppColors.surface,
-                              child: Center(
-                                child: Icon(Icons.broken_image, color: AppColors.primary, size: 64),
-                              ),
-                            ),
-                          ),
+                    child: AppImageWidget(
+                      imageUrl: event.imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 1080,
+                    ),
                   ),
                   // Dark Gradient Overlay for text contrast
                   Container(

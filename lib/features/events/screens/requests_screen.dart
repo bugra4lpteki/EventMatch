@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../services/mock_match_service.dart';
 import '../widgets/match_dialog.dart';
 import '../../messages/services/mock_message_service.dart';
@@ -50,40 +51,28 @@ class RequestsScreen extends StatelessWidget {
             itemCount: requests.length,
             itemBuilder: (context, index) {
               final req = requests[index];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: AppColors.surface,
-                      radius: 30,
-                      child: ClipOval(
-                        child: req.fromUser.avatarUrl.startsWith('http')
-                            ? Image.network(
-                                req.fromUser.avatarUrl,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(Icons.person, color: AppColors.primary),
-                              )
-                            : Image.asset(
-                                req.fromUser.avatarUrl,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    Icon(Icons.person, color: AppColors.primary),
-                              ),
+              return RepaintBoundary(
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      ClipOval(
+                        child: AppImageWidget(
+                          imageUrl: req.fromUser.avatarUrl,
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 120,
+                          memCacheHeight: 120,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
+                      const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -148,11 +137,12 @@ class RequestsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-              );
-            },
-          );
-        },
-      ),
-    );
+              ),
+            );
+          },
+        );
+      },
+    ),
+  );
   }
 }

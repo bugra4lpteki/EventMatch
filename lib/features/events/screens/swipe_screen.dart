@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:appinio_swiper/appinio_swiper.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../services/mock_match_service.dart';
 import '../models/user_model.dart';
 import '../models/group_model.dart';
@@ -197,62 +198,56 @@ class _SwipeScreenState extends State<SwipeScreen> {
         ? user.avatarUrl
         : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
 
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => UserProfileScreen(user: user),
-          ),
-        );
-      },
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          color: AppColors.surface,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.12),
-              blurRadius: 15,
-              spreadRadius: 2,
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => UserProfileScreen(user: user),
             ),
-          ],
-        ),
-        child: Stack(
-          children: [
-            // Avatar / Profile Photo Image
-            Positioned.fill(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: photoUrl.startsWith('http')
-                    ? Image.network(
-                        photoUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: AppColors.surface,
-                          child: Icon(Icons.person, size: 80, color: AppColors.primary),
-                        ),
-                      )
-                    : Container(
-                        color: AppColors.surface,
-                        child: Icon(Icons.person, size: 80, color: AppColors.primary),
-                      ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            color: AppColors.surface,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                blurRadius: 15,
+                spreadRadius: 2,
               ),
-            ),
-            // Gradient Overlay (Sadece en alt %18'lik bantta hafif karartma)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
+            ],
+          ),
+          child: Stack(
+            children: [
+              // Avatar / Profile Photo Image with memory limits
+              Positioned.fill(
+                child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  gradient: LinearGradient(
-                    colors: [Colors.transparent, Colors.black.withValues(alpha: 0.2), Colors.black.withValues(alpha: 0.6)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    stops: const [0.82, 0.92, 1.0],
+                  child: AppImageWidget(
+                    imageUrl: photoUrl,
+                    fit: BoxFit.cover,
+                    memCacheWidth: 600,
+                    memCacheHeight: 800,
                   ),
                 ),
               ),
-            ),
+              // Gradient Overlay (Sadece en alt %18'lik bantta hafif karartma)
+              Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    gradient: LinearGradient(
+                      colors: [Colors.transparent, Colors.black.withValues(alpha: 0.2), Colors.black.withValues(alpha: 0.6)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: const [0.82, 0.92, 1.0],
+                    ),
+                  ),
+                ),
+              ),
             // User Info (Fotoğrafa dokunulduğunda da profile gider, kompakt alt yerleşim)
             Positioned(
               bottom: 12,
@@ -339,8 +334,9 @@ class _SwipeScreenState extends State<SwipeScreen> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   IconData _getTagIcon(String tag) {
     switch (tag.toLowerCase()) {

@@ -1,12 +1,11 @@
-import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
@@ -148,9 +147,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               leading: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: event.imageUrl.startsWith('http')
-                    ? Image.network(event.imageUrl, width: 50, height: 50, fit: BoxFit.cover)
-                    : Image.asset(event.imageUrl, width: 50, height: 50, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Icon(Icons.event, color: AppColors.primary)),
+                child: AppImageWidget(
+                  imageUrl: event.imageUrl,
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.cover,
+                  memCacheWidth: 100,
+                  memCacheHeight: 100,
+                ),
               ),
               title: Text(event.title, style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 15)),
               subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
@@ -275,19 +279,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                           itemBuilder: (context, index) {
                             final photoUrl = displayPhotos[index];
                             if (photoUrl.isEmpty) return _defaultHeroBg(context);
-                            if (photoUrl.startsWith('http') || kIsWeb) {
-                              return Image.network(
-                                photoUrl,
+                            return RepaintBoundary(
+                              child: AppImageWidget(
+                                imageUrl: photoUrl,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _defaultHeroBg(context),
-                              );
-                            } else {
-                              return Image.file(
-                                File(photoUrl),
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _defaultHeroBg(context),
-                              );
-                            }
+                                memCacheWidth: 720,
+                                memCacheHeight: 900,
+                              ),
+                            );
                           },
                         ),
                       // Bottom subtle gradient for indicators only

@@ -1,11 +1,10 @@
-import 'dart:io';
 import 'dart:ui';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
@@ -76,11 +75,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           itemBuilder: (context, index) {
                             final photoUrl = displayPhotos[index];
                             if (photoUrl.isEmpty) return _defaultHeroBg(context);
-                            if (photoUrl.startsWith('http') || kIsWeb) {
-                              return Image.network(photoUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg(context));
-                            } else {
-                              return Image.file(File(photoUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => _defaultHeroBg(context));
-                            }
+                            return RepaintBoundary(
+                              child: AppImageWidget(
+                                imageUrl: photoUrl,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 720,
+                                memCacheHeight: 900,
+                              ),
+                            );
                           },
                         ),
                       // Bottom subtle gradient for indicators only
@@ -553,13 +555,14 @@ class _VenueCard extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  event.imageUrl.startsWith('http')
-                      ? Image.network(event.imageUrl, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              Container(color: const Color(0xFF2A2A2A)))
-                      : Image.asset(event.imageUrl, fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                              Container(color: const Color(0xFF2A2A2A))),
+                  Positioned.fill(
+                    child: AppImageWidget(
+                      imageUrl: event.imageUrl,
+                      fit: BoxFit.cover,
+                      memCacheWidth: 320,
+                      memCacheHeight: 200,
+                    ),
+                  ),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(

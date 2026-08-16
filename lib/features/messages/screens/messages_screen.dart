@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/mock_message_service.dart';
 import '../models/message_model.dart';
@@ -281,61 +282,66 @@ class _MessagesScreenState extends State<MessagesScreen> {
               ],
             ),
           ),
-          child: ListTile(
-            onLongPress: () => _showChatOptions(context, chat, service),
-            onTap: () {
-              service.markAsRead(chat.id);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatDetailScreen(chat: chat),
-                ),
-              );
-            },
-            leading: GestureDetector(
+          child: RepaintBoundary(
+            child: ListTile(
+              onLongPress: () => _showChatOptions(context, chat, service),
               onTap: () {
+                service.markAsRead(chat.id);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => UserProfileScreen(user: chat.participant),
+                    builder: (context) => ChatDetailScreen(chat: chat),
                   ),
                 );
               },
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: AppColors.surface,
-                    backgroundImage: chat.participant.avatarUrl.startsWith('http')
-                        ? NetworkImage(chat.participant.avatarUrl)
-                        : null,
-                    child: !chat.participant.avatarUrl.startsWith('http')
-                        ? Icon(Icons.person, color: AppColors.primary)
-                        : null,
-                  ),
-                  if (chat.unreadCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${chat.unreadCount}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
+              leading: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => UserProfileScreen(user: chat.participant),
+                    ),
+                  );
+                },
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: AppColors.surface,
+                      backgroundImage: chat.participant.avatarUrl.startsWith('http')
+                          ? CachedNetworkImageProvider(
+                              chat.participant.avatarUrl,
+                              maxHeight: 120,
+                              maxWidth: 120,
+                            )
+                          : null,
+                      child: !chat.participant.avatarUrl.startsWith('http')
+                          ? Icon(Icons.person, color: AppColors.primary)
+                          : null,
+                    ),
+                    if (chat.unreadCount > 0)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${chat.unreadCount}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
             title: Row(
               children: [
                 Expanded(
@@ -400,6 +406,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     ],
                   )
                 : null,
+            ),
           ),
         );
       },

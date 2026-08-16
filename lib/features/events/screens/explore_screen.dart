@@ -37,6 +37,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       ),
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        cacheExtent: 600, // Pre-cache offscreen items to prevent scroll jank
         slivers: [
         SliverToBoxAdapter(
           child: Column(
@@ -117,53 +118,58 @@ class _ExploreScreenState extends State<ExploreScreen> {
               ),
               // Popüler Etkinlikler Carousel & Filtre Çipleri (Arama esnasında gizle, ekranı arama sonuçlarına aç)
               if (_searchController.text.trim().isEmpty) ...[
-                Consumer<MockEventService>(
-                  builder: (context, eventService, child) {
-                    final allEvents = eventService.getAdminEvents();
-                    final sortedEvents = List<EventModel>.from(allEvents)
-                      ..sort((a, b) => b.attendees.length.compareTo(a.attendees.length));
-                    final popularEvents = sortedEvents.take(5).toList();
-                    return PopularEventsCarousel(events: popularEvents);
-                  },
+                RepaintBoundary(
+                  child: Consumer<MockEventService>(
+                    builder: (context, eventService, child) {
+                      final allEvents = eventService.getAdminEvents();
+                      final sortedEvents = List<EventModel>.from(allEvents)
+                        ..sort((a, b) => b.attendees.length.compareTo(a.attendees.length));
+                      final popularEvents = sortedEvents.take(5).toList();
+                      return PopularEventsCarousel(events: popularEvents);
+                    },
+                  ),
                 ),
                 const SizedBox(height: 8),
                 // Filter Chips
-                SizedBox(
-                  height: 60,
-                  child: Consumer<MockEventService>(
-                    builder: (context, eventService, child) {
-                      return ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        itemCount: eventService.categories.length,
-                        itemBuilder: (context, index) {
-                          final category = eventService.categories[index];
-                          final isSelected = eventService.selectedCategory == category;
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ChoiceChip(
-                              label: Text(category),
-                              selected: isSelected,
-                              onSelected: (selected) {
-                                if (selected) eventService.setCategory(category);
-                              },
-                              selectedColor: AppColors.primary.withValues(alpha: 0.2),
-                              backgroundColor: AppColors.surface,
-                              labelStyle: TextStyle(
-                                color: isSelected ? AppColors.primary : AppColors.textSecondary,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                RepaintBoundary(
+                  child: SizedBox(
+                    height: 60,
+                    child: Consumer<MockEventService>(
+                      builder: (context, eventService, child) {
+                        return ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          cacheExtent: 250,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          itemCount: eventService.categories.length,
+                          itemBuilder: (context, index) {
+                            final category = eventService.categories[index];
+                            final isSelected = eventService.selectedCategory == category;
+                            return Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(category),
+                                selected: isSelected,
+                                onSelected: (selected) {
+                                  if (selected) eventService.setCategory(category);
+                                },
+                                selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                                backgroundColor: AppColors.surface,
+                                labelStyle: TextStyle(
+                                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                                side: BorderSide(
+                                  color: isSelected ? AppColors.primary : Colors.transparent,
+                                  width: 1.5,
+                                ),
+                                elevation: isSelected ? 4 : 0,
+                                shadowColor: AppColors.primary.withValues(alpha: 0.3),
                               ),
-                              side: BorderSide(
-                                color: isSelected ? AppColors.primary : Colors.transparent,
-                                width: 1.5,
-                              ),
-                              elevation: isSelected ? 4 : 0,
-                              shadowColor: AppColors.primary.withValues(alpha: 0.3),
-                            ),
-                          );
-                        },
-                      );
-                    },
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
                 ),
               ] else ...[
@@ -193,7 +199,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ],
           ),
         ),
-        // Lazy-loaded Event List (Zero-lag rendering)
+        // Lazy-loaded Event List (Zero-lag rendering with RepaintBoundary & automatic keep-alives)
         Consumer<MockEventService>(
           builder: (context, eventService, child) {
             final events = eventService.filteredEvents;
@@ -216,6 +222,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     return EventCard(
+                      key: ValueKey('event_card_${events[index].id}'),
                       event: events[index],
                       onTap: () {
                         Navigator.push(
@@ -228,6 +235,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     );
                   },
                   childCount: events.length,
+                  addRepaintBoundaries: true,
+                  addAutomaticKeepAlives: true,
                 ),
               ),
             );
