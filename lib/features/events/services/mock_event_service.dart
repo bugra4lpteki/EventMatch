@@ -491,19 +491,6 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void scatterMockUsersAround(double baseLat, double baseLng) {
-    for (var event in _events) {
-      for (int i = 0; i < event.attendees.length; i++) {
-        double offsetLat = (i % 2 == 0) ? 0.002 : 0.006; 
-        double offsetLng = (i % 3 == 0) ? 0.002 : -0.001; 
-        
-        event.attendees[i].latitude = baseLat + offsetLat;
-        event.attendees[i].longitude = baseLng + offsetLng;
-      }
-    }
-    notifyListeners();
-  }
-
   final List<String> activityFeed = [];
 
   List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];

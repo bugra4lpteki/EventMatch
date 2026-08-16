@@ -10,7 +10,6 @@ class LocationRadarService extends ChangeNotifier {
   bool _isRadarActive = false;
   List<UserModel> _nearbyUsers = [];
   StreamSubscription<Position>? _positionStreamSubscription;
-  bool _mockUsersScattered = false;
   bool _hasSentNotification = false;
   double _radarDistanceKm = 10.0;
   Position? _lastPosition;
@@ -100,11 +99,6 @@ class LocationRadarService extends ChangeNotifier {
 
   void _handlePositionUpdate(Position position) {
     _lastPosition = position;
-    if (!_mockUsersScattered) {
-      // Radar sadece ilk kez açıldığında mock (sahte) kullanıcıları sizin etrafınıza serpiştirsin.
-      _eventService.scatterMockUsersAround(position.latitude, position.longitude);
-      _mockUsersScattered = true;
-    }
 
     List<UserModel> nearby = [];
     final allEvents = _eventService.getAdminEvents();

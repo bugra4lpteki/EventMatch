@@ -257,68 +257,12 @@ class MockMatchService extends ChangeNotifier {
         }
       }
 
-      // Eğer kaydırılacak gerçek profil kalmadıysa veya az ise deste boş kalmasın diye fallback profiller ekle
-      if (_potentialMatches.isEmpty) {
-        _addFallbackMatchesIfNeeded(excludedUserIds);
-      }
-
       _potentialMatches.shuffle();
       notifyListeners();
     } catch (e) {
       debugPrint('Load Potential Matches Error: $e');
       _potentialMatches.clear();
       notifyListeners();
-    }
-  }
-
-  void _addFallbackMatchesIfNeeded(Set<String> excludedUserIds) {
-    final demoUsers = [
-      UserModel(
-        id: 'mock_user_1',
-        name: 'Selin Yılmaz',
-        username: 'selin_y',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600',
-        aboutMe: 'Konser ve açık hava etkinliklerini kaçırmam! 🎵',
-        city: 'İstanbul',
-        gender: 'Kadın',
-        tags: ['Konser', 'Müzik', 'Kahve', 'Sanat'],
-        badges: ['Müzik Tutkunu'],
-        socialLinks: ['instagram.com/selin_y'],
-      ),
-      UserModel(
-        id: 'mock_user_2',
-        name: 'Deniz Kaya',
-        username: 'deniz_k',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=600',
-        aboutMe: 'Sinema, tiyatro ve doğa yürüyüşü tutkunu. 🎬🍿',
-        city: 'İstanbul',
-        gender: 'Erkek',
-        tags: ['Sinema', 'Tiyatro', 'Spor'],
-        badges: ['Sinema Sever'],
-        socialLinks: ['instagram.com/deniz_k'],
-      ),
-      UserModel(
-        id: 'mock_user_3',
-        name: 'Zeynep Demir',
-        username: 'zeynep_d',
-        avatarUrl:
-            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=600',
-        aboutMe: 'Stand-up geceleri ve techno festivaller tercihim! 🔥',
-        city: 'İstanbul',
-        gender: 'Kadın',
-        tags: ['Stand-up', 'Techno', 'Spor'],
-        badges: ['Sahne Tozu Yutmuş'],
-        socialLinks: ['instagram.com/zeynep_d'],
-      ),
-    ];
-
-    for (var demo in demoUsers) {
-      if (!excludedUserIds.contains(demo.id.toLowerCase()) &&
-          !_potentialMatches.any((m) => m.id == demo.id)) {
-        _potentialMatches.add(demo);
-      }
     }
   }
 
@@ -519,37 +463,12 @@ class MockMatchService extends ChangeNotifier {
         }
       }
 
-      if (_incomingRequests.isEmpty) {
-        _populateDemoIncomingRequests();
-      }
-
       notifyListeners();
     } catch (e) {
       debugPrint('Load Incoming Requests Error: $e');
-      if (_incomingRequests.isEmpty) {
-        _populateDemoIncomingRequests();
-      }
+      _incomingRequests.clear();
       notifyListeners();
     }
-  }
-
-  void _populateDemoIncomingRequests() {
-    _incomingRequests = [
-      MatchRequest(
-        id: 'demo_req_1',
-        fromUser: UserModel(
-          id: 'mock_user_1',
-          name: 'Selin Yılmaz',
-          username: 'selin_y',
-          avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600',
-          aboutMe: 'Konser ve tiyatro aşığı 🎭',
-          city: 'İstanbul',
-          tags: ['Konser', 'Tiyatro'],
-        ),
-        toUser: UserModel(id: currentUserId, name: 'Ben', avatarUrl: ''),
-        eventId: '1',
-      ),
-    ];
   }
 
   Future<bool> acceptRequest(MatchRequest request) async {
