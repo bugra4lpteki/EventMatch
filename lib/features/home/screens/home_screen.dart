@@ -274,12 +274,12 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  static const List<Widget> _pages = [
-    RepaintBoundary(child: ExploreScreen()),
-    RepaintBoundary(child: SwipeScreen()),
-    RepaintBoundary(child: RequestsScreen()),
-    RepaintBoundary(child: MessagesScreen()),
-    RepaintBoundary(child: ProfileScreen()),
+  final List<Widget> _pages = const [
+    ExploreScreen(key: PageStorageKey('ExploreScreen')),
+    SwipeScreen(key: PageStorageKey('SwipeScreen')),
+    RequestsScreen(key: PageStorageKey('RequestsScreen')),
+    MessagesScreen(key: PageStorageKey('MessagesScreen')),
+    ProfileScreen(key: PageStorageKey('ProfileScreen')),
   ];
 
   @override
@@ -319,7 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-                const Center(child: RepaintBoundary(child: RadarIconWidget())),
+                const Center(child: RadarIconWidget()),
                 if (_currentIndex == 4)
                   IconButton(
                     icon: Container(
@@ -346,34 +346,32 @@ class _HomeScreenState extends State<HomeScreen> {
               children: _pages,
             ),
             bottomNavigationBar: SafeArea(
-              child: RepaintBoundary(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  child: Container(
-                    height: 68,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface.withValues(alpha: 0.96),
-                      borderRadius: BorderRadius.circular(34),
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.25), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          blurRadius: 16,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-                    child: Row(
-                      children: [
-                        _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
-                        _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
-                        _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
-                        _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
-                        _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
-                      ],
-                    ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                child: Container(
+                  height: 68,
+                  decoration: BoxDecoration(
+                    color: AppColors.surface.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(34),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.25), width: 1.2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.15),
+                        blurRadius: 16,
+                        spreadRadius: 1,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  child: Row(
+                    children: [
+                      _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
+                      _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
+                      _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
+                      _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
+                      _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+                    ],
                   ),
                 ),
               ),
@@ -389,8 +387,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          HapticFeedback.mediumImpact();
-          setState(() => _currentIndex = index);
+          HapticFeedback.selectionClick();
+          if (_currentIndex != index) {
+            setState(() {
+              _currentIndex = index;
+            });
+          }
         },
         behavior: HitTestBehavior.opaque,
         child: Center(
@@ -454,8 +456,12 @@ class _HomeScreenState extends State<HomeScreen> {
         return Expanded(
           child: GestureDetector(
             onTap: () {
-              HapticFeedback.mediumImpact();
-              setState(() => _currentIndex = index);
+              HapticFeedback.selectionClick();
+              if (_currentIndex != index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              }
             },
             behavior: HitTestBehavior.opaque,
             child: Center(
