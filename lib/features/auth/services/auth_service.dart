@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -14,6 +15,42 @@ class AuthService extends ChangeNotifier {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       notifyListeners();
     });
+  }
+
+  Future<bool> signInWithGoogle() async {
+    try {
+      final res = await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+        authScreenLaunchMode: LaunchMode.platformDefault,
+      );
+      notifyListeners();
+      return res;
+    } on AuthException catch (e) {
+      debugPrint('Google OAuth AuthException: ${e.message}');
+      throw Exception(e.message);
+    } catch (e) {
+      debugPrint('Google OAuth Error: $e');
+      throw Exception('Google ile giriş sırasında hata oluştu: $e');
+    }
+  }
+
+  Future<bool> signInWithApple() async {
+    try {
+      final res = await _supabase.auth.signInWithOAuth(
+        OAuthProvider.apple,
+        redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+        authScreenLaunchMode: LaunchMode.platformDefault,
+      );
+      notifyListeners();
+      return res;
+    } on AuthException catch (e) {
+      debugPrint('Apple OAuth AuthException: ${e.message}');
+      throw Exception(e.message);
+    } catch (e) {
+      debugPrint('Apple OAuth Error: $e');
+      throw Exception('Apple ile giriş sırasında hata oluştu: $e');
+    }
   }
 
   Future<String?> login(String emailOrUsername, String password) async {

@@ -62,6 +62,36 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  void _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AuthService>().signInWithGoogle();
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _loginWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AuthService>().signInWithApple();
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   void _showSnackBar(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -377,9 +407,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
-                                _showSnackBar('Google ile giriş yakında aktif olacak!');
-                              },
+                              onPressed: _isLoading ? null : _loginWithGoogle,
                               style: OutlinedButton.styleFrom(
                                 backgroundColor: AppColors.surface.withOpacity(0.5),
                                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -406,9 +434,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(width: 14),
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: () {
-                                _showSnackBar('Apple ile giriş yakında aktif olacak!');
-                              },
+                              onPressed: _isLoading ? null : _loginWithApple,
                               style: OutlinedButton.styleFrom(
                                 backgroundColor: AppColors.surface.withOpacity(0.5),
                                 padding: const EdgeInsets.symmetric(vertical: 14),

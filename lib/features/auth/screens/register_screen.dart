@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -142,6 +143,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
         _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    }
+  }
+
+  void _loginWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AuthService>().signInWithGoogle();
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  void _loginWithApple() async {
+    setState(() => _isLoading = true);
+    try {
+      await context.read<AuthService>().signInWithApple();
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
       }
     }
   }
@@ -590,6 +627,87 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           ),
 
                           const SizedBox(height: 24),
+
+                          // Social Sign-In Divider
+                          Row(
+                            children: [
+                              Expanded(child: Divider(color: Colors.white.withOpacity(0.12), thickness: 1)),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: Text(
+                                  'veya sosyal hesap ile',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                              ),
+                              Expanded(child: Divider(color: Colors.white.withOpacity(0.12), thickness: 1)),
+                            ],
+                          ),
+
+                          const SizedBox(height: 20),
+
+                          // Social Auth Buttons Row
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _isLoading ? null : _loginWithGoogle,
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: AppColors.surface.withOpacity(0.5),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  icon: const FaIcon(
+                                    FontAwesomeIcons.google,
+                                    size: 18,
+                                    color: Color(0xFFEA4335),
+                                  ),
+                                  label: Text(
+                                    'Google',
+                                    style: GoogleFonts.outfit(
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _isLoading ? null : _loginWithApple,
+                                  style: OutlinedButton.styleFrom(
+                                    backgroundColor: AppColors.surface.withOpacity(0.5),
+                                    padding: const EdgeInsets.symmetric(vertical: 14),
+                                    side: BorderSide(color: Colors.white.withOpacity(0.1)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  icon: const FaIcon(
+                                    FontAwesomeIcons.apple,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                  label: Text(
+                                    'Apple',
+                                    style: GoogleFonts.outfit(
+                                      color: AppColors.textPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 28),
 
                           // Already have account Link
                           Row(
