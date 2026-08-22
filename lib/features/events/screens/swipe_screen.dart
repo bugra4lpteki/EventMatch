@@ -10,6 +10,8 @@ import '../widgets/match_dialog.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../messages/screens/chat_detail_screen.dart';
+import '../../../core/widgets/report_block_sheet.dart';
+import '../services/moderation_service.dart';
 
 class SwipeScreen extends StatefulWidget {
   const SwipeScreen({super.key});
@@ -49,7 +51,12 @@ class _SwipeScreenState extends State<SwipeScreen> {
   Widget build(BuildContext context) {
     return Consumer<MockMatchService>(
       builder: (context, matchService, child) {
-        final items = matchService.getPotentialMatches();
+        final allItems = matchService.getPotentialMatches();
+        final blockedIds = ModerationService().blockedUserIds;
+        final items = allItems.where((item) {
+          if (item is UserModel) return !blockedIds.contains(item.id);
+          return true;
+        }).toList();
 
         return Column(
           children: [
@@ -245,6 +252,32 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       end: Alignment.bottomCenter,
                       stops: const [0.82, 0.92, 1.0],
                     ),
+                  ),
+                ),
+              ),
+              // Top Right Report & Block Button
+              Positioned(
+                top: 12,
+                right: 12,
+                child: GestureDetector(
+                  onTap: () {
+                    ReportBlockSheet.showOptionsModal(
+                      context,
+                      userId: user.id,
+                      userName: user.name,
+                      onUserBlocked: () {
+                        _swiperController.swipeLeft();
+                      },
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24, width: 0.8),
+                    ),
+                    child: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 18),
                   ),
                 ),
               ),

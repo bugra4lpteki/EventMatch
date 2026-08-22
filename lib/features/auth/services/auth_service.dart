@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class AuthService extends ChangeNotifier {
@@ -159,11 +160,14 @@ class AuthService extends ChangeNotifier {
         try {
           await _supabase.from('users').delete().eq('id', userId);
         } catch (_) {}
-        await _supabase.auth.signOut();
-        notifyListeners();
-        return true;
       }
-      return false;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+      } catch (_) {}
+      await _supabase.auth.signOut();
+      notifyListeners();
+      return true;
     } catch (e) {
       debugPrint('Delete Account Error: $e');
       return false;

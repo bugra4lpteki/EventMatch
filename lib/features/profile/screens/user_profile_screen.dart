@@ -10,6 +10,7 @@ import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/widgets/vibe_check_widget.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -244,6 +245,23 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          if (!isCurrentUser)
+            IconButton(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white70),
+              tooltip: 'Seçenekler & Şikayet',
+              onPressed: () {
+                ReportBlockSheet.showOptionsModal(
+                  context,
+                  userId: user.id,
+                  userName: user.name,
+                  onUserBlocked: () {
+                    if (context.mounted) Navigator.pop(context);
+                  },
+                );
+              },
+            ),
+        ],
       ),
       body: CustomScrollView(
         slivers: [

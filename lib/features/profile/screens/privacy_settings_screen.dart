@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../auth/services/auth_service.dart';
+import '../../events/services/moderation_service.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -134,6 +135,81 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 ),
               ],
             ),
+          ),
+
+          const SizedBox(height: 24),
+          // Engellenen Kullanıcılar
+          Padding(
+            padding: const EdgeInsets.only(left: 4.0, bottom: 8.0),
+            child: Text(
+              'ENGELLENEN KULLANICILAR',
+              style: GoogleFonts.outfit(
+                color: AppColors.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.1,
+              ),
+            ),
+          ),
+          ListenableBuilder(
+            listenable: ModerationService(),
+            builder: (context, _) {
+              final blockedIds = ModerationService().blockedUserIds.toList();
+              return Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: blockedIds.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(
+                          child: Text(
+                            'Henüz engellediğiniz bir kullanıcı bulunmuyor.',
+                            style: TextStyle(color: Colors.white54, fontSize: 13),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: blockedIds.length,
+                        separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
+                        itemBuilder: (context, index) {
+                          final id = blockedIds[index];
+                          return ListTile(
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent.withValues(alpha: 0.15),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.block, color: Colors.redAccent, size: 18),
+                            ),
+                            title: Text(
+                              'Engellenen Kullanıcı (#$id)',
+                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                            ),
+                            trailing: TextButton(
+                              onPressed: () async {
+                                await ModerationService().unblockUser(id);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Kullanıcının engeli kaldırıldı.')),
+                                  );
+                                }
+                              },
+                              child: const Text(
+                                'Engeli Kaldır',
+                                style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              );
+            },
           ),
 
           const SizedBox(height: 24),
