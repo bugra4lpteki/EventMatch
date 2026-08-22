@@ -13,13 +13,17 @@ class MockMessageService extends ChangeNotifier {
   final Set<String> _blockedUserIds = {};
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
+  RealtimeChannel? _realtimeChannel;
 
   MockMessageService(this._eventService) {
     reloadChats();
+    _subscribeToRealtime();
     _supabase.auth.onAuthStateChange.listen((data) {
       if (data.session != null) {
         reloadChats();
+        _subscribeToRealtime();
       } else {
+        _realtimeChannel?.unsubscribe();
         _chats.clear();
         _blockedUserIds.clear();
         _followingUserIds.clear();
@@ -27,6 +31,25 @@ class MockMessageService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  void _subscribeToRealtime() {
+    try {
+      _realtimeChannel?.unsubscribe();
+      _realtimeChannel = _supabase
+          .channel('public:messages_realtime')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'messages',
+            callback: (payload) {
+              reloadChats();
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
+    }
   }
 
   List<ChatModel> _chats = [];
@@ -348,5 +371,11 @@ class MockMessageService extends ChangeNotifier {
       _chats[chatIndex].unreadCount = 0;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _realtimeChannel?.unsubscribe();
+    super.dispose();
   }
 }
