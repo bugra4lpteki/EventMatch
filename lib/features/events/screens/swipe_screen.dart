@@ -400,23 +400,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
           // Input & Action Row
           Row(
             children: [
-              // Pass Button
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.surface,
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.close_rounded, color: Colors.redAccent, size: 24),
-                  tooltip: 'Pas Geç',
-                  onPressed: () {
-                    _swiperController.swipeLeft();
-                    _messageController.clear();
-                  },
-                ),
-              ),
-              const SizedBox(width: 8),
               // Message TextField
               Expanded(
                 child: Container(

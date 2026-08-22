@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart' as fp;
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import 'event_form_screen.dart';
+import 'carousel_manager_screen.dart';
 
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key});
@@ -14,6 +15,16 @@ class AdminPanelScreen extends StatelessWidget {
       appBar: AppBar(
         title: Text('Yönetim Paneli', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.view_carousel_rounded, color: Colors.cyanAccent),
+            tooltip: 'Kayan Vitrin Yönetimi',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const CarouselManagerScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: Icon(Icons.file_upload, color: AppColors.primary),
             tooltip: 'Excel\'den Yükle',
@@ -47,14 +58,82 @@ class AdminPanelScreen extends StatelessWidget {
              return Center(child: Text("Henüz hiç etkinlik yok.", style: TextStyle(color: AppColors.textSecondary)));
           }
 
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: events.length,
-            itemBuilder: (context, index) {
-              final event = events[index];
-              return Card(
-                color: AppColors.surface,
-                margin: const EdgeInsets.only(bottom: 16),
+          return Column(
+            children: [
+              // Kayan Vitrin Yönetimi Hızlı Erişim Kartı
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.primary.withValues(alpha: 0.25),
+                      AppColors.secondary.withValues(alpha: 0.15),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.4)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  leading: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.view_carousel_rounded, color: Colors.cyanAccent, size: 28),
+                  ),
+                  title: const Text(
+                    'Kayan Ekran (Vitrin) Yönetimi',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                  subtitle: Text(
+                    'Keşfet sayfasındaki kayan vitrini canlı önizle, etkinlikleri seç ve sırala.',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Yönet', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                        SizedBox(width: 4),
+                        Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 12),
+                      ],
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const CarouselManagerScreen()),
+                    );
+                  },
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
+                child: Row(
+                  children: [
+                    Text(
+                      'Tüm Etkinlikler & Görünürlük',
+                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: events.length,
+                  itemBuilder: (context, index) {
+                    final event = events[index];
+                    return Card(
+                      color: AppColors.surface,
+                      margin: const EdgeInsets.only(bottom: 12),
                 child: ListTile(
                   contentPadding: const EdgeInsets.all(12),
                   leading: ClipRRect(
@@ -142,16 +221,19 @@ class AdminPanelScreen extends StatelessWidget {
                 ),
               );
             },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          Navigator.push(context, MaterialPageRoute(builder: (context) => const EventFormScreen()));
-        },
-      ),
+          ),
+        ),
+      ],
+    );
+  },
+),
+floatingActionButton: FloatingActionButton(
+  backgroundColor: AppColors.primary,
+  child: const Icon(Icons.add, color: Colors.white),
+  onPressed: () {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => const EventFormScreen()));
+  },
+),
     );
   }
 }

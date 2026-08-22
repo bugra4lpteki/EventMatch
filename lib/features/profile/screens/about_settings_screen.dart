@@ -1,9 +1,33 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../admin/widgets/secret_admin_dialog.dart';
 
-class AboutSettingsScreen extends StatelessWidget {
+class AboutSettingsScreen extends StatefulWidget {
   const AboutSettingsScreen({super.key});
+
+  @override
+  State<AboutSettingsScreen> createState() => _AboutSettingsScreenState();
+}
+
+class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
+  int _tapCount = 0;
+  Timer? _tapTimer;
+
+  void _handleSecretTap() {
+    _tapCount++;
+    _tapTimer?.cancel();
+    _tapTimer = Timer(const Duration(seconds: 3), () {
+      _tapCount = 0;
+    });
+
+    if (_tapCount >= 5) {
+      _tapCount = 0;
+      SecretAdminAuthHelper.showSecretPinDialog(context);
+    }
+  }
 
   void _showLegalModal(BuildContext context, String title, String contentText) {
     showModalBottomSheet(
@@ -79,38 +103,47 @@ class AboutSettingsScreen extends StatelessWidget {
           children: [
             const SizedBox(height: 10),
 
-            // App Brand Header Card
+            // App Brand Header Card (Gizli 5 tıklama ile admin paneline giriş)
             Center(
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.45),
-                      blurRadius: 25,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.confirmation_number_rounded,
-                  color: Colors.white,
-                  size: 44,
+              child: GestureDetector(
+                onTap: _handleSecretTap,
+                child: Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.45),
+                        blurRadius: 25,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.confirmation_number_rounded,
+                    color: Colors.white,
+                    size: 44,
+                  ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              'EventMatch',
-              style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+            GestureDetector(
+              onTap: _handleSecretTap,
+              child: Text(
+                'EventMatch',
+                style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+              ),
             ),
             const SizedBox(height: 4),
-            Text(
-              'Sürüm v1.0.0 (Build 102)',
-              style: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 13),
+            GestureDetector(
+              onTap: _handleSecretTap,
+              child: Text(
+                'Sürüm v1.0.0 (Build 102)',
+                style: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 13),
+              ),
             ),
             const SizedBox(height: 8),
             Text(

@@ -10,6 +10,8 @@ import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
 import '../../events/screens/event_detail_screen.dart';
 import 'edit_profile_screen.dart';
+import '../../admin/widgets/secret_admin_dialog.dart';
+import 'dart:async';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -20,6 +22,27 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   int _currentPhotoIndex = 0;
+  int _secretTapCount = 0;
+  Timer? _secretTapTimer;
+
+  void _handleSecretTap() {
+    _secretTapCount++;
+    _secretTapTimer?.cancel();
+    _secretTapTimer = Timer(const Duration(seconds: 3), () {
+      _secretTapCount = 0;
+    });
+
+    if (_secretTapCount >= 5) {
+      _secretTapCount = 0;
+      SecretAdminAuthHelper.showSecretPinDialog(context);
+    }
+  }
+
+  @override
+  void dispose() {
+    _secretTapTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -153,13 +176,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    user.name,
-                                    style: TextStyle(
-                                      color: AppColors.textPrimary,
-                                      fontSize: 24,
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: -0.4,
+                                  GestureDetector(
+                                    onTap: _handleSecretTap,
+                                    child: Text(
+                                      user.name,
+                                      style: TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: -0.4,
+                                      ),
                                     ),
                                   ),
                                   Row(

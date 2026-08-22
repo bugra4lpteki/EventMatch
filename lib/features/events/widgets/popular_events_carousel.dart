@@ -8,8 +8,15 @@ import '../screens/event_detail_screen.dart';
 /// Performance-optimized carousel with isolated indicator rebuilds and RepaintBoundary.
 class PopularEventsCarousel extends StatefulWidget {
   final List<EventModel> events;
+  final double height;
+  final bool showIndicators;
 
-  const PopularEventsCarousel({super.key, required this.events});
+  const PopularEventsCarousel({
+    super.key,
+    required this.events,
+    this.height = 420,
+    this.showIndicators = true,
+  });
 
   @override
   State<PopularEventsCarousel> createState() => _PopularEventsCarouselState();
@@ -60,7 +67,7 @@ class _PopularEventsCarouselState extends State<PopularEventsCarousel> {
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
-          height: 420,
+          height: widget.height,
           child: PageView.builder(
             controller: _pageController,
             onPageChanged: (index) {
@@ -151,9 +158,9 @@ class _PopularEventsCarouselState extends State<PopularEventsCarousel> {
                                 const SizedBox(height: 8),
                                 Text(
                                   event.title,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 24,
+                                    fontSize: widget.height < 300 ? 16 : 24,
                                     fontWeight: FontWeight.bold,
                                     height: 1.1,
                                   ),
@@ -172,29 +179,33 @@ class _PopularEventsCarouselState extends State<PopularEventsCarousel> {
             },
           ),
         ),
-        const SizedBox(height: 12),
-        // Isolated Pagination Dots Indicator using ValueListenableBuilder
-        ValueListenableBuilder<int>(
-          valueListenable: _currentPageNotifier,
-          builder: (context, currentPage, _) {
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(widget.events.length, (index) {
-                final isSelected = index == currentPage;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: isSelected ? 24 : 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.white : Colors.white30,
-                    borderRadius: BorderRadius.circular(4),
+        if (widget.showIndicators) ...[
+          const SizedBox(height: 12),
+          // Isolated Pagination Dots Indicator using ValueListenableBuilder
+          ValueListenableBuilder<int>(
+            valueListenable: _currentPageNotifier,
+            builder: (context, currentPage, _) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.events.length,
+                  (index) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: currentPage == index ? 24 : 8,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: currentPage == index
+                          ? AppColors.primary
+                          : Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
                   ),
-                );
-              }),
-            );
-          },
-        ),
+                ),
+              );
+            },
+          ),
+        ],
       ],
     );
   }

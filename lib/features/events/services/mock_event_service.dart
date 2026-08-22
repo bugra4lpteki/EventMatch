@@ -12,6 +12,7 @@ class MockEventService extends ChangeNotifier {
 
   MockEventService() {
     loadUserProfile();
+    _loadCarouselSettings();
     fetchEvents();
   }
 
@@ -52,6 +53,9 @@ class MockEventService extends ChangeNotifier {
         _populateFallbackEvents();
       }
 
+      // 4. Supabase'den gerçek kayıtlı katılımcıları çek
+      await _loadSupabaseAttendees();
+
       notifyListeners();
     } catch (e) {
       debugPrint('Events fetch error: $e');
@@ -59,6 +63,32 @@ class MockEventService extends ChangeNotifier {
         _populateFallbackEvents();
       }
       notifyListeners();
+    }
+  }
+
+  Future<void> _loadSupabaseAttendees() async {
+    try {
+      final rows = await _supabase.from('event_attendees').select('event_id, user_id, status');
+      if (rows.isEmpty) return;
+
+      for (var row in rows) {
+        final eventId = row['event_id']?.toString();
+        final userId = row['user_id']?.toString();
+        if (eventId == null || userId == null) continue;
+
+        final eventIndex = _events.indexWhere((e) => e.id == eventId);
+        if (eventIndex >= 0) {
+          if (!_events[eventIndex].attendees.any((u) => u.id == userId)) {
+            _events[eventIndex].attendees.add(UserModel(
+              id: userId,
+              name: userId == currentUser.id ? currentUser.name : 'Katılımcı',
+              avatarUrl: userId == currentUser.id ? currentUser.avatarUrl : '',
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[EventService] Supabase attendees çekme hatası: $e');
     }
   }
 
@@ -108,7 +138,7 @@ class MockEventService extends ChangeNotifier {
         ticketUrl: 'https://www.biletix.com',
         ticketProvider: 'Biletix',
         atmosphere: '✨ Büyüleyici',
-        isPopular: true,
+        isPopular: false,
       ),
       EventModel(
         id: '4',
@@ -123,7 +153,7 @@ class MockEventService extends ChangeNotifier {
         ticketUrl: 'https://www.biletix.com',
         ticketProvider: 'Biletix',
         atmosphere: '🎸 Efsane',
-        isPopular: true,
+        isPopular: false,
       ),
       EventModel(
         id: '5',
@@ -493,7 +523,7 @@ class MockEventService extends ChangeNotifier {
 
   final List<String> activityFeed = [];
 
-  List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival', 'Gece Kulübü'];
+  List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival'];
   List<String> cities = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana', 'Gaziantep', 'Mersin'];
   
   static const List<String> allTurkishCities = [
@@ -514,9 +544,75 @@ class MockEventService extends ChangeNotifier {
   String _selectedCity = 'Tüm Şehirler';
   String _searchQuery = '';
 
+  List<String> _featuredCarouselEventIds = [];
+  List<String> get featuredCarouselEventIds => [..._featuredCarouselEventIds];
+
+  Future<void> _loadCarouselSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _featuredCarouselEventIds = prefs.getStringList('featured_carousel_event_ids') ?? [];
+    } catch (_) {}
+  }
+
+  Future<void> saveCarouselSettings(List<String> eventIds) async {
+    _featuredCarouselEventIds = eventIds;
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('featured_carousel_event_ids', _featuredCarouselEventIds);
+    } catch (_) {}
+  }
+
+  void toggleCarouselFeatured(String eventId) {
+    if (_featuredCarouselEventIds.contains(eventId)) {
+      _featuredCarouselEventIds.remove(eventId);
+    } else {
+      _featuredCarouselEventIds.add(eventId);
+    }
+    notifyListeners();
+    _saveCarouselIdsToPrefs();
+  }
+
+  void _saveCarouselIdsToPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('featured_carousel_event_ids', _featuredCarouselEventIds);
+    } catch (_) {}
+  }
+
+  List<EventModel> getCarouselEvents() {
+    final now = DateTime.now();
+    final active = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
+    
+    if (_featuredCarouselEventIds.isNotEmpty) {
+      final List<EventModel> customList = [];
+      for (var id in _featuredCarouselEventIds) {
+        for (var ev in active) {
+          if (ev.id == id && !customList.any((c) => c.id == id)) {
+            customList.add(ev);
+            break;
+          }
+        }
+      }
+      if (customList.isNotEmpty) {
+        return customList;
+      }
+    }
+
+    // Default fallback: Top popular / highest attendance active events
+    final sorted = List<EventModel>.from(active)
+      ..sort((a, b) {
+        final scoreA = (a.attendees.length * 5) + (a.isPopular ? 10 : 0);
+        final scoreB = (b.attendees.length * 5) + (b.isPopular ? 10 : 0);
+        return scoreB.compareTo(scoreA);
+      });
+    return sorted.take(6).toList();
+  }
+
   String get selectedCategory => _selectedCategory;
   String get selectedCity => _selectedCity;
   String get searchQuery => _searchQuery;
+
   List<EventModel> getAdminEvents() => [..._events];
 
   void setCategory(String category) {
@@ -712,21 +808,76 @@ class MockEventService extends ChangeNotifier {
     if (_selectedCategory == 'Tümü') return activeEvents;
     
     if (_selectedCategory == '🔥 Popüler') {
-      final sorted = List<EventModel>.from(activeEvents)..sort((a,b) => b.attendees.length.compareTo(a.attendees.length));
+      final sorted = List<EventModel>.from(activeEvents)..sort((a, b) {
+        final scoreA = (a.attendees.length * 5) + (a.isPopular ? 10 : 0);
+        final scoreB = (b.attendees.length * 5) + (b.isPopular ? 10 : 0);
+        return scoreB.compareTo(scoreA);
+      });
       return sorted;
     }
     
     if (_selectedCategory == '🌟 Sana Özel') {
-      return activeEvents.where((e) {
-        return currentUser.tags.any((tag) => 
-          _normalizeText(e.category).contains(_normalizeText(tag)) ||
-          _normalizeText(e.title).contains(_normalizeText(tag))
-        );
-      }).toList();
+      final userKeywords = <String>{};
+      for (var t in currentUser.tags) {
+        if (t.trim().isNotEmpty) userKeywords.add(_normalizeText(t.trim()));
+      }
+      for (var p in currentUser.pastEvents) {
+        if (p.trim().isNotEmpty) userKeywords.add(_normalizeText(p.trim()));
+      }
+      for (var pl in currentUser.plannedEvents) {
+        if (pl.trim().isNotEmpty) userKeywords.add(_normalizeText(pl.trim()));
+      }
+      for (var e in _events) {
+        if (e.attendees.any((u) => u.id == currentUser.id)) {
+          userKeywords.add(_normalizeText(e.category));
+          userKeywords.add(_normalizeText(e.title));
+        }
+      }
+
+      int scoreEvent(EventModel e) {
+        int score = 0;
+        final titleNorm = _normalizeText(e.title);
+        final catNorm = _normalizeText(e.category);
+        final descNorm = _normalizeText(e.description);
+        final locNorm = _normalizeText(e.location);
+        final userCityNorm = currentUser.city != null ? _normalizeText(currentUser.city!) : '';
+
+        if (userCityNorm.isNotEmpty && locNorm.contains(userCityNorm)) {
+          score += 5;
+        }
+
+        for (var kw in userKeywords) {
+          if (kw.isEmpty) continue;
+          if (catNorm.contains(kw) || kw.contains(catNorm)) score += 10;
+          if (titleNorm.contains(kw) || kw.contains(titleNorm)) score += 8;
+          if (descNorm.contains(kw)) score += 4;
+        }
+        return score;
+      }
+
+      final scoredEvents = activeEvents.map((e) => MapEntry(e, scoreEvent(e))).toList();
+      scoredEvents.sort((a, b) => b.value.compareTo(a.value));
+      
+      final matching = scoredEvents.where((entry) => entry.value > 0).map((entry) => entry.key).toList();
+      if (matching.isNotEmpty) {
+        return matching;
+      }
+      return scoredEvents.map((e) => e.key).toList();
     }
     
     if (_selectedCategory == '💖 Eşleşme Oranı Yüksek') {
-      return List<EventModel>.from(activeEvents).reversed.toList();
+      int getMatchRateScore(EventModel e) {
+        int score = e.attendees.length * 10;
+        int matchableUsers = e.attendees.where((u) => u.id != currentUser.id).length;
+        score += matchableUsers * 15;
+        if (e.isPopular) score += 5;
+        return score;
+      }
+
+      final sorted = List<EventModel>.from(activeEvents)..sort((a, b) {
+        return getMatchRateScore(b).compareTo(getMatchRateScore(a));
+      });
+      return sorted;
     }
     
     final selectedNorm = _normalizeText(_selectedCategory);

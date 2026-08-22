@@ -118,6 +118,11 @@ class ExternalEventService {
 
             // Açıklama
             final description = item['pleaseNote'] ?? item['info'] ?? '$title etkinliği canlı performansı ile sahnede.';
+            final isMajorPop = title.toLowerCase().contains('duman') || 
+                               title.toLowerCase().contains('baturay') ||
+                               title.toLowerCase().contains('teoman') ||
+                               title.toLowerCase().contains('derbi') ||
+                               title.toLowerCase().contains('festival');
 
             eventsList.add(EventModel(
               id: id,
@@ -131,8 +136,8 @@ class ExternalEventService {
               longitude: lng,
               ticketUrl: ticketUrl,
               ticketProvider: 'Biletix',
-              atmosphere: '🔥 Popüler',
-              isPopular: true,
+              atmosphere: isMajorPop ? '🔥 Popüler' : '✨ Canlı',
+              isPopular: isMajorPop,
             ));
           } catch (e) {
             debugPrint('Biletix tekil etkinlik parse hatası: $e');
@@ -169,9 +174,14 @@ class ExternalEventService {
           imageUrl = item['imageUrl'] ?? item['image'] ?? 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
         }
 
+        final title = item['name'] ?? item['title'] ?? 'Biletix Etkinliği';
+        final isMajor = title.toString().toLowerCase().contains('duman') || 
+                        title.toString().toLowerCase().contains('teoman') ||
+                        title.toString().toLowerCase().contains('festival');
+
         return EventModel(
           id: 'biletix_${item['id'] ?? item['code'] ?? UniqueKey().toString()}',
-          title: item['name'] ?? item['title'] ?? 'Biletix Etkinliği',
+          title: title,
           category: item['categoryName'] ?? item['type'] ?? 'Konser',
           location: '${item['venueName'] ?? 'Mekan'}, ${item['cityName'] ?? 'İstanbul'}',
           dateTime: item['date'] != null 
@@ -183,8 +193,8 @@ class ExternalEventService {
           longitude: item['longitude'] != null ? double.tryParse(item['longitude'].toString()) : null,
           ticketUrl: ticketUrl,
           ticketProvider: 'Biletix',
-          atmosphere: '🔥 Popüler',
-          isPopular: true,
+          atmosphere: isMajor ? '🔥 Popüler' : '✨ Canlı',
+          isPopular: isMajor,
         );
       }).toList();
     } catch (e) {
@@ -213,7 +223,7 @@ class ExternalEventService {
           ticketUrl: item['link'] ?? item['buyUrl'] ?? 'https://www.bubilet.com.tr',
           ticketProvider: 'Bubilet',
           atmosphere: '✨ Fırsat Etkinliği',
-          isPopular: true,
+          isPopular: false,
         );
       }).toList();
     } catch (e) {
@@ -242,7 +252,7 @@ class ExternalEventService {
           ticketUrl: item['DetailUrl'] ?? item['ticketUrl'] ?? 'https://biletinial.com',
           ticketProvider: 'Biletinial',
           atmosphere: '🎭 Sanat',
-          isPopular: true,
+          isPopular: false,
         );
       }).toList();
     } catch (e) {

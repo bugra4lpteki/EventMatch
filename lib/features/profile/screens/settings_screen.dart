@@ -10,6 +10,8 @@ import 'privacy_settings_screen.dart';
 import 'themes_screen.dart';
 import 'help_settings_screen.dart';
 import 'about_settings_screen.dart';
+import '../../admin/screens/carousel_manager_screen.dart';
+import '../../admin/screens/admin_login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -98,7 +100,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 4: Tehlikeli Bölge (Çıkış ve Silme)
+          // Section 5: Tehlikeli Bölge (Çıkış ve Silme)
           _buildSectionHeader('OTURUM & TEHLİKELİ BÖLGE'),
           const SizedBox(height: 8),
           _buildGroupedCard([

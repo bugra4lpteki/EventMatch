@@ -6,6 +6,8 @@ import '../widgets/event_card.dart';
 import '../widgets/popular_events_carousel.dart';
 import '../models/event_model.dart';
 import 'event_detail_screen.dart';
+import '../../admin/screens/admin_login_screen.dart';
+import 'package:flutter/services.dart';
 
 import 'dart:ui';
 
@@ -18,6 +20,20 @@ class ExploreScreen extends StatefulWidget {
 
 class _ExploreScreenState extends State<ExploreScreen> {
   final TextEditingController _searchController = TextEditingController();
+
+  void _checkSecretAdminSearch(String value) {
+    final query = value.trim().toLowerCase();
+    if (query == '#admin' || query == '#panel' || query == '*999#' || query == '#vitrin') {
+      _searchController.clear();
+      context.read<MockEventService>().setSearchQuery('');
+      FocusScope.of(context).unfocus();
+      HapticFeedback.heavyImpact();
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -65,7 +81,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   child: TextField(
                     controller: _searchController,
                     onChanged: (value) {
+                      _checkSecretAdminSearch(value);
                       context.read<MockEventService>().setSearchQuery(value);
+                    },
+                    onSubmitted: (value) {
+                      _checkSecretAdminSearch(value);
                     },
                     style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500),
                     textAlignVertical: TextAlignVertical.center,
@@ -121,11 +141,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 RepaintBoundary(
                   child: Consumer<MockEventService>(
                     builder: (context, eventService, child) {
-                      final allEvents = eventService.getAdminEvents();
-                      final sortedEvents = List<EventModel>.from(allEvents)
-                        ..sort((a, b) => b.attendees.length.compareTo(a.attendees.length));
-                      final popularEvents = sortedEvents.take(5).toList();
-                      return PopularEventsCarousel(events: popularEvents);
+                      final carouselEvents = eventService.getCarouselEvents();
+                      return PopularEventsCarousel(events: carouselEvents);
                     },
                   ),
                 ),

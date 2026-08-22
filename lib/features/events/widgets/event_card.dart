@@ -109,32 +109,65 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Popular / Upcoming Badge
+                  // Popular / High Match / Upcoming Badge
                   Positioned(
                     top: 14,
                     right: 14,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        gradient: event.isPopular ? AppColors.goldGradient : AppColors.accentGradient,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (event.isPopular ? const Color(0xFFF59E0B) : const Color(0xFF06B6D4)).withValues(alpha: 0.35),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
+                    child: Builder(
+                      builder: (context) {
+                        final isPop = event.attendees.length >= 5 || (event.isPopular && event.attendees.length >= 3);
+                        final isHighMatch = !isPop && event.attendees.length >= 2;
+                        final daysUntil = event.dateTime.difference(DateTime.now()).inDays;
+                        final isUpcoming = !isPop && !isHighMatch && daysUntil >= 0 && daysUntil <= 4;
+
+                        final String badgeText;
+                        final LinearGradient badgeGradient;
+                        final Color shadowColor;
+
+                        if (isPop) {
+                          badgeText = '🔥 POPÜLER';
+                          badgeGradient = AppColors.goldGradient;
+                          shadowColor = const Color(0xFFF59E0B);
+                        } else if (isHighMatch) {
+                          badgeText = '💖 YÜKSEK EŞLEŞME';
+                          badgeGradient = AppColors.primaryGradient;
+                          shadowColor = AppColors.primary;
+                        } else if (isUpcoming) {
+                          badgeText = '⚡ YAKINDA';
+                          badgeGradient = AppColors.accentGradient;
+                          shadowColor = const Color(0xFF06B6D4);
+                        } else {
+                          badgeText = '✨ ETKİNLİK';
+                          badgeGradient = const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                          );
+                          shadowColor = const Color(0xFF6366F1);
+                        }
+
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            gradient: badgeGradient,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: shadowColor.withValues(alpha: 0.35),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: Text(
-                        event.isPopular ? '🔥 POPÜLER' : '⚡ YAKINDA',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
+                          child: Text(
+                            badgeText,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -207,7 +240,9 @@ class EventCard extends StatelessWidget {
                             Icon(Icons.people_outline, color: AppColors.accent, size: 15),
                             const SizedBox(width: 5),
                             Text(
-                              'Katılanlar var',
+                              event.attendees.isNotEmpty
+                                  ? '${event.attendees.length} kişi katılıyor'
+                                  : 'İlk katılan sen ol',
                               style: TextStyle(color: AppColors.accent, fontSize: 11.5, fontWeight: FontWeight.w600),
                             ),
                           ],
