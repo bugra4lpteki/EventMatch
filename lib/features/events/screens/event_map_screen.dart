@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/location_permission_dialog.dart';
 import '../services/mock_event_service.dart';
 import '../models/event_model.dart';
 import 'event_detail_screen.dart';
@@ -47,8 +48,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+        if (mounted) {
+          final granted = await LocationPermissionDialog.requestLocationWithPreDialog(context);
+          if (!granted) return;
+        }
       }
 
       if (permission == LocationPermission.deniedForever) return;
