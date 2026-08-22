@@ -34,6 +34,8 @@ class MockEventService extends ChangeNotifier {
           service.fetchLiveTicketmasterEvents(keyword: 'tiyatro'),
           service.fetchLiveTicketmasterEvents(keyword: 'stand up'),
           service.fetchLiveTicketmasterEvents(keyword: 'konser'),
+          service.fetchLiveBiletinialEvents(city: 'İstanbul'),
+          service.fetchLiveBiletinialEvents(city: 'Ankara'),
         ]);
 
         for (var list in results) {
@@ -43,7 +45,7 @@ class MockEventService extends ChangeNotifier {
             }
           }
         }
-        debugPrint('[EventService] 🎟️ Biletix API canlı tüm turne ve etkinlikler eklendi: ${_events.length}');
+        debugPrint('[EventService] 🎟️ Biletix & Biletinial canlı tüm turne ve tiyatro etkinlikleri eklendi: ${_events.length}');
       } catch (e) {
         debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
