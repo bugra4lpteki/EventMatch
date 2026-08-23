@@ -18,31 +18,11 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Build iOS Archive
-        script: flutter build ipa --release --no-codesign
-      - name: Package and Sign IPA with Export Options
+      - name: Build and Sign iOS IPA
         script: |
-          cat <<EOF > ExportOptions.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>destination</key>
-            <string>export</string>
-            <key>signingStyle</key>
-            <string>automatic</string>
-            <key>stripSwiftSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
-          mkdir -p build/ios/ipa
-          xcodebuild -exportArchive \
-            -archivePath $(find build/ios/archive -name "*.xcarchive") \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist ExportOptions.plist
+          xcode-project build-ipa \
+            --workspace ios/Runner.xcworkspace \
+            --scheme Runner
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
