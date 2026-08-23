@@ -1,20 +1,30 @@
 workflows:
   ios-release:
-    name: EventMatch iOS Release IPA
+    name: EventMatch iOS App Store & TestFlight
     instance_type: mac_mini_m2
     max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.eventmatch.social
       flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Set up code signing settings on Xcode project
+        script: xcode-project use-profiles
       - name: Get Flutter dependencies
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
-        script: flutter build ipa --release --no-codesign
+        script: flutter build ipa --release
     artifacts:
-      - build/ios/archive/*.xcarchive
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
