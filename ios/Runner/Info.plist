@@ -12,6 +12,8 @@
 	<string>Profil fotoğrafınızı seçebilmeniz için fotoğraf galerinize erişim izni gerekmektedir.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Profil fotoğrafı çekebilmeniz için kameranıza erişim izni gerekmektedir.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>

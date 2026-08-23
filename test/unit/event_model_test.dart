@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:event_match/features/events/models/event_model.dart';
-import 'package:event_match/features/events/models/user_model.dart';
 
 void main() {
   group('EventModel Tests', () {

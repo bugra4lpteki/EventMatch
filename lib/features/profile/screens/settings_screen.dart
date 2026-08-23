@@ -10,8 +10,6 @@ import 'privacy_settings_screen.dart';
 import 'themes_screen.dart';
 import 'help_settings_screen.dart';
 import 'about_settings_screen.dart';
-import '../../admin/screens/carousel_manager_screen.dart';
-import '../../admin/screens/admin_login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
