@@ -23,8 +23,18 @@ workflows:
         script: flutter build ipa --release
       - name: Upload to App Store Connect & TestFlight
         script: |
-          app-store-connect publish \
-            --package $(find build/ios/ipa -name "*.ipa")
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" 2>/dev/null | head -n 1)
+          if [ -n "$IPA_PATH" ]; then
+            echo "Uploading $IPA_PATH to App Store Connect..."
+            app-store-connect publish "$IPA_PATH"
+          else
+            echo "Searching for generated IPA package..."
+            find build/ios -name "*.ipa"
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
