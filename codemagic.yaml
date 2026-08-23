@@ -14,7 +14,11 @@ workflows:
       cocoapods: default
     scripts:
       - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+        script: |
+          app-store-connect fetch-signing-files "com.eventmatch.social" \
+            --type IOS_APP_STORE \
+            --create
+          xcode-project use-profiles
       - name: Get Flutter dependencies
         script: flutter pub get
       - name: Install CocoaPods
