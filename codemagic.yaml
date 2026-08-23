@@ -5,10 +5,6 @@ workflows:
     max_build_duration: 60
     integrations:
       app_store_connect: Codemagic
-    environment:
-      flutter: stable
-      xcode: latest
-      cocoapods: default
     scripts:
       - name: Set up keychain for codesigning
         script: keychain initialize
@@ -19,7 +15,12 @@ workflows:
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
-        script: flutter build ipa --release
+        script: |
+          if [ -f /Users/builder/export_options.plist ]; then
+            flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+          else
+            flutter build ipa --release
+          fi
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
