@@ -21,10 +21,10 @@ workflows:
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
         script: flutter build ipa --release
+      - name: Upload to App Store Connect & TestFlight
+        script: |
+          app-store-connect publish \
+            --package $(find build/ios/ipa -name "*.ipa")
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: true
