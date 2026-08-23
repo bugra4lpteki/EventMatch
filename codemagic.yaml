@@ -6,23 +6,21 @@ workflows:
     integrations:
       app_store_connect: Codemagic
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.eventmatch.social
       flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Set up keychain for codesigning
-        script: keychain initialize
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
       - name: Get Flutter dependencies
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Build and Sign iOS IPA
-        script: |
-          xcode-project build-ipa \
-            --workspace ios/Runner.xcworkspace \
-            --scheme Runner
+      - name: Build iOS IPA
+        script: flutter build ipa --release
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
