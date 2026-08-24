@@ -1,13 +1,20 @@
 import '../../events/models/user_model.dart';
 import '../../events/models/event_model.dart';
 
+enum MessageStatus {
+  sending,   // Saat ikonu / Gönderiliyor
+  sent,      // Tek gri tık (Sunucuya ulaştı)
+  delivered, // Çift gri tık (Karşı cihaza iletildi)
+  read,      // Çift mavi tık (Karşı taraf okudu)
+}
+
 class MessageModel {
   final String id;
   final String senderId;
   final String? receiverId;
   final String text;
   final DateTime timestamp;
-  final bool isRead;
+  MessageStatus status;
 
   MessageModel({
     required this.id,
@@ -15,8 +22,10 @@ class MessageModel {
     this.receiverId,
     required this.text,
     required this.timestamp,
-    this.isRead = false,
+    this.status = MessageStatus.sent,
   });
+
+  bool get isRead => status == MessageStatus.read;
 
   Map<String, dynamic> toMap() {
     return {
@@ -25,11 +34,22 @@ class MessageModel {
       'receiver_id': receiverId,
       'content': text,
       'created_at': timestamp.toIso8601String(),
-      'is_read': isRead,
+      'status': status.name,
+      'is_read': status == MessageStatus.read,
     };
   }
 
   factory MessageModel.fromMap(Map<String, dynamic> map) {
+    MessageStatus parsedStatus = MessageStatus.sent;
+    if (map['status'] != null) {
+      parsedStatus = MessageStatus.values.firstWhere(
+        (s) => s.name == map['status'],
+        orElse: () => MessageStatus.sent,
+      );
+    } else if (map['is_read'] == true) {
+      parsedStatus = MessageStatus.read;
+    }
+
     return MessageModel(
       id: map['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
       senderId: map['sender_id']?.toString() ?? '',
@@ -38,7 +58,7 @@ class MessageModel {
       timestamp: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
           : (map['timestamp'] != null ? DateTime.tryParse(map['timestamp'].toString()) ?? DateTime.now() : DateTime.now()),
-      isRead: map['is_read'] == true,
+      status: parsedStatus,
     );
   }
 }
@@ -51,6 +71,8 @@ class ChatModel {
   final List<MessageModel> messages;
   int unreadCount;
   final DateTime? expiresAt;
+  bool isOnline;
+  DateTime? lastSeen;
 
   ChatModel({
     required this.id,
@@ -60,6 +82,8 @@ class ChatModel {
     required this.messages,
     this.unreadCount = 0,
     this.expiresAt,
+    this.isOnline = true,
+    this.lastSeen,
   });
 
   MessageModel? get lastMessage {
@@ -75,6 +99,8 @@ class ChatModel {
       'messages': messages.map((m) => m.toMap()).toList(),
       'unread_count': unreadCount,
       'expires_at': expiresAt?.toIso8601String(),
+      'is_online': isOnline,
+      'last_seen': lastSeen?.toIso8601String(),
     };
   }
 
@@ -91,8 +117,8 @@ class ChatModel {
       messages: messagesList,
       unreadCount: map['unread_count'] is int ? map['unread_count'] : 0,
       expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'].toString()) : null,
+      isOnline: map['is_online'] != false,
+      lastSeen: map['last_seen'] != null ? DateTime.tryParse(map['last_seen'].toString()) : null,
     );
   }
 }
-
-

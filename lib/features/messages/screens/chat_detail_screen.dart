@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/notification_service.dart';
 import '../models/message_model.dart';
 import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
@@ -28,6 +29,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void initState() {
     super.initState();
     _lastMessageCount = widget.chat.messages.length;
+
+    // Aktif sohbet ID'sini bildir (Bu sohbet açıkken bildirim sesi/penceresi bastırılır)
+    NotificationService().activeChatId = widget.chat.participant.id;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animated: false);
       final msgService = context.read<MockMessageService>();
@@ -35,7 +40,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // Her 1 saniyede bir arka planda hızlı canlı senkronizasyon
+    // 1 saniyelik canlı akış arka plan senkronizasyonu
     _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
@@ -45,6 +50,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   @override
   void dispose() {
+    NotificationService().activeChatId = null;
     _liveSyncTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
@@ -143,16 +149,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     String? matchInsightTitle;
     if (commonTags.isNotEmpty) {
       matchInsightTitle = "İkiniz de ${commonTags.take(3).join(', ')} seviyorsunuz!";
-    } else if (currentUserObj.age != null && currentChat.participant.age != null) {
-      final myAge = int.tryParse(currentUserObj.age!);
-      final theirAge = int.tryParse(currentChat.participant.age!);
-      if (myAge != null && theirAge != null && (myAge - theirAge).abs() <= 2) {
-        matchInsightTitle = "Yaşlarınız birbirine çok yakın! 🎯";
-      }
     }
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: const Color(0xFF0D0E15),
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         titleSpacing: 0,
@@ -219,25 +219,23 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         ],
                       ],
                     ),
-                    if (currentChat.isEventBased && currentChat.relatedEvent != null)
-                      Row(
-                        children: [
-                          Icon(Icons.event, size: 12, color: AppColors.primary),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Text(
-                              currentChat.relatedEvent!.title,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 11, color: AppColors.primary),
-                            ),
+                    Row(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: Colors.greenAccent,
+                            shape: BoxShape.circle,
                           ),
-                        ],
-                      )
-                    else
-                      Text(
-                        'Çevrimiçi',
-                        style: TextStyle(fontSize: 11, color: Colors.greenAccent.shade400),
-                      ),
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Çevrimiçi',
+                          style: TextStyle(fontSize: 11, color: Colors.greenAccent.shade400, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -259,22 +257,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 );
               } else if (value == 'follow') {
                 msgService.toggleFollowUser(currentChat.participant.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isFollowing
-                        ? '${currentChat.participant.name} takipten çıkarıldı.'
-                        : '${currentChat.participant.name} takip ediliyor! 🟢'),
-                  ),
-                );
               } else if (value == 'block') {
                 msgService.toggleBlockUser(currentChat.participant.id);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(isBlocked
-                        ? '${currentChat.participant.name} engeli kaldırıldı.'
-                        : '${currentChat.participant.name} engellendi.'),
-                  ),
-                );
               } else if (value == 'delete') {
                 _showDeleteConfirmDialog(context, msgService, currentChat.id);
               }
@@ -410,7 +394,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   )
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     itemCount: currentChat.messages.length,
                     itemBuilder: (context, index) {
                       final message = currentChat.messages[index];
@@ -418,7 +402,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           message.senderId == 'me' ||
                           (msgService.currentUserId.isEmpty && message.senderId != currentChat.participant.id);
 
-                      return _buildMessageBubble(message, isMe);
+                      return _buildWhatsAppMessageBubble(message, isMe);
                     },
                   ),
           ),
@@ -428,60 +412,61 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _buildMessageBubble(MessageModel message, bool isMe) {
+  /// WhatsApp Tarzı Mesaj Balonu ve İletim Tıkları
+  Widget _buildWhatsAppMessageBubble(MessageModel message, bool isMe) {
     final timeStr = DateFormat('HH:mm').format(message.timestamp);
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.76,
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
         decoration: BoxDecoration(
-          color: isMe ? AppColors.primary : AppColors.surface,
+          color: isMe ? const Color(0xFF6D28D9) : const Color(0xFF1F2232),
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(18),
-            topRight: const Radius.circular(18),
-            bottomLeft: Radius.circular(isMe ? 18 : 2),
-            bottomRight: Radius.circular(isMe ? 2 : 18),
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 2),
+            bottomRight: Radius.circular(isMe ? 2 : 16),
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.1),
+              color: Colors.black.withValues(alpha: 0.15),
               blurRadius: 4,
               offset: const Offset(0, 2),
             ),
           ],
-          border: isMe ? null : Border.all(color: Colors.white10, width: 0.8),
         ),
-        child: Column(
-          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          alignment: WrapAlignment.end,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 8,
+          runSpacing: 2,
           children: [
             Text(
               message.text,
-              style: TextStyle(
-                color: isMe ? Colors.white : AppColors.textPrimary,
-                fontSize: 14.5,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 15,
                 height: 1.3,
               ),
             ),
-            const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   timeStr,
                   style: TextStyle(
-                    color: isMe ? Colors.white70 : AppColors.textSecondary,
-                    fontSize: 10,
+                    color: isMe ? Colors.white70 : Colors.white60,
+                    fontSize: 10.5,
                   ),
                 ),
                 if (isMe) ...[
                   const SizedBox(width: 4),
-                  const Icon(Icons.done_all_rounded, size: 13, color: Colors.white70),
+                  _buildStatusTick(message.status),
                 ],
               ],
             ),
@@ -491,14 +476,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  /// WhatsApp Tık İkonları (Gönderiliyor -> Gönderildi -> İletildi -> Okundu Çift Mavi Tık)
+  Widget _buildStatusTick(MessageStatus status) {
+    switch (status) {
+      case MessageStatus.sending:
+        return const Icon(Icons.access_time_rounded, size: 12, color: Colors.white60);
+      case MessageStatus.sent:
+        return const Icon(Icons.check_rounded, size: 14, color: Colors.white70);
+      case MessageStatus.delivered:
+        return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white70);
+      case MessageStatus.read:
+        return const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF34B7F1)); // WhatsApp Canlı Mavi Tık
+    }
+  }
+
   Widget _buildMessageComposer(MockMessageService msgService, String currentChatId, bool isBlocked) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10).copyWith(
-        bottom: MediaQuery.of(context).padding.bottom + 10,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8).copyWith(
+        bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        border: const Border(top: BorderSide(color: Colors.white10)),
+      decoration: const BoxDecoration(
+        color: Color(0xFF171923),
+        border: Border(top: BorderSide(color: Colors.white10)),
       ),
       child: Row(
         children: [
@@ -509,12 +508,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               minLines: 1,
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
-              style: TextStyle(color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary, fontSize: 14.5),
+              style: TextStyle(color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary, fontSize: 15),
               decoration: InputDecoration(
                 hintText: isBlocked ? '🚫 Kullanıcı engellendi' : 'Mesaj yaz...',
-                hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.5),
                 filled: true,
-                fillColor: AppColors.background,
+                fillColor: const Color(0xFF0D0E15),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
@@ -530,10 +529,20 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isBlocked ? Colors.grey : AppColors.primary,
+                gradient: isBlocked ? null : AppColors.primaryGradient,
+                color: isBlocked ? Colors.grey : null,
                 shape: BoxShape.circle,
+                boxShadow: isBlocked
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: AppColors.primary.withValues(alpha: 0.4),
+                          blurRadius: 8,
+                          spreadRadius: 1,
+                        ),
+                      ],
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
             ),
           ),
         ],

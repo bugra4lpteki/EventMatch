@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/services/notification_service.dart';
 import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
@@ -45,10 +46,7 @@ class MockMessageService extends ChangeNotifier {
   }
 
   Future<void> _initService() async {
-    // 1. Önce anında yerel SharedPreferences önbelleğinden yükle (0ms yükleme süresi)
     await _loadChatsFromLocalStorage();
-
-    // 2. Supabase ile senkronize et
     await reloadChats();
     _subscribeToRealtime();
 
@@ -68,7 +66,7 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  // --- LOCAL PERSISTENCE CACHE (Restart Güvencesi) ---
+  // --- LOCAL CACHING (0ms Restart Loading) ---
 
   String _getCacheKey() {
     final id = currentUserId;
@@ -111,13 +109,12 @@ class MockMessageService extends ChangeNotifier {
       final cacheKey = _getCacheKey();
       final serializedList = _chats.map((c) => c.toMap()).toList();
       await prefs.setString(cacheKey, jsonEncode(serializedList));
-      debugPrint('[MessageService] 💾 Sohbetler yerel belleğe yedeklendi: ${_chats.length} adet');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Local storage save error: $e');
     }
   }
 
-  // --- REALTIME SUBSCRIPTIONS ---
+  // --- REALTIME ENGINE ---
 
   void _subscribeToRealtime() {
     try {
@@ -125,7 +122,7 @@ class MockMessageService extends ChangeNotifier {
       final currentId = currentUserId;
       if (currentId.isEmpty) return;
 
-      // 1. Instant WebSocket Broadcast Channel
+      // 1. Instant WebSocket Broadcast
       _broadcastChannel = _supabase
           .channel('eventmatch_global_chat')
           .onBroadcast(
@@ -136,7 +133,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      // 2. Database Postgres Changes Channel
+      // 2. Postgres Changes Channel
       _messagesChannel = _supabase
           .channel('public_messages_stream')
           .onPostgresChanges(
@@ -149,7 +146,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      // 3. Matches Postgres Changes Channel
+      // 3. Matches Stream
       _matchesChannel = _supabase
           .channel('public_matches_stream')
           .onPostgresChanges(
@@ -163,7 +160,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      debugPrint('[MessageService] 🚀 Realtime kanalları hazır.');
+      debugPrint('[MessageService] 🚀 Multi-layer realtime channels connected.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
@@ -210,6 +207,17 @@ class MockMessageService extends ChangeNotifier {
         content: content,
         timestamp: timestamp,
       );
+
+      // Karşı taraftan geldiyse bildirim düşür (aktif sohbetteyse bastırılır)
+      if (senderId.toLowerCase() != currentId.toLowerCase()) {
+        final chat = _chats.firstWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase(),
+            orElse: () => createOrGetChatForUser(UserModel(id: partnerId, name: 'Yeni Mesaj', avatarUrl: '')));
+        NotificationService().showMessageNotification(
+          chatId: partnerId,
+          senderName: chat.participant.name,
+          message: content,
+        );
+      }
     } catch (e) {
       debugPrint('[MessageService] ⚠️ handleBroadcastMessage error: $e');
     }
@@ -271,7 +279,7 @@ class MockMessageService extends ChangeNotifier {
       final chat = _chats[chatIndex];
       final exists = chat.messages.any((m) =>
           m.id == msgId ||
-          (m.text == content && m.senderId == senderId && m.timestamp.difference(timestamp).abs().inSeconds < 3));
+          (m.text == content && m.senderId.toLowerCase() == senderId.toLowerCase() && m.timestamp.difference(timestamp).abs().inSeconds < 3));
 
       if (!exists) {
         final newMsg = MessageModel(
@@ -280,6 +288,7 @@ class MockMessageService extends ChangeNotifier {
           receiverId: receiverId,
           text: content,
           timestamp: timestamp,
+          status: MessageStatus.delivered,
         );
         chat.messages.add(newMsg);
         chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -343,6 +352,59 @@ class MockMessageService extends ChangeNotifier {
     await _loadChatsFromSupabase();
   }
 
+  /// 1. EŞLEŞME SONRASI SOHBET ODASI OLUŞTURMA / BULMA (Get or Create Chat Room)
+  ChatModel getOrCreateChatRoom(UserModel targetUser, {String? initialMessage}) {
+    return createOrGetChatForUser(targetUser, initialMessage: initialMessage);
+  }
+
+  ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
+    final lowerUserId = user.id.toLowerCase();
+    final existingIndex = _chats.indexWhere(
+      (c) => c.participant.id.toLowerCase() == lowerUserId || c.participant.name.toLowerCase() == user.name.toLowerCase(),
+    );
+
+    if (existingIndex >= 0) {
+      final chat = _chats[existingIndex];
+      if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+        final textTrim = initialMessage.trim();
+        if (!chat.messages.any((m) => m.text == textTrim)) {
+          sendMessage(chat.id, textTrim, receiverUserId: user.id);
+        }
+      }
+      return chat;
+    }
+
+    final newChat = ChatModel(
+      id: 'chat_${user.id}_${DateTime.now().millisecondsSinceEpoch}',
+      participant: user,
+      isEventBased: true,
+      unreadCount: 0,
+      messages: [],
+    );
+
+    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+      final firstMsg = MessageModel(
+        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+        receiverId: user.id,
+        text: initialMessage.trim(),
+        timestamp: DateTime.now(),
+        status: MessageStatus.sent,
+      );
+      newChat.messages.add(firstMsg);
+    }
+
+    _chats.insert(0, newChat);
+    _saveChatsToLocalStorage();
+    notifyListeners();
+
+    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+      _persistMessage(newChat.id, user.id, initialMessage.trim(), 'msg_${DateTime.now().millisecondsSinceEpoch}');
+    }
+
+    return newChat;
+  }
+
   Future<void> syncChatMessagesForPartner(String partnerId) async {
     final currentId = currentUserId;
     if (currentId.isEmpty || partnerId.isEmpty) return;
@@ -367,7 +429,6 @@ class MockMessageService extends ChangeNotifier {
           final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
           final mIdMatch = row['match_id']?.toString();
 
-          // Check if message belongs to this conversation
           final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
                                 (s == lowerPartner && r == lowerCurrent) ||
                                 (mIdMatch != null && (mIdMatch == chat.id || (int.tryParse(chat.id) != null && mIdMatch == chat.id)));
@@ -382,13 +443,18 @@ class MockMessageService extends ChangeNotifier {
 
           if (text.trim().isEmpty) continue;
 
-          if (!chat.messages.any((m) => m.id == mId || (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3))) {
+          final existingMsgIndex = chat.messages.indexWhere((m) =>
+              m.id == mId ||
+              (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3));
+
+          if (existingMsgIndex < 0) {
             chat.messages.add(MessageModel(
               id: mId,
               senderId: sender,
               receiverId: receiver,
               text: text,
               timestamp: ts,
+              status: MessageStatus.delivered,
             ));
             hasNew = true;
           }
@@ -399,7 +465,6 @@ class MockMessageService extends ChangeNotifier {
           _sortChats();
           _saveChatsToLocalStorage();
           notifyListeners();
-          debugPrint('[MessageService] 🔄 Canlı senkronizasyon ile yeni mesajlar eklendi.');
         }
       }
     } catch (e) {
@@ -414,14 +479,10 @@ class MockMessageService extends ChangeNotifier {
   Future<void> _loadChatsFromSupabase() async {
     try {
       final currentId = currentUserId;
-      if (currentId.isEmpty) {
-        // Oturum açılmamışsa dahi yerel bellekteki sohbetleri koru
-        return;
-      }
+      if (currentId.isEmpty) return;
 
       _isLoading = true;
 
-      // 1. Fetch matches
       List<dynamic> matchesRes = [];
       try {
         matchesRes = await _supabase
@@ -437,7 +498,6 @@ class MockMessageService extends ChangeNotifier {
         } catch (_) {}
       }
 
-      // 2. Fetch direct messages
       List<dynamic> directMessagesRes = [];
       try {
         directMessagesRes = await _supabase
@@ -449,7 +509,6 @@ class MockMessageService extends ChangeNotifier {
         debugPrint('[MessageService] ⚠️ direct messages select error: $e');
       }
 
-      // Collect all partner user IDs
       final partnerUserIds = <String>{};
       final Map<String, String> matchIdByPartner = {};
       final Map<String, String?> eventIdByPartner = {};
@@ -481,14 +540,12 @@ class MockMessageService extends ChangeNotifier {
         }
       }
 
-      // Keep existing local partner IDs so NO chat is ever lost on restart!
       for (var existingChat in _chats) {
         if (existingChat.participant.id.isNotEmpty) {
           partnerUserIds.add(existingChat.participant.id);
         }
       }
 
-      // 3. Query profiles for partner users
       Map<String, Map<String, dynamic>> profilesMap = {};
       Map<String, String> photosMap = {};
       Map<String, List<String>> socialLinksMap = {};
@@ -505,9 +562,7 @@ class MockMessageService extends ChangeNotifier {
           for (var p in profilesRes) {
             profilesMap[p['id'].toString().toLowerCase()] = p;
           }
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ users query error: $e');
-        }
+        } catch (_) {}
 
         try {
           final photosRes = await _supabase
@@ -523,9 +578,7 @@ class MockMessageService extends ChangeNotifier {
               photosMap[uId] = photo['storage_url'].toString();
             }
           }
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ user_photos query error: $e');
-        }
+        } catch (_) {}
 
         try {
           final socialRes = await _supabase
@@ -538,15 +591,11 @@ class MockMessageService extends ChangeNotifier {
             final url = link['url'].toString();
             socialLinksMap.putIfAbsent(uId, () => []).add(url);
           }
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ user_social_links query error: $e');
-        }
+        } catch (_) {}
       }
 
-      // 4. Group all messages by partner ID
       final Map<String, List<MessageModel>> messagesByPartner = {};
 
-      // Messages from matches table embedded messages
       for (var match in matchesRes) {
         final u1 = match['user_id_1']?.toString() ?? '';
         final u2 = match['user_id_2']?.toString() ?? '';
@@ -562,13 +611,13 @@ class MockMessageService extends ChangeNotifier {
               timestamp: msg['created_at'] != null
                   ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
                   : DateTime.now(),
+              status: MessageStatus.delivered,
             );
             messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
           }
         }
       }
 
-      // Direct messages from messages table
       for (var msg in directMessagesRes) {
         final sender = msg['sender_id']?.toString() ?? '';
         final receiver = msg['receiver_id']?.toString() ?? '';
@@ -582,12 +631,12 @@ class MockMessageService extends ChangeNotifier {
           timestamp: msg['created_at'] != null
               ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
               : DateTime.now(),
+          status: MessageStatus.delivered,
         );
 
         messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
       }
 
-      // 5. Build final consolidated chat list
       final Map<String, ChatModel> consolidatedChats = {};
 
       for (var partnerId in partnerUserIds) {
@@ -693,53 +742,7 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
-    final lowerUserId = user.id.toLowerCase();
-    final existingIndex = _chats.indexWhere(
-      (c) => c.participant.id.toLowerCase() == lowerUserId || c.participant.name.toLowerCase() == user.name.toLowerCase(),
-    );
-
-    if (existingIndex >= 0) {
-      final chat = _chats[existingIndex];
-      if (initialMessage != null && initialMessage.trim().isNotEmpty) {
-        final textTrim = initialMessage.trim();
-        if (!chat.messages.any((m) => m.text == textTrim)) {
-          sendMessage(chat.id, textTrim, receiverUserId: user.id);
-        }
-      }
-      return chat;
-    }
-
-    final newChat = ChatModel(
-      id: 'chat_${user.id}_${DateTime.now().millisecondsSinceEpoch}',
-      participant: user,
-      isEventBased: true,
-      unreadCount: 0,
-      messages: [],
-    );
-
-    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
-      final firstMsg = MessageModel(
-        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-        senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
-        receiverId: user.id,
-        text: initialMessage.trim(),
-        timestamp: DateTime.now(),
-      );
-      newChat.messages.add(firstMsg);
-    }
-
-    _chats.insert(0, newChat);
-    _saveChatsToLocalStorage();
-    notifyListeners();
-
-    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
-      _persistMessage(newChat.id, user.id, initialMessage.trim(), 'msg_${DateTime.now().millisecondsSinceEpoch}');
-    }
-
-    return newChat;
-  }
-
+  /// 2. İYİMSE GÖNDERİM & WHATSAPP İLETİM TIKLARI
   Future<void> sendMessage(String chatId, String text, {String? receiverUserId}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
@@ -758,12 +761,14 @@ class MockMessageService extends ChangeNotifier {
         final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
         final now = DateTime.now();
 
+        // 1. WhatsApp İyimser Güncelleme: Anında UI'a 'sent' (tek tık) eklenir
         final newMsg = MessageModel(
           id: newMsgId,
           senderId: currentId.isNotEmpty ? currentId : 'me',
           receiverId: partnerId,
           text: trimmedText,
           timestamp: now,
+          status: MessageStatus.sent,
         );
 
         chat.messages.add(newMsg);
@@ -771,7 +776,7 @@ class MockMessageService extends ChangeNotifier {
         _saveChatsToLocalStorage();
         notifyListeners();
 
-        // 1. WebSocket Broadcast
+        // 2. WebSocket Broadcast Gönderimi
         _broadcastChannel?.sendBroadcastMessage(
           event: 'new_message',
           payload: {
@@ -783,8 +788,8 @@ class MockMessageService extends ChangeNotifier {
           },
         );
 
-        // 2. Persist to Supabase Database
-        _persistMessage(chatId, partnerId, trimmedText, newMsgId);
+        // 3. Veritabanına Kalıcı Kayıt
+        await _persistMessage(chatId, partnerId, trimmedText, newMsgId);
       }
     } catch (e) {
       debugPrint('[MessageService] ❌ Send Message Error: $e');
@@ -853,7 +858,11 @@ class MockMessageService extends ChangeNotifier {
   void markAsRead(String chatId) {
     final chatIndex = _chats.indexWhere((c) => c.id == chatId);
     if (chatIndex >= 0) {
-      _chats[chatIndex].unreadCount = 0;
+      final chat = _chats[chatIndex];
+      chat.unreadCount = 0;
+      for (var m in chat.messages) {
+        m.status = MessageStatus.read; // Mavi tık
+      }
       _saveChatsToLocalStorage();
       notifyListeners();
     }
