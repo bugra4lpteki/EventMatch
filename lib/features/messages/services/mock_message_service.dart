@@ -26,6 +26,9 @@ class MockMessageService extends ChangeNotifier {
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
   
+  // Canlı oda stream kontrolcüleri (Bellek sızıntısız persistent StreamController)
+  final Map<String, StreamController<List<MessageModel>>> _roomStreamControllers = {};
+
   RealtimeChannel? _messagesChannel;
   RealtimeChannel? _matchesChannel;
   RealtimeChannel? _broadcastChannel;
@@ -66,6 +69,39 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
+  // --- STREAM REGISTRY (Persistent StreamBuilder Provider) ---
+
+  Stream<List<MessageModel>> getMessagesStream(String partnerId) {
+    final lowerPartnerId = partnerId.toLowerCase();
+    
+    if (!_roomStreamControllers.containsKey(lowerPartnerId) || _roomStreamControllers[lowerPartnerId]!.isClosed) {
+      _roomStreamControllers[lowerPartnerId] = StreamController<List<MessageModel>>.broadcast();
+    }
+
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    final initialList = chatIndex >= 0 ? List<MessageModel>.from(_chats[chatIndex].messages) : <MessageModel>[];
+
+    // İlk mevcut durumu microtask ile hemen yayına ver
+    Future.microtask(() {
+      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
+        _roomStreamControllers[lowerPartnerId]!.add(initialList);
+      }
+    });
+
+    return _roomStreamControllers[lowerPartnerId]!.stream;
+  }
+
+  void _emitRoomUpdate(String partnerId) {
+    final lowerPartnerId = partnerId.toLowerCase();
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    if (chatIndex >= 0) {
+      final freshList = List<MessageModel>.from(_chats[chatIndex].messages);
+      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
+        _roomStreamControllers[lowerPartnerId]!.add(freshList);
+      }
+    }
+  }
+
   // --- LOCAL CACHING (0ms Restart Loading) ---
 
   String _getCacheKey() {
@@ -95,6 +131,9 @@ class MockMessageService extends ChangeNotifier {
           _chats = loadedChats;
           _sortChats();
           notifyListeners();
+          for (var chat in _chats) {
+            _emitRoomUpdate(chat.participant.id);
+          }
           debugPrint('[MessageService] 💾 Yerel önbellekten ${_chats.length} sohbet yüklendi.');
         }
       }
@@ -208,7 +247,7 @@ class MockMessageService extends ChangeNotifier {
         timestamp: timestamp,
       );
 
-      // Karşı taraftan geldiyse bildirim düşür (aktif sohbetteyse bastırılır)
+      // Karşı taraftan geldiyse bildirim tetikle (aktif sohbetteyse bastırılır)
       if (senderId.toLowerCase() != currentId.toLowerCase()) {
         final chat = _chats.firstWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase(),
             orElse: () => createOrGetChatForUser(UserModel(id: partnerId, name: 'Yeni Mesaj', avatarUrl: '')));
@@ -297,6 +336,7 @@ class MockMessageService extends ChangeNotifier {
         }
         _sortChats();
         _saveChatsToLocalStorage();
+        _emitRoomUpdate(partnerId);
         notifyListeners();
       }
     } else {
@@ -337,6 +377,7 @@ class MockMessageService extends ChangeNotifier {
       if (currentId.isNotEmpty) {
         for (var c in removed) {
           _deletedChatIds.add(c.participant.id);
+          _emitRoomUpdate(c.participant.id);
         }
         if (int.tryParse(chatId) != null) {
           await _supabase.from('messages').delete().eq('match_id', int.parse(chatId));
@@ -352,7 +393,6 @@ class MockMessageService extends ChangeNotifier {
     await _loadChatsFromSupabase();
   }
 
-  /// 1. EŞLEŞME SONRASI SOHBET ODASI OLUŞTURMA / BULMA (Get or Create Chat Room)
   ChatModel getOrCreateChatRoom(UserModel targetUser, {String? initialMessage}) {
     return createOrGetChatForUser(targetUser, initialMessage: initialMessage);
   }
@@ -396,6 +436,7 @@ class MockMessageService extends ChangeNotifier {
 
     _chats.insert(0, newChat);
     _saveChatsToLocalStorage();
+    _emitRoomUpdate(user.id);
     notifyListeners();
 
     if (initialMessage != null && initialMessage.trim().isNotEmpty) {
@@ -464,6 +505,7 @@ class MockMessageService extends ChangeNotifier {
           chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
           _sortChats();
           _saveChatsToLocalStorage();
+          _emitRoomUpdate(partnerId);
           notifyListeners();
         }
       }
@@ -726,6 +768,9 @@ class MockMessageService extends ChangeNotifier {
       _chats = newChatsList;
       _isLoading = false;
       _saveChatsToLocalStorage();
+      for (var chat in _chats) {
+        _emitRoomUpdate(chat.participant.id);
+      }
       notifyListeners();
     } catch (e) {
       debugPrint('[MessageService] ❌ Load Chats Error: $e');
@@ -742,7 +787,6 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  /// 2. İYİMSE GÖNDERİM & WHATSAPP İLETİM TIKLARI
   Future<void> sendMessage(String chatId, String text, {String? receiverUserId}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
@@ -761,7 +805,6 @@ class MockMessageService extends ChangeNotifier {
         final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
         final now = DateTime.now();
 
-        // 1. WhatsApp İyimser Güncelleme: Anında UI'a 'sent' (tek tık) eklenir
         final newMsg = MessageModel(
           id: newMsgId,
           senderId: currentId.isNotEmpty ? currentId : 'me',
@@ -774,9 +817,9 @@ class MockMessageService extends ChangeNotifier {
         chat.messages.add(newMsg);
         _sortChats();
         _saveChatsToLocalStorage();
+        _emitRoomUpdate(partnerId);
         notifyListeners();
 
-        // 2. WebSocket Broadcast Gönderimi
         _broadcastChannel?.sendBroadcastMessage(
           event: 'new_message',
           payload: {
@@ -788,7 +831,6 @@ class MockMessageService extends ChangeNotifier {
           },
         );
 
-        // 3. Veritabanına Kalıcı Kayıt
         await _persistMessage(chatId, partnerId, trimmedText, newMsgId);
       }
     } catch (e) {
@@ -861,15 +903,20 @@ class MockMessageService extends ChangeNotifier {
       final chat = _chats[chatIndex];
       chat.unreadCount = 0;
       for (var m in chat.messages) {
-        m.status = MessageStatus.read; // Mavi tık
+        m.status = MessageStatus.read;
       }
       _saveChatsToLocalStorage();
+      _emitRoomUpdate(chat.participant.id);
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
+    for (var controller in _roomStreamControllers.values) {
+      controller.close();
+    }
+    _roomStreamControllers.clear();
     _unsubscribeFromRealtime();
     _authSubscription?.cancel();
     super.dispose();

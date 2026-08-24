@@ -20,6 +20,8 @@ class ChatDetailScreen extends StatefulWidget {
 }
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
+  // 1. STREAM ASLA BUILD METODUNDA ÇAĞRILMAZ, initState'TE BAĞLANIR!
+  late final Stream<List<MessageModel>> _messageStream;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   Timer? _liveSyncTimer;
@@ -33,14 +35,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     // Aktif sohbet ID'sini bildir (Bu sohbet açıkken bildirim sesi/penceresi bastırılır)
     NotificationService().activeChatId = widget.chat.participant.id;
 
+    // 2. Stream'i kalıcı olarak tek seferlik bağla
+    final msgService = context.read<MockMessageService>();
+    _messageStream = msgService.getMessagesStream(widget.chat.participant.id);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animated: false);
-      final msgService = context.read<MockMessageService>();
       msgService.markAsRead(widget.chat.id);
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // 1 saniyelik canlı akış arka plan senkronizasyonu
+    // 1 saniyelik canlı senkronizasyon emniyet sübabı
     _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
@@ -133,13 +138,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           c.participant.id.toLowerCase() == widget.chat.participant.id.toLowerCase(),
       orElse: () => widget.chat,
     );
-
-    if (currentChat.messages.length != _lastMessageCount) {
-      _lastMessageCount = currentChat.messages.length;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToBottom(animated: true);
-      });
-    }
 
     final currentUserObj = context.read<MockEventService>().currentUser;
     final myTags = currentUserObj.tags;
@@ -372,9 +370,36 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ],
               ),
             ),
+          
+          // 3. DOĞRUDAN STREAMBUILDER İLE CANLI MESAJ LİSTESİ
           Expanded(
-            child: currentChat.messages.isEmpty
-                ? Center(
+            child: StreamBuilder<List<MessageModel>>(
+              stream: _messageStream,
+              initialData: currentChat.messages,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: SelectableText(
+                        'STREAM HATA: ${snapshot.error}',
+                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  );
+                }
+
+                final messages = snapshot.data ?? currentChat.messages;
+
+                if (messages.length != _lastMessageCount) {
+                  _lastMessageCount = messages.length;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _scrollToBottom(animated: true);
+                  });
+                }
+
+                if (messages.isEmpty) {
+                  return Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -391,20 +416,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         ),
                       ],
                     ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    itemCount: currentChat.messages.length,
-                    itemBuilder: (context, index) {
-                      final message = currentChat.messages[index];
-                      final isMe = message.senderId == msgService.currentUserId ||
-                          message.senderId == 'me' ||
-                          (msgService.currentUserId.isEmpty && message.senderId != currentChat.participant.id);
+                  );
+                }
 
-                      return _buildWhatsAppMessageBubble(message, isMe);
-                    },
-                  ),
+                return ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  itemCount: messages.length,
+                  itemBuilder: (context, index) {
+                    final message = messages[index];
+                    final isMe = message.senderId == msgService.currentUserId ||
+                        message.senderId == 'me' ||
+                        (msgService.currentUserId.isEmpty && message.senderId != currentChat.participant.id);
+
+                    return _buildWhatsAppMessageBubble(message, isMe);
+                  },
+                );
+              },
+            ),
           ),
           _buildMessageComposer(msgService, currentChat.id, isBlocked),
         ],
@@ -486,7 +515,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       case MessageStatus.delivered:
         return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white70);
       case MessageStatus.read:
-        return const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF34B7F1)); // WhatsApp Canlı Mavi Tık
+        return const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF34B7F1));
     }
   }
 
