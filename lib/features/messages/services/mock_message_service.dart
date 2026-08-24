@@ -8,7 +8,7 @@ import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 
-class MockMessageService extends ChangeNotifier {
+class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   final MockEventService _eventService;
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -26,6 +26,9 @@ class MockMessageService extends ChangeNotifier {
   final Set<String> _blockedUserIds = {};
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
+  final Set<String> _onlineUserIds = {};
+  bool _hideOnlineStatus = false;
+  bool get hideOnlineStatus => _hideOnlineStatus;
   
   // Canlı oda stream kontrolcüleri (Persistent StreamController)
   final Map<String, StreamController<List<MessageModel>>> _roomStreamControllers = {};
@@ -33,6 +36,7 @@ class MockMessageService extends ChangeNotifier {
   RealtimeChannel? _messagesChannel;
   RealtimeChannel? _matchesChannel;
   RealtimeChannel? _broadcastChannel;
+  RealtimeChannel? _presenceChannel;
   StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -46,6 +50,26 @@ class MockMessageService extends ChangeNotifier {
   List<ChatModel> get archivedChats => _chats
       .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && c.isArchived)
       .toList();
+
+  bool isUserOnline(String userId) {
+    return _onlineUserIds.contains(userId.toLowerCase());
+  }
+
+  Future<void> toggleHideOnlineStatus(bool hide) async {
+    _hideOnlineStatus = hide;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('privacy_hide_last_seen', hide);
+      await prefs.setBool('${currentUserId}_privacy_hide_last_seen', hide);
+      
+      if (hide) {
+        _presenceChannel?.untrack();
+      } else {
+        _trackMyPresence();
+      }
+    } catch (_) {}
+    notifyListeners();
+  }
 
   void toggleArchiveChat(String chatId) {
     final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
@@ -68,10 +92,28 @@ class MockMessageService extends ChangeNotifier {
   List<ChatModel> get eventChats => [];
 
   MockMessageService(this._eventService) {
+    WidgetsBinding.instance.addObserver(this);
     _initService();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _trackMyPresence();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.inactive) {
+      try {
+        _presenceChannel?.untrack();
+      } catch (_) {}
+    }
+  }
+
   Future<void> _initService() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _hideOnlineStatus = prefs.getBool('${currentUserId}_privacy_hide_last_seen') ??
+                          prefs.getBool('privacy_hide_last_seen') ?? false;
+    } catch (_) {}
+
     await _loadChatsFromLocalStorage();
     await reloadChats();
     _subscribeToRealtime();
@@ -87,6 +129,7 @@ class MockMessageService extends ChangeNotifier {
         _blockedUserIds.clear();
         _followingUserIds.clear();
         _deletedChatIds.clear();
+        _onlineUserIds.clear();
         notifyListeners();
       }
     });
@@ -210,28 +253,65 @@ class MockMessageService extends ChangeNotifier {
             debugPrint('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status');
           });
 
-      // 3. Matches Stream
-      _matchesChannel = _supabase
-          .channel('public_matches_stream')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: 'matches',
-            callback: (payload) {
-              debugPrint('[MessageService] 🔔 Realtime match change detected');
-              reloadChats();
-            },
-          )
-          .subscribe();
+      // 4. Realtime Presence Channel (Online Status)
+      _presenceChannel = _supabase.channel('eventmatch_presence_channel');
+      _presenceChannel!
+          .onPresenceSync((_) {
+            try {
+              final state = _presenceChannel!.presenceState();
+              final online = <String>{};
+              for (var entry in state) {
+                for (var p in entry.presences) {
+                  final uId = p.payload['user_id']?.toString().toLowerCase();
+                  if (uId != null && uId.isNotEmpty) {
+                    online.add(uId);
+                  }
+                }
+              }
+              _onlineUserIds.clear();
+              _onlineUserIds.addAll(online);
+              for (var c in _chats) {
+                c.isOnline = _onlineUserIds.contains(c.participant.id.toLowerCase());
+              }
+              notifyListeners();
+            } catch (e) {
+              debugPrint('[MessageService] Presence sync parse error: $e');
+            }
+          })
+          .subscribe((status, [error]) {
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              _trackMyPresence();
+            }
+          });
 
-      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
+      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları ve Presence aktif.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
+  Future<void> _trackMyPresence() async {
+    if (_hideOnlineStatus) return;
+    final id = currentUserId;
+    if (id.isNotEmpty && _presenceChannel != null) {
+      try {
+        await _presenceChannel?.track({
+          'user_id': id.toLowerCase(),
+          'online_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('[MessageService] ⚠️ Track presence error: $e');
+      }
+    }
+  }
+
   void _unsubscribeFromRealtime() {
     try {
+      try {
+        _presenceChannel?.untrack();
+      } catch (_) {}
+      _presenceChannel?.unsubscribe();
+      _presenceChannel = null;
       _broadcastChannel?.unsubscribe();
       _broadcastChannel = null;
       _messagesChannel?.unsubscribe();

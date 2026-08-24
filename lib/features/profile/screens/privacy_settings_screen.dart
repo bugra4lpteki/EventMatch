@@ -6,6 +6,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../auth/services/auth_service.dart';
 import '../../events/services/moderation_service.dart';
+import '../../messages/services/mock_message_service.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -73,6 +74,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       hideLastSeen: key == 'privacy_hide_last_seen' ? value : null,
       locationSharing: key == 'privacy_location_sharing' ? value : null,
     );
+
+    if (key == 'privacy_hide_last_seen' && mounted) {
+      context.read<MockMessageService>().toggleHideOnlineStatus(value);
+    }
   }
 
   @override

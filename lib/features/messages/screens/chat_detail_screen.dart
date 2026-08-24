@@ -212,15 +212,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.greenAccent,
+                          decoration: BoxDecoration(
+                            color: msgService.isUserOnline(currentChat.participant.id) ? Colors.greenAccent : Colors.white38,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 5),
                         Text(
-                          'Çevrimiçi',
-                          style: TextStyle(fontSize: 11, color: Colors.greenAccent.shade400, fontWeight: FontWeight.w500),
+                          msgService.isUserOnline(currentChat.participant.id) ? 'Çevrimiçi' : 'Çevrimdışı',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: msgService.isUserOnline(currentChat.participant.id) ? Colors.greenAccent.shade400 : AppColors.textSecondary,
+                            fontWeight: msgService.isUserOnline(currentChat.participant.id) ? FontWeight.w600 : FontWeight.w400,
+                          ),
                         ),
                       ],
                     ),
