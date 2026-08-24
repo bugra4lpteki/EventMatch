@@ -348,26 +348,41 @@ class MockMessageService extends ChangeNotifier {
     if (currentId.isEmpty || partnerId.isEmpty) return;
 
     try {
+      final lowerCurrent = currentId.toLowerCase();
+      final lowerPartner = partnerId.toLowerCase();
+
       final res = await _supabase
           .from('messages')
           .select('*')
-          .or('and(sender_id.eq.$currentId,receiver_id.eq.$partnerId),and(sender_id.eq.$partnerId,receiver_id.eq.$currentId)')
+          .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
           .order('created_at', ascending: true);
 
-      final lowerPartnerId = partnerId.toLowerCase();
-      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
         bool hasNew = false;
 
         for (var row in res) {
+          final s = (row['sender_id']?.toString() ?? '').toLowerCase();
+          final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+          final mIdMatch = row['match_id']?.toString();
+
+          // Check if message belongs to this conversation
+          final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
+                                (s == lowerPartner && r == lowerCurrent) ||
+                                (mIdMatch != null && (mIdMatch == chat.id || (int.tryParse(chat.id) != null && mIdMatch == chat.id)));
+
+          if (!isForThisChat) continue;
+
           final mId = row['id']?.toString() ?? '';
-          final text = row['content']?.toString() ?? '';
+          final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
           final sender = row['sender_id']?.toString() ?? '';
           final receiver = row['receiver_id']?.toString() ?? '';
           final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now();
 
-          if (!chat.messages.any((m) => m.id == mId || (m.text == text && m.senderId == sender && m.timestamp.difference(ts).abs().inSeconds < 3))) {
+          if (text.trim().isEmpty) continue;
+
+          if (!chat.messages.any((m) => m.id == mId || (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3))) {
             chat.messages.add(MessageModel(
               id: mId,
               senderId: sender,
@@ -384,6 +399,7 @@ class MockMessageService extends ChangeNotifier {
           _sortChats();
           _saveChatsToLocalStorage();
           notifyListeners();
+          debugPrint('[MessageService] 🔄 Canlı senkronizasyon ile yeni mesajlar eklendi.');
         }
       }
     } catch (e) {

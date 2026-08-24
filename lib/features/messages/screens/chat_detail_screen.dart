@@ -35,8 +35,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // Her 2 saniyede bir arka planda hızlı senkronizasyon (Zero-lag güvencesi)
-    _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) {
+    // Her 1 saniyede bir arka planda hızlı canlı senkronizasyon
+    _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
       }
