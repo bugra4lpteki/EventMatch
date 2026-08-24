@@ -248,7 +248,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                 );
               } else if (value == 'block') {
-                ReportBlockSheet.showBlockConfirmDialog(
+                ReportBlockSheet.showBlockConfirmationDialog(
                   context,
                   userId: currentChat.participant.id,
                   userName: currentChat.participant.name,
