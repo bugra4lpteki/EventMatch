@@ -223,7 +223,6 @@ class MockMessageService extends ChangeNotifier {
 
   void _handleBroadcastMessage(Map<String, dynamic> payload) {
     try {
-      final currentId = currentUserId.toLowerCase();
       final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase();
       final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase();
       final content = payload['content']?.toString() ?? '';
@@ -231,13 +230,19 @@ class MockMessageService extends ChangeNotifier {
       final createdAtStr = payload['created_at']?.toString();
       final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
 
+      if (content.trim().isEmpty) return;
+
+      debugPrint('--> [BROADCAST CANLI MESAJ] Sender: $senderId | Receiver: $receiverId | Content: $content');
+
+      final currentId = currentUserId.toLowerCase();
+
       String partnerId = '';
       if (senderId == currentId && receiverId.isNotEmpty) {
         partnerId = receiverId;
-      } else if (receiverId == currentId && senderId.isNotEmpty) {
+      } else if (receiverId == currentId || receiverId.isEmpty || receiverId == 'user_mobile') {
         partnerId = senderId;
-      } else if (senderId.isNotEmpty && senderId != currentId) {
-        partnerId = senderId;
+      } else {
+        partnerId = senderId; // Güvenlik ağı: yine de göndereni partner kabul et
       }
 
       if (partnerId.isEmpty) return;
@@ -268,12 +273,8 @@ class MockMessageService extends ChangeNotifier {
 
   void _handlePostgresMessageEvent(PostgresChangePayload payload) {
     try {
-      final currentId = currentUserId.toLowerCase();
       final record = payload.newRecord;
-      if (record.isEmpty) {
-        reloadChats();
-        return;
-      }
+      if (record.isEmpty) return;
 
       final senderId = (record['sender_id']?.toString() ?? '').toLowerCase();
       final receiverId = (record['receiver_id']?.toString() ?? '').toLowerCase();
@@ -283,20 +284,26 @@ class MockMessageService extends ChangeNotifier {
       final createdAtStr = record['created_at']?.toString();
       final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
 
+      if (content.trim().isEmpty) return;
+
+      debugPrint('--> [CANLI MESAJ YAKALANDI] Sender: $senderId | Receiver: $receiverId | Content: $content');
+
+      final currentId = currentUserId.toLowerCase();
+
       String partnerId = '';
       if (senderId == currentId && receiverId.isNotEmpty) {
         partnerId = receiverId;
-      } else if (receiverId == currentId && senderId.isNotEmpty) {
+      } else if (receiverId == currentId || receiverId.isEmpty || receiverId == 'user_mobile') {
         partnerId = senderId;
       } else if (matchId != null) {
         final matchedChatIndex = _chats.indexWhere((c) => c.id == matchId);
         if (matchedChatIndex >= 0) {
           partnerId = _chats[matchedChatIndex].participant.id.toLowerCase();
+        } else {
+          partnerId = senderId;
         }
-      }
-
-      if (partnerId.isEmpty && (senderId.isNotEmpty && senderId != currentId)) {
-        partnerId = senderId;
+      } else {
+        partnerId = senderId; // Güvenlik ağı: yine de göndereni partner kabul et
       }
 
       if (partnerId.isEmpty) return;
