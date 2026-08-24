@@ -187,10 +187,6 @@ CREATE POLICY "Allow manage own matches" ON public.matches FOR ALL USING (auth.u
 CREATE POLICY "Allow read own messages" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
 CREATE POLICY "Allow insert own messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
 
--- SAMPLE EVENTS DATA INSERT (Opsiyonel Örnek Veriler)
-INSERT INTO public.events (id, title, type, venue, city, date, description, image_url, lat, lng, tag)
-VALUES 
-  ('11111111-1111-1111-1111-111111111111', 'Yaz Festivali Konseri', 'Müzik', 'KüçükÇiftlik Park', 'İstanbul', NOW() + INTERVAL '2 days', 'Yazın en büyük açık hava konseri!', 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745', 41.0415, 28.9925, 'Popüler'),
-  ('22222222-2222-2222-2222-222222222222', 'Açık Hava Sineması', 'Sinema', 'Zorlu PSM', 'İstanbul', NOW() + INTERVAL '5 days', 'Nostaljik açık hava sinema gecesi.', 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba', 41.0664, 29.0171, 'Sakin'),
-  ('33333333-3333-3333-3333-333333333333', 'Tech & AI Summit', 'Teknoloji', 'Kolektif House', 'İstanbul', NOW() + INTERVAL '10 days', 'Yapay zeka ve teknoloji dünyasından konuşmacılar.', 'https://images.unsplash.com/photo-1540575467063-178a50c2df87', 41.0782, 29.0118, 'Teknoloji')
-ON CONFLICT (id) DO NOTHING;
+-- 13. ENABLE REALTIME PUBLICATION FOR MESSAGES & MATCHES
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;

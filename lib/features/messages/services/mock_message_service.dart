@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
@@ -8,22 +11,54 @@ class MockMessageService extends ChangeNotifier {
   final MockEventService _eventService;
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  String get currentUserId => _supabase.auth.currentUser?.id ?? '';
+  String get currentUserId {
+    final sbId = _supabase.auth.currentUser?.id;
+    if (sbId != null && sbId.isNotEmpty) return sbId;
+    final sessId = _supabase.auth.currentSession?.user.id;
+    if (sessId != null && sessId.isNotEmpty) return sessId;
+    final eventUserId = _eventService.currentUser.id;
+    if (eventUserId.isNotEmpty) return eventUserId;
+    return '';
+  }
 
   final Set<String> _blockedUserIds = {};
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
-  RealtimeChannel? _realtimeChannel;
+  
+  RealtimeChannel? _messagesChannel;
+  RealtimeChannel? _matchesChannel;
+  RealtimeChannel? _broadcastChannel;
+  StreamSubscription<AuthState>? _authSubscription;
+  bool _isLoading = false;
+  bool get isLoading => _isLoading;
+
+  List<ChatModel> _chats = [];
+
+  List<ChatModel> get individualChats => _chats
+      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id))
+      .toList();
+
+  List<ChatModel> get eventChats => [];
 
   MockMessageService(this._eventService) {
-    reloadChats();
+    _initService();
+  }
+
+  Future<void> _initService() async {
+    // 1. Önce anında yerel SharedPreferences önbelleğinden yükle (0ms yükleme süresi)
+    await _loadChatsFromLocalStorage();
+
+    // 2. Supabase ile senkronize et
+    await reloadChats();
     _subscribeToRealtime();
-    _supabase.auth.onAuthStateChange.listen((data) {
+
+    _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
       if (data.session != null) {
-        reloadChats();
+        await _loadChatsFromLocalStorage();
+        await reloadChats();
         _subscribeToRealtime();
       } else {
-        _realtimeChannel?.unsubscribe();
+        _unsubscribeFromRealtime();
         _chats.clear();
         _blockedUserIds.clear();
         _followingUserIds.clear();
@@ -33,32 +68,232 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
+  // --- LOCAL PERSISTENCE CACHE (Restart Güvencesi) ---
+
+  String _getCacheKey() {
+    final id = currentUserId;
+    return id.isNotEmpty ? 'eventmatch_chats_cache_$id' : 'eventmatch_chats_cache_default';
+  }
+
+  Future<void> _loadChatsFromLocalStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = _getCacheKey();
+      final jsonStr = prefs.getString(cacheKey);
+
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List<dynamic> decodedList = jsonDecode(jsonStr);
+        final loadedChats = <ChatModel>[];
+
+        for (var item in decodedList) {
+          try {
+            loadedChats.add(ChatModel.fromMap(Map<String, dynamic>.from(item)));
+          } catch (e) {
+            debugPrint('[MessageService] Chat parse error: $e');
+          }
+        }
+
+        if (loadedChats.isNotEmpty) {
+          _chats = loadedChats;
+          _sortChats();
+          notifyListeners();
+          debugPrint('[MessageService] 💾 Yerel önbellekten ${_chats.length} sohbet yüklendi.');
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Local storage read error: $e');
+    }
+  }
+
+  Future<void> _saveChatsToLocalStorage() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheKey = _getCacheKey();
+      final serializedList = _chats.map((c) => c.toMap()).toList();
+      await prefs.setString(cacheKey, jsonEncode(serializedList));
+      debugPrint('[MessageService] 💾 Sohbetler yerel belleğe yedeklendi: ${_chats.length} adet');
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Local storage save error: $e');
+    }
+  }
+
+  // --- REALTIME SUBSCRIPTIONS ---
+
   void _subscribeToRealtime() {
     try {
-      _realtimeChannel?.unsubscribe();
-      _realtimeChannel = _supabase
-          .channel('public:messages_realtime')
+      _unsubscribeFromRealtime();
+      final currentId = currentUserId;
+      if (currentId.isEmpty) return;
+
+      // 1. Instant WebSocket Broadcast Channel
+      _broadcastChannel = _supabase
+          .channel('eventmatch_global_chat')
+          .onBroadcast(
+            event: 'new_message',
+            callback: (payload) {
+              _handleBroadcastMessage(payload);
+            },
+          )
+          .subscribe();
+
+      // 2. Database Postgres Changes Channel
+      _messagesChannel = _supabase
+          .channel('public_messages_stream')
           .onPostgresChanges(
             event: PostgresChangeEvent.all,
             schema: 'public',
             table: 'messages',
             callback: (payload) {
+              _handlePostgresMessageEvent(payload);
+            },
+          )
+          .subscribe();
+
+      // 3. Matches Postgres Changes Channel
+      _matchesChannel = _supabase
+          .channel('public_matches_stream')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'matches',
+            callback: (payload) {
+              debugPrint('[MessageService] 🔔 Realtime match change detected');
               reloadChats();
             },
           )
           .subscribe();
+
+      debugPrint('[MessageService] 🚀 Realtime kanalları hazır.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
-  List<ChatModel> _chats = [];
+  void _unsubscribeFromRealtime() {
+    try {
+      _broadcastChannel?.unsubscribe();
+      _broadcastChannel = null;
+      _messagesChannel?.unsubscribe();
+      _messagesChannel = null;
+      _matchesChannel?.unsubscribe();
+      _matchesChannel = null;
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Unsubscribe error: $e');
+    }
+  }
 
-  List<ChatModel> get individualChats => _chats
-      .where((c) => !_deletedChatIds.contains(c.id))
-      .toList();
+  void _handleBroadcastMessage(Map<String, dynamic> payload) {
+    try {
+      final currentId = currentUserId;
+      if (currentId.isEmpty) return;
 
-  List<ChatModel> get eventChats => [];
+      final senderId = payload['sender_id']?.toString() ?? '';
+      final receiverId = payload['receiver_id']?.toString() ?? '';
+      final content = payload['content']?.toString() ?? '';
+      final msgId = payload['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
+      final createdAtStr = payload['created_at']?.toString();
+      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+
+      if (receiverId.toLowerCase() != currentId.toLowerCase() && senderId.toLowerCase() != currentId.toLowerCase()) {
+        return;
+      }
+
+      if (isBlocked(senderId)) return;
+
+      final partnerId = senderId.toLowerCase() == currentId.toLowerCase() ? receiverId : senderId;
+
+      _injectMessageIntoChat(
+        partnerId: partnerId,
+        msgId: msgId,
+        senderId: senderId,
+        receiverId: receiverId,
+        content: content,
+        timestamp: timestamp,
+      );
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handleBroadcastMessage error: $e');
+    }
+  }
+
+  void _handlePostgresMessageEvent(PostgresChangePayload payload) {
+    try {
+      final currentId = currentUserId;
+      if (currentId.isEmpty) return;
+
+      final record = payload.newRecord;
+      if (record.isEmpty) {
+        reloadChats();
+        return;
+      }
+
+      final senderId = record['sender_id']?.toString() ?? '';
+      final receiverId = record['receiver_id']?.toString() ?? '';
+      final content = record['content']?.toString() ?? record['message']?.toString() ?? '';
+      final msgId = record['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
+      final createdAtStr = record['created_at']?.toString();
+      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+
+      if (senderId.toLowerCase() != currentId.toLowerCase() && receiverId.toLowerCase() != currentId.toLowerCase()) {
+        return;
+      }
+
+      if (isBlocked(senderId)) return;
+
+      final partnerId = senderId.toLowerCase() == currentId.toLowerCase() ? receiverId : senderId;
+
+      _injectMessageIntoChat(
+        partnerId: partnerId,
+        msgId: msgId,
+        senderId: senderId,
+        receiverId: receiverId,
+        content: content,
+        timestamp: timestamp,
+      );
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handlePostgresMessage error: $e');
+    }
+  }
+
+  void _injectMessageIntoChat({
+    required String partnerId,
+    required String msgId,
+    required String senderId,
+    required String receiverId,
+    required String content,
+    required DateTime timestamp,
+  }) {
+    if (content.trim().isEmpty || partnerId.isEmpty) return;
+
+    final lowerPartnerId = partnerId.toLowerCase();
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+
+    if (chatIndex >= 0) {
+      final chat = _chats[chatIndex];
+      final exists = chat.messages.any((m) =>
+          m.id == msgId ||
+          (m.text == content && m.senderId == senderId && m.timestamp.difference(timestamp).abs().inSeconds < 3));
+
+      if (!exists) {
+        final newMsg = MessageModel(
+          id: msgId,
+          senderId: senderId,
+          receiverId: receiverId,
+          text: content,
+          timestamp: timestamp,
+        );
+        chat.messages.add(newMsg);
+        chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        if (senderId.toLowerCase() != currentUserId.toLowerCase()) {
+          chat.unreadCount += 1;
+        }
+        _sortChats();
+        _saveChatsToLocalStorage();
+        notifyListeners();
+      }
+    } else {
+      reloadChats();
+    }
+  }
 
   bool isBlocked(String userId) => _blockedUserIds.contains(userId);
   bool isFollowing(String userId) => _followingUserIds.contains(userId);
@@ -83,12 +318,21 @@ class MockMessageService extends ChangeNotifier {
 
   Future<void> deleteChat(String chatId) async {
     _deletedChatIds.add(chatId);
+    final removed = _chats.where((c) => c.id == chatId).toList();
     _chats.removeWhere((c) => c.id == chatId);
+    _saveChatsToLocalStorage();
     notifyListeners();
 
     try {
-      if (currentUserId.isNotEmpty && !chatId.startsWith('chat_')) {
-        await _supabase.from('messages').delete().eq('match_id', chatId);
+      final currentId = currentUserId;
+      if (currentId.isNotEmpty) {
+        for (var c in removed) {
+          _deletedChatIds.add(c.participant.id);
+        }
+        if (int.tryParse(chatId) != null) {
+          await _supabase.from('messages').delete().eq('match_id', int.parse(chatId));
+          await _supabase.from('matches').delete().eq('id', int.parse(chatId));
+        }
       }
     } catch (e) {
       debugPrint('[MessageService] Delete chat error: $e');
@@ -99,51 +343,154 @@ class MockMessageService extends ChangeNotifier {
     await _loadChatsFromSupabase();
   }
 
+  Future<void> syncChatMessagesForPartner(String partnerId) async {
+    final currentId = currentUserId;
+    if (currentId.isEmpty || partnerId.isEmpty) return;
+
+    try {
+      final res = await _supabase
+          .from('messages')
+          .select('*')
+          .or('and(sender_id.eq.$currentId,receiver_id.eq.$partnerId),and(sender_id.eq.$partnerId,receiver_id.eq.$currentId)')
+          .order('created_at', ascending: true);
+
+      final lowerPartnerId = partnerId.toLowerCase();
+      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        bool hasNew = false;
+
+        for (var row in res) {
+          final mId = row['id']?.toString() ?? '';
+          final text = row['content']?.toString() ?? '';
+          final sender = row['sender_id']?.toString() ?? '';
+          final receiver = row['receiver_id']?.toString() ?? '';
+          final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now();
+
+          if (!chat.messages.any((m) => m.id == mId || (m.text == text && m.senderId == sender && m.timestamp.difference(ts).abs().inSeconds < 3))) {
+            chat.messages.add(MessageModel(
+              id: mId,
+              senderId: sender,
+              receiverId: receiver,
+              text: text,
+              timestamp: ts,
+            ));
+            hasNew = true;
+          }
+        }
+
+        if (hasNew) {
+          chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          _sortChats();
+          _saveChatsToLocalStorage();
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] syncChatMessagesForPartner error: $e');
+    }
+  }
+
+  bool _isValidUuid(String str) {
+    return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
+  }
+
   Future<void> _loadChatsFromSupabase() async {
     try {
       final currentId = currentUserId;
-      if (currentId.isEmpty) return;
+      if (currentId.isEmpty) {
+        // Oturum açılmamışsa dahi yerel bellekteki sohbetleri koru
+        return;
+      }
 
-      debugPrint('[MessageService] 🔍 reloadChats for user: $currentId');
+      _isLoading = true;
 
-      final matchesRes = await _supabase
-          .from('matches')
-          .select('*, messages(*)')
-          .eq('status', 'matched')
-          .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
+      // 1. Fetch matches
+      List<dynamic> matchesRes = [];
+      try {
+        matchesRes = await _supabase
+            .from('matches')
+            .select('*, messages(*)')
+            .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
+      } catch (e) {
+        try {
+          matchesRes = await _supabase
+              .from('matches')
+              .select('*')
+              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
+        } catch (_) {}
+      }
 
-      debugPrint('[MessageService] Bulunan matched sayısı: ${matchesRes.length}');
+      // 2. Fetch direct messages
+      List<dynamic> directMessagesRes = [];
+      try {
+        directMessagesRes = await _supabase
+            .from('messages')
+            .select('*')
+            .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
+            .order('created_at', ascending: true);
+      } catch (e) {
+        debugPrint('[MessageService] ⚠️ direct messages select error: $e');
+      }
 
-      final otherUserIds = <String>{};
+      // Collect all partner user IDs
+      final partnerUserIds = <String>{};
+      final Map<String, String> matchIdByPartner = {};
+      final Map<String, String?> eventIdByPartner = {};
+      final Map<String, DateTime?> expiresByPartner = {};
+
       for (var match in matchesRes) {
-        final u1 = match['user_id_1'].toString();
-        final u2 = match['user_id_2'].toString();
+        final status = match['status']?.toString().toLowerCase();
+        if (status == 'rejected') continue;
+
+        final u1 = match['user_id_1']?.toString() ?? '';
+        final u2 = match['user_id_2']?.toString() ?? '';
         final otherId = u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1;
-        if (otherId.toLowerCase() != currentId.toLowerCase()) {
-          otherUserIds.add(otherId);
+        if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase()) {
+          partnerUserIds.add(otherId);
+          matchIdByPartner[otherId] = match['id']?.toString() ?? '';
+          eventIdByPartner[otherId] = match['event_id']?.toString();
+          if (match['expires_at'] != null) {
+            expiresByPartner[otherId] = DateTime.tryParse(match['expires_at'].toString());
+          }
         }
       }
 
+      for (var msg in directMessagesRes) {
+        final sender = msg['sender_id']?.toString() ?? '';
+        final receiver = msg['receiver_id']?.toString() ?? '';
+        final otherId = sender.toLowerCase() == currentId.toLowerCase() ? receiver : sender;
+        if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase()) {
+          partnerUserIds.add(otherId);
+        }
+      }
+
+      // Keep existing local partner IDs so NO chat is ever lost on restart!
+      for (var existingChat in _chats) {
+        if (existingChat.participant.id.isNotEmpty) {
+          partnerUserIds.add(existingChat.participant.id);
+        }
+      }
+
+      // 3. Query profiles for partner users
       Map<String, Map<String, dynamic>> profilesMap = {};
       Map<String, String> photosMap = {};
       Map<String, List<String>> socialLinksMap = {};
 
-      final validUuidList = otherUserIds
-          .where((id) => RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(id))
-          .toList();
+      final validUuidList = partnerUserIds.where((id) => _isValidUuid(id)).toList();
 
       if (validUuidList.isNotEmpty) {
         try {
-          final profilesResList = await _supabase
+          final profilesRes = await _supabase
               .from('users')
               .select('id, name, username, bio, city, gender, interests')
               .inFilter('id', validUuidList);
 
-          for (var p in profilesResList) {
-            profilesMap[p['id'].toString()] = p;
+          for (var p in profilesRes) {
+            profilesMap[p['id'].toString().toLowerCase()] = p;
           }
         } catch (e) {
-          debugPrint('[MessageService] ⚠️ users sorgu hatası: $e');
+          debugPrint('[MessageService] ⚠️ users query error: $e');
         }
 
         try {
@@ -151,16 +498,17 @@ class MockMessageService extends ChangeNotifier {
               .from('user_photos')
               .select('user_id, storage_url')
               .inFilter('user_id', validUuidList)
-              .eq('is_active', true);
+              .eq('is_active', true)
+              .order('sort_order', ascending: true);
 
           for (var photo in photosRes) {
-            final uId = photo['user_id'].toString();
+            final uId = photo['user_id'].toString().toLowerCase();
             if (!photosMap.containsKey(uId)) {
               photosMap[uId] = photo['storage_url'].toString();
             }
           }
         } catch (e) {
-          debugPrint('[MessageService] ⚠️ user_photos sorgu hatası: $e');
+          debugPrint('[MessageService] ⚠️ user_photos query error: $e');
         }
 
         try {
@@ -170,44 +518,93 @@ class MockMessageService extends ChangeNotifier {
               .inFilter('user_id', validUuidList);
 
           for (var link in socialRes) {
-            final uId = link['user_id'].toString();
+            final uId = link['user_id'].toString().toLowerCase();
             final url = link['url'].toString();
             socialLinksMap.putIfAbsent(uId, () => []).add(url);
           }
         } catch (e) {
-          debugPrint('[MessageService] ⚠️ user_social_links sorgu hatası: $e');
+          debugPrint('[MessageService] ⚠️ user_social_links query error: $e');
         }
       }
 
-      // DEDUPLICATION: Partner ID bazlı tek sohbet odası tutulur
-      final Map<String, ChatModel> chatsByPartnerId = {};
+      // 4. Group all messages by partner ID
+      final Map<String, List<MessageModel>> messagesByPartner = {};
 
+      // Messages from matches table embedded messages
       for (var match in matchesRes) {
-        final matchId = match['id'].toString();
-        final u1 = match['user_id_1'].toString();
-        final u2 = match['user_id_2'].toString();
-        final otherUserId = u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1;
-        
-        if (otherUserId.toLowerCase() == currentId.toLowerCase()) continue;
+        final u1 = match['user_id_1']?.toString() ?? '';
+        final u2 = match['user_id_2']?.toString() ?? '';
+        final partnerId = (u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1).toLowerCase();
 
-        final eventId = match['event_id']?.toString();
-        final profile = profilesMap[otherUserId];
-        final name = profile?['name'] ?? 'Kullanıcı $otherUserId';
-        final username = profile?['username'];
-        final bio = profile?['bio'];
-        final city = profile?['city'];
-        final gender = profile?['gender'];
-        final avatarUrl = photosMap[otherUserId] ??
+        if (match['messages'] != null && match['messages'] is List) {
+          for (var msg in match['messages']) {
+            final msgModel = MessageModel(
+              id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+              senderId: msg['sender_id']?.toString() ?? '',
+              receiverId: msg['receiver_id']?.toString(),
+              text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+              timestamp: msg['created_at'] != null
+                  ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+                  : DateTime.now(),
+            );
+            messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+          }
+        }
+      }
+
+      // Direct messages from messages table
+      for (var msg in directMessagesRes) {
+        final sender = msg['sender_id']?.toString() ?? '';
+        final receiver = msg['receiver_id']?.toString() ?? '';
+        final partnerId = (sender.toLowerCase() == currentId.toLowerCase() ? receiver : sender).toLowerCase();
+
+        final msgModel = MessageModel(
+          id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+          senderId: sender,
+          receiverId: receiver,
+          text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+          timestamp: msg['created_at'] != null
+              ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+              : DateTime.now(),
+        );
+
+        messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+      }
+
+      // 5. Build final consolidated chat list
+      final Map<String, ChatModel> consolidatedChats = {};
+
+      for (var partnerId in partnerUserIds) {
+        final lowerPartnerId = partnerId.toLowerCase();
+        final profile = profilesMap[lowerPartnerId];
+        
+        ChatModel? existingChat;
+        for (var c in _chats) {
+          if (c.participant.id.toLowerCase() == lowerPartnerId) {
+            existingChat = c;
+            break;
+          }
+        }
+
+        final name = profile?['name'] ?? existingChat?.participant.name ?? 'Kullanıcı $partnerId';
+        final username = profile?['username'] ?? existingChat?.participant.username;
+        final bio = profile?['bio'] ?? existingChat?.participant.aboutMe;
+        final city = profile?['city'] ?? existingChat?.participant.city;
+        final gender = profile?['gender'] ?? existingChat?.participant.gender;
+        final avatarUrl = photosMap[lowerPartnerId] ??
+            existingChat?.participant.avatarUrl ??
             'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
 
-        List<String> socialLinks = List<String>.from(socialLinksMap[otherUserId] ?? []);
+        List<String> socialLinks = List<String>.from(socialLinksMap[lowerPartnerId] ?? existingChat?.participant.socialLinks ?? []);
         List<String> tags = [];
         if (profile?['interests'] != null && profile!['interests'] is List) {
           tags = List<String>.from(profile['interests'] as List);
+        } else if (existingChat?.participant.tags != null) {
+          tags = existingChat!.participant.tags;
         }
 
         final participant = UserModel(
-          id: otherUserId,
+          id: partnerId,
           name: name,
           username: username,
           avatarUrl: avatarUrl,
@@ -218,51 +615,43 @@ class MockMessageService extends ChangeNotifier {
           socialLinks: socialLinks,
         );
 
-        final event = eventId != null ? _eventService.getEventById(eventId) : null;
+        final eventId = eventIdByPartner[partnerId];
+        final event = eventId != null ? _eventService.getEventById(eventId) : existingChat?.relatedEvent;
+        final matchId = matchIdByPartner[partnerId] ?? existingChat?.id ?? 'chat_$partnerId';
 
-        List<MessageModel> messages = [];
-        if (match['messages'] != null && match['messages'] is List) {
-          for (var msg in match['messages']) {
-            messages.add(MessageModel(
-              id: msg['id'].toString(),
-              senderId: msg['sender_id'].toString(),
-              text: msg['content']?.toString() ?? '',
-              timestamp: msg['created_at'] != null
-                  ? DateTime.parse(msg['created_at'].toString())
-                  : DateTime.now(),
-            ));
+        final rawMessages = messagesByPartner[lowerPartnerId] ?? [];
+        if (existingChat != null) {
+          for (var localMsg in existingChat.messages) {
+            rawMessages.add(localMsg);
           }
         }
 
-        DateTime? expiresAt;
-        if (match['expires_at'] != null) {
-          expiresAt = DateTime.tryParse(match['expires_at'].toString());
+        final dedupedMessages = <MessageModel>[];
+        final seenMsgKeys = <String>{};
+
+        for (var msg in rawMessages) {
+          if (msg.text.trim().isEmpty) continue;
+          final key = '${msg.id}_${msg.text}_${msg.senderId}';
+          if (!seenMsgKeys.contains(key)) {
+            seenMsgKeys.add(key);
+            dedupedMessages.add(msg);
+          }
         }
 
-        if (chatsByPartnerId.containsKey(otherUserId)) {
-          // Var olan sohbetle mesajları birleştir (Deduplicate)
-          final existingChat = chatsByPartnerId[otherUserId]!;
-          for (var msg in messages) {
-            if (!existingChat.messages.any((m) => m.id == msg.id || (m.text == msg.text && m.timestamp.difference(msg.timestamp).abs().inSeconds < 2))) {
-              existingChat.messages.add(msg);
-            }
-          }
-          existingChat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        } else {
-          messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-          chatsByPartnerId[otherUserId] = ChatModel(
-            id: matchId,
-            participant: participant,
-            isEventBased: event != null,
-            relatedEvent: event,
-            unreadCount: 0,
-            messages: messages,
-            expiresAt: expiresAt,
-          );
-        }
+        dedupedMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+        consolidatedChats[lowerPartnerId] = ChatModel(
+          id: matchId,
+          participant: participant,
+          isEventBased: event != null,
+          relatedEvent: event,
+          unreadCount: existingChat?.unreadCount ?? 0,
+          messages: dedupedMessages,
+          expiresAt: expiresByPartner[partnerId],
+        );
       }
 
-      final newChatsList = chatsByPartnerId.values.toList();
+      final newChatsList = consolidatedChats.values.toList();
       newChatsList.sort((a, b) {
         final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);
         final bTime = b.messages.isNotEmpty ? b.messages.last.timestamp : DateTime(2000);
@@ -270,19 +659,28 @@ class MockMessageService extends ChangeNotifier {
       });
 
       _chats = newChatsList;
+      _isLoading = false;
+      _saveChatsToLocalStorage();
       notifyListeners();
     } catch (e) {
-      debugPrint('Load Chats Error: $e');
-      _chats = [];
+      debugPrint('[MessageService] ❌ Load Chats Error: $e');
+      _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Eşleşilen kullanıcı için sohbet döndürür veya oluşturur (Deduplication garantili)
+  void _sortChats() {
+    _chats.sort((a, b) {
+      final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);
+      final bTime = b.messages.isNotEmpty ? b.messages.last.timestamp : DateTime(2000);
+      return bTime.compareTo(aTime);
+    });
+  }
+
   ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
-    // 1. Önce ID veya isim eşleşmesiyle var olan sohbeti bul
+    final lowerUserId = user.id.toLowerCase();
     final existingIndex = _chats.indexWhere(
-      (c) => c.participant.id == user.id || c.participant.name.toLowerCase() == user.name.toLowerCase(),
+      (c) => c.participant.id.toLowerCase() == lowerUserId || c.participant.name.toLowerCase() == user.name.toLowerCase(),
     );
 
     if (existingIndex >= 0) {
@@ -290,78 +688,149 @@ class MockMessageService extends ChangeNotifier {
       if (initialMessage != null && initialMessage.trim().isNotEmpty) {
         final textTrim = initialMessage.trim();
         if (!chat.messages.any((m) => m.text == textTrim)) {
-          chat.messages.add(MessageModel(
-            id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-            senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
-            text: textTrim,
-            timestamp: DateTime.now(),
-          ));
+          sendMessage(chat.id, textTrim, receiverUserId: user.id);
         }
       }
       return chat;
     }
-
-    // 2. Yoksa tek sohbet oluştur
-    final firstMsg = (initialMessage != null && initialMessage.trim().isNotEmpty)
-        ? initialMessage.trim()
-        : 'Harika, eşleştik! 🎉 Ne zaman etkinliğe gidiyoruz?';
 
     final newChat = ChatModel(
       id: 'chat_${user.id}_${DateTime.now().millisecondsSinceEpoch}',
       participant: user,
       isEventBased: true,
       unreadCount: 0,
-      messages: [
-        MessageModel(
-          id: 'msg_welcome_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
-          text: firstMsg,
-          timestamp: DateTime.now(),
-        )
-      ],
-      expiresAt: DateTime.now().add(const Duration(minutes: 10)),
+      messages: [],
     );
 
+    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+      final firstMsg = MessageModel(
+        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        senderId: currentUserId.isNotEmpty ? currentUserId : 'me',
+        receiverId: user.id,
+        text: initialMessage.trim(),
+        timestamp: DateTime.now(),
+      );
+      newChat.messages.add(firstMsg);
+    }
+
     _chats.insert(0, newChat);
+    _saveChatsToLocalStorage();
     notifyListeners();
+
+    if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+      _persistMessage(newChat.id, user.id, initialMessage.trim(), 'msg_${DateTime.now().millisecondsSinceEpoch}');
+    }
+
     return newChat;
   }
 
-  Future<void> sendMessage(String chatId, String text) async {
+  Future<void> sendMessage(String chatId, String text, {String? receiverUserId}) async {
+    final trimmedText = text.trim();
+    if (trimmedText.isEmpty) return;
+
     try {
       final currentId = currentUserId;
       final chatIndex = _chats.indexWhere((c) => c.id == chatId);
+      String partnerId = receiverUserId ?? '';
+
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
-        
-        // Engellenmişse mesaj göndermeyi durdur
-        if (isBlocked(chat.participant.id)) {
-          return;
-        }
+        partnerId = chat.participant.id;
+
+        if (isBlocked(partnerId)) return;
+
+        final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
+        final now = DateTime.now();
 
         final newMsg = MessageModel(
-          id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: currentId,
-          text: text,
-          timestamp: DateTime.now(),
+          id: newMsgId,
+          senderId: currentId.isNotEmpty ? currentId : 'me',
+          receiverId: partnerId,
+          text: trimmedText,
+          timestamp: now,
         );
-        chat.messages.add(newMsg);
-        notifyListeners();
-      }
 
-      if (currentId.isNotEmpty && int.tryParse(chatId) != null) {
-        try {
-          await _supabase.from('messages').insert({
-            'match_id': int.parse(chatId),
+        chat.messages.add(newMsg);
+        _sortChats();
+        _saveChatsToLocalStorage();
+        notifyListeners();
+
+        // 1. WebSocket Broadcast
+        _broadcastChannel?.sendBroadcastMessage(
+          event: 'new_message',
+          payload: {
+            'id': newMsgId,
             'sender_id': currentId,
-            'content': text
-          });
-        } catch (e) {
-          debugPrint('[MessageService] Supabase message insert error: $e');
-        }
+            'receiver_id': partnerId,
+            'content': trimmedText,
+            'created_at': now.toUtc().toIso8601String(),
+          },
+        );
+
+        // 2. Persist to Supabase Database
+        _persistMessage(chatId, partnerId, trimmedText, newMsgId);
       }
     } catch (e) {
-      debugPrint('Send Message Error: $e');
+      debugPrint('[MessageService] ❌ Send Message Error: $e');
+    }
+  }
+
+  Future<void> _persistMessage(String chatId, String partnerId, String text, String clientMsgId) async {
+    final currentId = currentUserId;
+    if (currentId.isEmpty) return;
+
+    try {
+      int? numericMatchId = int.tryParse(chatId);
+
+      if (numericMatchId == null && partnerId.isNotEmpty && _isValidUuid(currentId) && _isValidUuid(partnerId)) {
+        try {
+          final existingMatch = await _supabase
+              .from('matches')
+              .select('id')
+              .or('and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId),and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId)')
+              .maybeSingle();
+
+          if (existingMatch != null) {
+            numericMatchId = int.tryParse(existingMatch['id'].toString());
+          } else {
+            final inserted = await _supabase.from('matches').insert({
+              'user_id_1': currentId,
+              'user_id_2': partnerId,
+              'status': 'matched',
+            }).select('id').maybeSingle();
+
+            if (inserted != null) {
+              numericMatchId = int.tryParse(inserted['id'].toString());
+            }
+          }
+
+          if (numericMatchId != null) {
+            final idx = _chats.indexWhere((c) => c.id == chatId);
+            if (idx >= 0) {
+              _chats[idx].id = numericMatchId.toString();
+              _saveChatsToLocalStorage();
+            }
+          }
+        } catch (e) {
+          debugPrint('[MessageService] ⚠️ Match lookup error: $e');
+        }
+      }
+
+      final messagePayload = <String, dynamic>{
+        'sender_id': currentId,
+        'receiver_id': partnerId.isNotEmpty ? partnerId : null,
+        'content': text,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      };
+
+      if (numericMatchId != null) {
+        messagePayload['match_id'] = numericMatchId;
+      }
+
+      await _supabase.from('messages').insert(messagePayload);
+      debugPrint('[MessageService] ✉️ Mesaj Supabase veritabanına kalıcı kaydedildi.');
+    } catch (e) {
+      debugPrint('[MessageService] ❌ Supabase message persist error: $e');
     }
   }
 
@@ -369,13 +838,15 @@ class MockMessageService extends ChangeNotifier {
     final chatIndex = _chats.indexWhere((c) => c.id == chatId);
     if (chatIndex >= 0) {
       _chats[chatIndex].unreadCount = 0;
+      _saveChatsToLocalStorage();
       notifyListeners();
     }
   }
 
   @override
   void dispose() {
-    _realtimeChannel?.unsubscribe();
+    _unsubscribeFromRealtime();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

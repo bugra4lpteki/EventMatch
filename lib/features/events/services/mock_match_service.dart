@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/match_request.dart';
 import '../models/user_model.dart';
@@ -18,6 +19,11 @@ class MockMatchService extends ChangeNotifier {
   bool get isDoubleDateMode => _isDoubleDateMode;
 
   MockMatchService(this.eventService) {
+    _initMatchService();
+  }
+
+  Future<void> _initMatchService() async {
+    await _loadCachedRequests();
     loadPotentialMatches();
     loadIncomingRequests();
     _supabase.auth.onAuthStateChange.listen((data) {
@@ -31,6 +37,26 @@ class MockMatchService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  Future<void> _loadCachedRequests() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final str = prefs.getString('cached_incoming_requests_$currentUserId');
+      if (str != null && str.isNotEmpty) {
+        final List<dynamic> list = jsonDecode(str);
+        _incomingRequests = list.map((item) => MatchRequest.fromMap(Map<String, dynamic>.from(item))).toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCachedRequests() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _incomingRequests.map((r) => r.toMap()).toList();
+      await prefs.setString('cached_incoming_requests_$currentUserId', jsonEncode(list));
+    } catch (_) {}
   }
 
   /// Oturum açmış kullanıcının public.users veritabanı kaydını garanti eder
@@ -329,7 +355,9 @@ class MockMatchService extends ChangeNotifier {
                 await _supabase.from('messages').insert({
                   'match_id': matchRowId,
                   'sender_id': currentId,
+                  'receiver_id': targetUser.id,
                   'content': initialMessage.trim(),
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
               } catch (e) {
                 debugPrint('[MatchService] initialMessage kaydetme hatası: $e');
@@ -352,7 +380,9 @@ class MockMatchService extends ChangeNotifier {
                 await _supabase.from('messages').insert({
                   'match_id': insertedMatch['id'],
                   'sender_id': currentId,
+                  'receiver_id': targetUser.id,
                   'content': initialMessage.trim(),
+                  'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
               }
             } catch (e) {
@@ -463,10 +493,10 @@ class MockMatchService extends ChangeNotifier {
         }
       }
 
+      _saveCachedRequests();
       notifyListeners();
     } catch (e) {
       debugPrint('Load Incoming Requests Error: $e');
-      _incomingRequests.clear();
       notifyListeners();
     }
   }
@@ -480,6 +510,7 @@ class MockMatchService extends ChangeNotifier {
             .eq('id', request.id);
       }
       _incomingRequests.removeWhere((r) => r.id == request.id);
+      _saveCachedRequests();
       notifyListeners();
       return true;
     } catch (e) {
@@ -497,6 +528,7 @@ class MockMatchService extends ChangeNotifier {
             .eq('id', request.id);
       }
       _incomingRequests.removeWhere((r) => r.id == request.id);
+      _saveCachedRequests();
       notifyListeners();
     } catch (e) {
       debugPrint('Reject Request Error: $e');

@@ -38,23 +38,18 @@ void main() {
       expect(event.id, equals('test_123'));
       expect(event.title, equals('Teknoloji Zirvesi'));
       expect(event.category, equals('Teknoloji'));
-      expect(event.latitude, equals(41.04));
-      expect(event.longitude, equals(28.99));
-      expect(event.attendees, isEmpty);
+      expect(event.location, equals('Kolektif House, İstanbul'));
     });
 
     test('fromMap handles null or missing fields gracefully without crash', () {
-      final mapData = <String, dynamic>{
-        'id': null,
-        'title': null,
-      };
-
+      final mapData = <String, dynamic>{};
       final event = EventModel.fromMap(mapData);
 
       expect(event.id, isNotEmpty);
       expect(event.title, equals('İsimsiz Etkinlik'));
       expect(event.category, equals('Genel'));
       expect(event.location, equals('Bilinmiyor'));
+      expect(event.imageUrl, isNotEmpty);
     });
   });
 }

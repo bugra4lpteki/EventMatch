@@ -16,4 +16,28 @@ class MatchRequest {
     required this.eventId,
     this.status = MatchRequestStatus.pending,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'from_user': fromUser.toMap(),
+      'to_user': toUser.toMap(),
+      'event_id': eventId,
+      'status': status.name,
+    };
+  }
+
+  factory MatchRequest.fromMap(Map<String, dynamic> map) {
+    return MatchRequest(
+      id: map['id']?.toString() ?? '',
+      fromUser: UserModel.fromMap(Map<String, dynamic>.from(map['from_user'] ?? {})),
+      toUser: UserModel.fromMap(Map<String, dynamic>.from(map['to_user'] ?? {})),
+      eventId: map['event_id']?.toString() ?? '',
+      status: MatchRequestStatus.values.firstWhere(
+        (s) => s.name == map['status'],
+        orElse: () => MatchRequestStatus.pending,
+      ),
+    );
+  }
 }
+

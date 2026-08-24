@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -19,30 +20,67 @@ class ChatDetailScreen extends StatefulWidget {
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  Timer? _liveSyncTimer;
+  int _lastMessageCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastMessageCount = widget.chat.messages.length;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom(animated: false);
+      final msgService = context.read<MockMessageService>();
+      msgService.markAsRead(widget.chat.id);
+      msgService.syncChatMessagesForPartner(widget.chat.participant.id);
+    });
+
+    // Her 2 saniyede bir arka planda hızlı senkronizasyon (Zero-lag güvencesi)
+    _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 2000), (_) {
+      if (mounted) {
+        context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _liveSyncTimer?.cancel();
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  void _sendMessage(MockMessageService msgService, bool isBlocked) {
-    if (isBlocked) return;
+  void _scrollToBottom({bool animated = true}) {
+    if (!_scrollController.hasClients) return;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    if (animated) {
+      _scrollController.animateTo(
+        maxScroll,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutQuad,
+      );
+    } else {
+      _scrollController.jumpTo(maxScroll);
+    }
+  }
 
-    final currentChat = msgService.individualChats.followedBy(msgService.eventChats)
-        .firstWhere((c) => c.id == widget.chat.id, orElse: () => widget.chat);
-    final isExpired = currentChat.expiresAt != null && currentChat.expiresAt!.isBefore(DateTime.now());
-    if (isExpired) return;
+  void _sendMessage(MockMessageService msgService, String currentChatId, bool isBlocked) {
+    if (isBlocked) return;
 
     final text = _messageController.text.trim();
     if (text.isNotEmpty) {
       HapticFeedback.lightImpact();
-      msgService.sendMessage(widget.chat.id, text);
       _messageController.clear();
+      msgService.sendMessage(currentChatId, text, receiverUserId: widget.chat.participant.id);
+      
+      Future.delayed(const Duration(milliseconds: 50), () {
+        _scrollToBottom(animated: true);
+      });
     }
   }
 
-  void _showDeleteConfirmDialog(BuildContext context, MockMessageService service) {
+  void _showDeleteConfirmDialog(BuildContext context, MockMessageService service, String currentChatId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -61,10 +99,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () async {
-              Navigator.pop(context); // Pop dialog
-              await service.deleteChat(widget.chat.id);
+              Navigator.pop(context);
+              await service.deleteChat(currentChatId);
               if (mounted) {
-                Navigator.pop(context); // Pop chat detail back to list
+                Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('${widget.chat.participant.name} ile sohbet silindi.')),
                 );
@@ -83,17 +121,48 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final isFollowing = msgService.isFollowing(widget.chat.participant.id);
     final isBlocked = msgService.isBlocked(widget.chat.participant.id);
 
+    final currentChat = msgService.individualChats.firstWhere(
+      (c) =>
+          c.id == widget.chat.id ||
+          c.participant.id.toLowerCase() == widget.chat.participant.id.toLowerCase(),
+      orElse: () => widget.chat,
+    );
+
+    if (currentChat.messages.length != _lastMessageCount) {
+      _lastMessageCount = currentChat.messages.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom(animated: true);
+      });
+    }
+
+    final currentUserObj = context.read<MockEventService>().currentUser;
+    final myTags = currentUserObj.tags;
+    final theirTags = currentChat.participant.tags;
+    final commonTags = myTags.where((tag) => theirTags.contains(tag)).toList();
+
+    String? matchInsightTitle;
+    if (commonTags.isNotEmpty) {
+      matchInsightTitle = "İkiniz de ${commonTags.take(3).join(', ')} seviyorsunuz!";
+    } else if (currentUserObj.age != null && currentChat.participant.age != null) {
+      final myAge = int.tryParse(currentUserObj.age!);
+      final theirAge = int.tryParse(currentChat.participant.age!);
+      if (myAge != null && theirAge != null && (myAge - theirAge).abs() <= 2) {
+        matchInsightTitle = "Yaşlarınız birbirine çok yakın! 🎯";
+      }
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         titleSpacing: 0,
+        elevation: 1,
         title: GestureDetector(
           onTap: () {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => UserProfileScreen(user: widget.chat.participant),
+                builder: (context) => UserProfileScreen(user: currentChat.participant),
               ),
             );
           },
@@ -102,10 +171,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.primary,
-                backgroundImage: widget.chat.participant.avatarUrl.startsWith('http')
-                    ? NetworkImage(widget.chat.participant.avatarUrl)
+                backgroundImage: currentChat.participant.avatarUrl.startsWith('http')
+                    ? NetworkImage(currentChat.participant.avatarUrl)
                     : null,
-                child: !widget.chat.participant.avatarUrl.startsWith('http')
+                child: !currentChat.participant.avatarUrl.startsWith('http')
                     ? const Icon(Icons.person, color: Colors.white)
                     : null,
               ),
@@ -118,7 +187,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                       children: [
                         Flexible(
                           child: Text(
-                            widget.chat.participant.name,
+                            currentChat.participant.name,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 16,
@@ -129,33 +198,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.primary),
+                        Icon(Icons.arrow_forward_ios_rounded, size: 11, color: AppColors.primary),
                         if (isFollowing) ...[
                           const SizedBox(width: 6),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.2),
+                              color: AppColors.primary.withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text('Takip Ediliyor', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
+                            child: Text(
+                              'Takip',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ],
                       ],
                     ),
-                    if (widget.chat.isEventBased && widget.chat.relatedEvent != null)
+                    if (currentChat.isEventBased && currentChat.relatedEvent != null)
                       Row(
                         children: [
                           Icon(Icons.event, size: 12, color: AppColors.primary),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              widget.chat.relatedEvent!.title,
+                              currentChat.relatedEvent!.title,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, color: AppColors.primary),
+                              style: TextStyle(fontSize: 11, color: AppColors.primary),
                             ),
                           ),
                         ],
+                      )
+                    else
+                      Text(
+                        'Çevrimiçi',
+                        style: TextStyle(fontSize: 11, color: Colors.greenAccent.shade400),
                       ),
                   ],
                 ),
@@ -173,29 +254,29 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => UserProfileScreen(user: widget.chat.participant),
+                    builder: (context) => UserProfileScreen(user: currentChat.participant),
                   ),
                 );
               } else if (value == 'follow') {
-                msgService.toggleFollowUser(widget.chat.participant.id);
+                msgService.toggleFollowUser(currentChat.participant.id);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(isFollowing
-                        ? '${widget.chat.participant.name} takipten çıkarıldı.'
-                        : '${widget.chat.participant.name} takip ediliyor! 🟢'),
+                        ? '${currentChat.participant.name} takipten çıkarıldı.'
+                        : '${currentChat.participant.name} takip ediliyor! 🟢'),
                   ),
                 );
               } else if (value == 'block') {
-                msgService.toggleBlockUser(widget.chat.participant.id);
+                msgService.toggleBlockUser(currentChat.participant.id);
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(isBlocked
-                        ? '${widget.chat.participant.name} engeli kaldırıldı.'
-                        : '${widget.chat.participant.name} engellendi.'),
+                        ? '${currentChat.participant.name} engeli kaldırıldı.'
+                        : '${currentChat.participant.name} engellendi.'),
                   ),
                 );
               } else if (value == 'delete') {
-                _showDeleteConfirmDialog(context, msgService);
+                _showDeleteConfirmDialog(context, msgService, currentChat.id);
               }
             },
             itemBuilder: (context) => [
@@ -258,111 +339,91 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ],
       ),
-      body: Consumer<MockMessageService>(
-        builder: (context, messageService, child) {
-          final currentChat = messageService.individualChats.followedBy(messageService.eventChats)
-              .firstWhere((c) => c.id == widget.chat.id, orElse: () => widget.chat);
-
-          final currentUserObj = context.read<MockEventService>().currentUser;
-          final myTags = currentUserObj.tags;
-          final theirTags = widget.chat.participant.tags;
-          final commonTags = myTags.where((tag) => theirTags.contains(tag)).toList();
-          
-          String? matchInsightTitle;
-          if (commonTags.isNotEmpty) {
-            matchInsightTitle = "İkiniz de ${commonTags.join(', ')} seviyorsunuz!";
-          } else if (currentUserObj.age != null && widget.chat.participant.age != null) {
-            final myAge = int.tryParse(currentUserObj.age!);
-            final theirAge = int.tryParse(widget.chat.participant.age!);
-            if (myAge != null && theirAge != null && (myAge - theirAge).abs() <= 2) {
-              matchInsightTitle = "Yaşlarınız birbirine çok yakın!";
-            }
-          }
-
-          final isExpired = currentChat.expiresAt != null && currentChat.expiresAt!.isBefore(DateTime.now());
-
-          return Column(
-            children: [
-              if (isBlocked)
-                Container(
-                  color: Colors.redAccent.withOpacity(0.2),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Bu kullanıcıyı engellediniz.',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => messageService.toggleBlockUser(widget.chat.participant.id),
-                        child: const Text('Engeli Kaldır', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-                      ),
-                    ],
+      body: Column(
+        children: [
+          if (isBlocked)
+            Container(
+              color: Colors.redAccent.withValues(alpha: 0.2),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              child: Row(
+                children: [
+                  const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Bu kullanıcıyı engellediniz.',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
                   ),
-                )
-              else if (isExpired)
-                Container(
-                  color: Colors.redAccent.withOpacity(0.15),
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.lock_clock, color: Colors.redAccent, size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Bu sohbetin süresi dolmuştur.',
-                        style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 13),
-                      ),
-                    ],
+                  TextButton(
+                    onPressed: () => msgService.toggleBlockUser(currentChat.participant.id),
+                    child: const Text('Engeli Kaldır', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
                   ),
-                ),
-              if (matchInsightTitle != null && !isBlocked)
-                Container(
-                  margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1),
-                    boxShadow: [
-                      BoxShadow(color: AppColors.primary.withOpacity(0.1), blurRadius: 10, spreadRadius: 1)
-                    ]
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.tips_and_updates, color: AppColors.primary, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          matchInsightTitle,
-                          style: TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: currentChat.messages.length,
-                  itemBuilder: (context, index) {
-                    final message = currentChat.messages[index];
-                    final isMe = message.senderId == messageService.currentUserId;
-
-                    return _buildMessageBubble(message, isMe);
-                  },
-                ),
+                ],
               ),
-              _buildMessageComposer(messageService, isExpired, isBlocked),
-            ],
-          );
-        },
+            ),
+          if (matchInsightTitle != null && !isBlocked)
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3), width: 1),
+                boxShadow: [
+                  BoxShadow(color: AppColors.primary.withValues(alpha: 0.08), blurRadius: 10, spreadRadius: 1),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.tips_and_updates_rounded, color: AppColors.primary, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      matchInsightTitle,
+                      style: TextStyle(color: AppColors.textPrimary, fontSize: 12.5, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: currentChat.messages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_bubble_outline_rounded, size: 48, color: AppColors.surface),
+                        const SizedBox(height: 12),
+                        Text(
+                          'Eşleşme sağlandı! 🎉',
+                          style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'İlk mesajı göndererek sohbete başla.',
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    itemCount: currentChat.messages.length,
+                    itemBuilder: (context, index) {
+                      final message = currentChat.messages[index];
+                      final isMe = message.senderId == msgService.currentUserId ||
+                          message.senderId == 'me' ||
+                          (msgService.currentUserId.isEmpty && message.senderId != currentChat.participant.id);
+
+                      return _buildMessageBubble(message, isMe);
+                    },
+                  ),
+          ),
+          _buildMessageComposer(msgService, currentChat.id, isBlocked),
+        ],
       ),
     );
   }
@@ -373,30 +434,38 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.75,
+          maxWidth: MediaQuery.of(context).size.width * 0.76,
         ),
         decoration: BoxDecoration(
           color: isMe ? AppColors.primary : AppColors.surface,
           borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 0),
-            bottomRight: Radius.circular(isMe ? 0 : 16),
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(isMe ? 18 : 2),
+            bottomRight: Radius.circular(isMe ? 2 : 18),
           ),
-          border: isMe ? null : Border.all(color: Colors.white12, width: 0.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: isMe ? null : Border.all(color: Colors.white10, width: 0.8),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               message.text,
               style: TextStyle(
                 color: isMe ? Colors.white : AppColors.textPrimary,
-                fontSize: 15,
+                fontSize: 14.5,
+                height: 1.3,
               ),
             ),
             const SizedBox(height: 4),
@@ -412,7 +481,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 ),
                 if (isMe) ...[
                   const SizedBox(width: 4),
-                  const Icon(Icons.done_all_rounded, size: 14, color: Colors.white),
+                  const Icon(Icons.done_all_rounded, size: 13, color: Colors.white70),
                 ],
               ],
             ),
@@ -422,12 +491,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  Widget _buildMessageComposer(MockMessageService msgService, bool isExpired, bool isBlocked) {
-    final isDisabled = isExpired || isBlocked;
-
+  Widget _buildMessageComposer(MockMessageService msgService, String currentChatId, bool isBlocked) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12).copyWith(
-        bottom: MediaQuery.of(context).padding.bottom + 12,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10).copyWith(
+        bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
         color: AppColors.surface,
@@ -438,35 +505,35 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           Expanded(
             child: TextField(
               controller: _messageController,
-              enabled: !isDisabled,
-              style: TextStyle(color: isDisabled ? AppColors.textSecondary : AppColors.textPrimary),
+              enabled: !isBlocked,
+              minLines: 1,
+              maxLines: 4,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary, fontSize: 14.5),
               decoration: InputDecoration(
-                hintText: isBlocked
-                    ? '🚫 Kullanıcı engellendi'
-                    : isExpired
-                        ? 'Sohbet süresi doldu'
-                        : 'Mesaj yaz...',
-                hintStyle: TextStyle(color: AppColors.textSecondary),
+                hintText: isBlocked ? '🚫 Kullanıcı engellendi' : 'Mesaj yaz...',
+                hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                 filled: true,
                 fillColor: AppColors.background,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
                 ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
+              onSubmitted: (_) => _sendMessage(msgService, currentChatId, isBlocked),
             ),
           ),
           const SizedBox(width: 8),
           GestureDetector(
-            onTap: isDisabled ? null : () => _sendMessage(msgService, isBlocked),
+            onTap: isBlocked ? null : () => _sendMessage(msgService, currentChatId, isBlocked),
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isDisabled ? Colors.grey : AppColors.primary,
+                color: isBlocked ? Colors.grey : AppColors.primary,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.send, color: Colors.white, size: 20),
+              child: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
             ),
           ),
         ],

@@ -245,171 +245,177 @@ class _MessagesScreenState extends State<MessagesScreen> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: chats.length,
-      itemBuilder: (context, index) {
-        final chat = chats[index];
-        final lastMsg = chat.lastMessage;
-        final isExpired =
-            chat.expiresAt != null && chat.expiresAt!.isBefore(DateTime.now());
-        final isFollowing = service.isFollowing(chat.participant.id);
-        final isBlocked = service.isBlocked(chat.participant.id);
+    return RefreshIndicator(
+      color: AppColors.primary,
+      backgroundColor: AppColors.surface,
+      onRefresh: () => service.reloadChats(),
+      child: ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        itemCount: chats.length,
+        itemBuilder: (context, index) {
+          final chat = chats[index];
+          final lastMsg = chat.lastMessage;
+          final isFollowing = service.isFollowing(chat.participant.id);
+          final isBlocked = service.isBlocked(chat.participant.id);
 
-        return Dismissible(
-          key: Key(chat.id),
-          direction: DismissDirection.endToStart,
-          confirmDismiss: (direction) => _showDeleteConfirmDialog(context),
-          onDismissed: (direction) {
-            service.deleteChat(chat.id);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${chat.participant.name} ile sohbet silindi.'),
-                duration: const Duration(seconds: 2),
+          String timeStr = '';
+          if (lastMsg != null) {
+            final now = DateTime.now();
+            if (lastMsg.timestamp.day == now.day &&
+                lastMsg.timestamp.month == now.month &&
+                lastMsg.timestamp.year == now.year) {
+              timeStr = '${lastMsg.timestamp.hour.toString().padLeft(2, '0')}:${lastMsg.timestamp.minute.toString().padLeft(2, '0')}';
+            } else {
+              timeStr = '${lastMsg.timestamp.day}/${lastMsg.timestamp.month}';
+            }
+          }
+
+          return Dismissible(
+            key: Key('${chat.id}_${chat.participant.id}'),
+            direction: DismissDirection.endToStart,
+            confirmDismiss: (direction) => _showDeleteConfirmDialog(context),
+            onDismissed: (direction) {
+              service.deleteChat(chat.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${chat.participant.name} ile sohbet silindi.'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            background: Container(
+              alignment: Alignment.centerRight,
+              padding: const EdgeInsets.only(right: 24),
+              color: Colors.redAccent.withOpacity(0.8),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(Icons.delete_forever_rounded, color: Colors.white, size: 28),
+                  SizedBox(width: 8),
+                  Text('Sohbeti Sil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ],
               ),
-            );
-          },
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 24),
-            color: Colors.redAccent.withOpacity(0.8),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Icon(Icons.delete_forever_rounded, color: Colors.white, size: 28),
-                SizedBox(width: 8),
-                Text('Sohbeti Sil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              ],
             ),
-          ),
-          child: RepaintBoundary(
-            child: ListTile(
-              onLongPress: () => _showChatOptions(context, chat, service),
-              onTap: () {
-                service.markAsRead(chat.id);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ChatDetailScreen(chat: chat),
-                  ),
-                );
-              },
-              leading: GestureDetector(
+            child: RepaintBoundary(
+              child: ListTile(
+                onLongPress: () => _showChatOptions(context, chat, service),
                 onTap: () {
+                  service.markAsRead(chat.id);
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => UserProfileScreen(user: chat.participant),
+                      builder: (context) => ChatDetailScreen(chat: chat),
                     ),
                   );
                 },
-                child: Stack(
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: AppColors.surface,
-                      backgroundImage: chat.participant.avatarUrl.startsWith('http')
-                          ? CachedNetworkImageProvider(
-                              chat.participant.avatarUrl,
-                              maxHeight: 120,
-                              maxWidth: 120,
-                            )
-                          : null,
-                      child: !chat.participant.avatarUrl.startsWith('http')
-                          ? Icon(Icons.person, color: AppColors.primary)
-                          : null,
-                    ),
-                    if (chat.unreadCount > 0)
-                      Positioned(
-                        right: 0,
-                        top: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${chat.unreadCount}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                leading: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => UserProfileScreen(user: chat.participant),
+                      ),
+                    );
+                  },
+                  child: Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 28,
+                        backgroundColor: AppColors.surface,
+                        backgroundImage: chat.participant.avatarUrl.startsWith('http')
+                            ? CachedNetworkImageProvider(
+                                chat.participant.avatarUrl,
+                                maxHeight: 120,
+                                maxWidth: 120,
+                              )
+                            : null,
+                        child: !chat.participant.avatarUrl.startsWith('http')
+                            ? Icon(Icons.person, color: AppColors.primary)
+                            : null,
+                      ),
+                      if (chat.unreadCount > 0)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${chat.unreadCount}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
+                    ],
+                  ),
+                ),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        chat.participant.name,
+                        style: TextStyle(
+                          color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                          decoration: isBlocked ? TextDecoration.lineThrough : null,
+                        ),
                       ),
-                  ],
-                ),
-              ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    chat.participant.name,
-                    style: TextStyle(
-                      color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      decoration: isBlocked ? TextDecoration.lineThrough : null,
                     ),
-                  ),
-                ),
-                if (isFollowing) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text('Takip Ediliyor', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-                if (isBlocked) ...[
-                  const SizedBox(width: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text('Engellendi', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ],
-            ),
-            subtitle: Text(
-              isBlocked
-                  ? '🚫 Bu kullanıcı engellendi'
-                  : lastMsg?.text ?? 'Eşleşme sağlandı! Sohbet başlatın.',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: isBlocked
-                    ? Colors.redAccent.withOpacity(0.7)
-                    : isExpired
-                        ? Colors.redAccent
-                        : AppColors.textSecondary,
-              ),
-            ),
-            trailing: chat.expiresAt != null
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const Icon(Icons.timer_outlined, size: 16, color: Colors.amber),
-                      const SizedBox(height: 2),
-                      Text(
-                        isExpired ? 'Süre doldu' : 'Aktif',
-                        style: const TextStyle(fontSize: 10, color: Colors.amber),
+                    if (isFollowing) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('Takip Ediliyor', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
                       ),
                     ],
-                  )
-                : null,
+                    if (isBlocked) ...[
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text('Engellendi', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ],
+                ),
+                subtitle: Text(
+                  isBlocked
+                      ? '🚫 Bu kullanıcı engellendi'
+                      : lastMsg?.text ?? 'Eşleşme sağlandı! Sohbet başlatın.',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: isBlocked
+                        ? Colors.redAccent.withOpacity(0.7)
+                        : AppColors.textSecondary,
+                  ),
+                ),
+                trailing: timeStr.isNotEmpty
+                    ? Text(
+                        timeStr,
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      )
+                    : null,
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
+
