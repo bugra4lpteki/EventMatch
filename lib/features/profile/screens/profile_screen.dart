@@ -11,6 +11,7 @@ import '../../events/models/event_model.dart';
 import '../../events/screens/event_detail_screen.dart';
 import 'edit_profile_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
+import '../../messages/services/mock_message_service.dart';
 import 'dart:async';
 
 class ProfileScreen extends StatefulWidget {
@@ -209,30 +210,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              if (!user.hideLastSeen && !user.isPrivateProfile) ...[
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Container(
-                                      width: 9,
-                                      height: 9,
-                                      decoration: const BoxDecoration(
-                                        color: Color(0xFF4CAF50),
-                                        shape: BoxShape.circle,
+                              Builder(
+                                builder: (context) {
+                                  final msgService = context.watch<MockMessageService>();
+                                  final isOnline = !msgService.hideOnlineStatus;
+
+                                  if (!user.hideLastSeen && !user.isPrivateProfile) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 10),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 9,
+                                            height: 9,
+                                            decoration: BoxDecoration(
+                                              color: isOnline ? const Color(0xFF4CAF50) : Colors.white30,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            isOnline ? 'Çevrimiçi' : 'Çevrimdışı',
+                                            style: TextStyle(
+                                              color: isOnline ? const Color(0xFF4CAF50) : AppColors.textSecondary,
+                                              fontSize: 13,
+                                              fontWeight: isOnline ? FontWeight.w600 : FontWeight.w400,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    const Text(
-                                      'Çevrimiçi',
-                                      style: TextStyle(
-                                        color: Color(0xFF4CAF50),
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ] else if (user.isPrivateProfile) ...[
+                                    );
+                                  } else if (user.isPrivateProfile) {
                                 const SizedBox(height: 10),
                                 Row(
                                   children: [

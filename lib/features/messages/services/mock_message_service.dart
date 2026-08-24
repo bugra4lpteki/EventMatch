@@ -51,8 +51,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && c.isArchived)
       .toList();
 
-  bool isUserOnline(String userId) {
-    return _onlineUserIds.contains(userId.toLowerCase());
+  bool isUserOnline(String userId, [String? userName]) {
+    if (userId.isEmpty) return false;
+    final lowerId = userId.toLowerCase();
+    if (_onlineUserIds.contains(lowerId)) return true;
+    if (userName != null && userName.isNotEmpty && _onlineUserIds.contains(userName.toLowerCase())) {
+      return true;
+    }
+    return false;
   }
 
   Future<void> toggleHideOnlineStatus(bool hide) async {
@@ -63,9 +69,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       await prefs.setBool('${currentUserId}_privacy_hide_last_seen', hide);
       
       if (hide) {
-        _presenceChannel?.untrack();
+        try {
+          await _presenceChannel?.untrack();
+        } catch (_) {}
       } else {
-        _trackMyPresence();
+        await _trackMyPresence();
       }
     } catch (_) {}
     notifyListeners();
@@ -258,24 +266,87 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       _presenceChannel!
           .onPresenceSync((_) {
             try {
-              final state = _presenceChannel!.presenceState();
+              final dynamic state = _presenceChannel!.presenceState();
               final online = <String>{};
-              for (var entry in state) {
-                for (var p in entry.presences) {
-                  final uId = p.payload['user_id']?.toString().toLowerCase();
-                  if (uId != null && uId.isNotEmpty) {
-                    online.add(uId);
+
+              if (state is List) {
+                for (var entry in state) {
+                  try {
+                    for (var p in (entry as dynamic).presences) {
+                      final payload = p.payload as Map?;
+                      final uId = payload?['user_id']?.toString().toLowerCase();
+                      final uName = payload?['user_name']?.toString().toLowerCase();
+                      if (uId != null && uId.isNotEmpty) online.add(uId);
+                      if (uName != null && uName.isNotEmpty) online.add(uName);
+                    }
+                  } catch (_) {
+                    try {
+                      final payload = (entry as dynamic).payload as Map?;
+                      final uId = payload?['user_id']?.toString().toLowerCase();
+                      final uName = payload?['user_name']?.toString().toLowerCase();
+                      if (uId != null && uId.isNotEmpty) online.add(uId);
+                      if (uName != null && uName.isNotEmpty) online.add(uName);
+                    } catch (_) {}
+                  }
+                }
+              } else if (state is Map) {
+                for (var presences in state.values) {
+                  if (presences is List) {
+                    for (var p in presences) {
+                      try {
+                        final payload = (p as dynamic).payload as Map?;
+                        final uId = payload?['user_id']?.toString().toLowerCase();
+                        final uName = payload?['user_name']?.toString().toLowerCase();
+                        if (uId != null && uId.isNotEmpty) online.add(uId);
+                        if (uName != null && uName.isNotEmpty) online.add(uName);
+                      } catch (_) {}
+                    }
                   }
                 }
               }
+
               _onlineUserIds.clear();
               _onlineUserIds.addAll(online);
               for (var c in _chats) {
-                c.isOnline = _onlineUserIds.contains(c.participant.id.toLowerCase());
+                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
               }
               notifyListeners();
             } catch (e) {
               debugPrint('[MessageService] Presence sync parse error: $e');
+            }
+          })
+          .onPresenceJoin((payload) {
+            try {
+              final newPresences = payload.newPresences;
+              for (var p in newPresences) {
+                final uId = p.payload['user_id']?.toString().toLowerCase();
+                final uName = p.payload['user_name']?.toString().toLowerCase();
+                if (uId != null && uId.isNotEmpty) _onlineUserIds.add(uId);
+                if (uName != null && uName.isNotEmpty) _onlineUserIds.add(uName);
+              }
+              for (var c in _chats) {
+                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
+              }
+              notifyListeners();
+            } catch (e) {
+              debugPrint('[MessageService] Presence join parse error: $e');
+            }
+          })
+          .onPresenceLeave((payload) {
+            try {
+              final leftPresences = payload.leftPresences;
+              for (var p in leftPresences) {
+                final uId = p.payload['user_id']?.toString().toLowerCase();
+                final uName = p.payload['user_name']?.toString().toLowerCase();
+                if (uId != null) _onlineUserIds.remove(uId);
+                if (uName != null) _onlineUserIds.remove(uName);
+              }
+              for (var c in _chats) {
+                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
+              }
+              notifyListeners();
+            } catch (e) {
+              debugPrint('[MessageService] Presence leave parse error: $e');
             }
           })
           .subscribe((status, [error]) {
@@ -293,10 +364,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _trackMyPresence() async {
     if (_hideOnlineStatus) return;
     final id = currentUserId;
+    final name = _eventService.currentUser.name;
     if (id.isNotEmpty && _presenceChannel != null) {
       try {
         await _presenceChannel?.track({
           'user_id': id.toLowerCase(),
+          'user_name': name.toLowerCase(),
           'online_at': DateTime.now().toUtc().toIso8601String(),
         });
       } catch (e) {

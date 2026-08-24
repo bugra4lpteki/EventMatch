@@ -11,6 +11,7 @@ import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/widgets/vibe_check_widget.dart';
 import '../../../core/widgets/report_block_sheet.dart';
+import '../../messages/services/mock_message_service.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -226,6 +227,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     // Sadece kullanıcının gerçekten eklediği sosyal medya bağlantıları
     final socialLinks = user.socialLinks;
+    final msgService = context.watch<MockMessageService>();
+    final isOnline = isCurrentUser ? !msgService.hideOnlineStatus : msgService.isUserOnline(user.id, user.name);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -418,18 +421,18 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         Container(
                           width: 10,
                           height: 10,
-                          decoration: const BoxDecoration(
-                            color: Colors.greenAccent,
+                          decoration: BoxDecoration(
+                            color: isOnline ? Colors.greenAccent : Colors.white30,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Çevrimiçi',
+                        Text(
+                          isOnline ? 'Çevrimiçi' : 'Çevrimdışı',
                           style: TextStyle(
-                            color: Colors.greenAccent,
+                            color: isOnline ? Colors.greenAccent : AppColors.textSecondary,
                             fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: isOnline ? FontWeight.w600 : FontWeight.w400,
                           ),
                         ),
                         if (user.points > 0) ...[

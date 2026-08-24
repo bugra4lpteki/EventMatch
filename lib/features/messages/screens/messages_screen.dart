@@ -315,7 +315,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       )
                     : null,
               ),
-              if (service.isUserOnline(chat.participant.id))
+              if (service.isUserOnline(chat.participant.id, chat.participant.name))
                 Positioned(
                   right: 0,
                   bottom: 0,
