@@ -70,39 +70,60 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  // --- STREAM REGISTRY & DIAGNOSTICS ---
+  // --- DIRECT SUPABASE REACTIVE STREAM API ---
 
   Stream<List<MessageModel>> getMessagesStream(String partnerId) {
-    final lowerPartnerId = partnerId.toLowerCase();
-    debugPrint('--> DİNLENEN YOL: chats/$partnerId/messages (currentUser: $currentUserId)');
+    final currentId = currentUserId;
+    print('--> [SUPABASE STREAM BAŞLADI] Dinlenen Partner: $partnerId | CurrentUser: $currentId');
 
-    if (!_roomStreamControllers.containsKey(lowerPartnerId) || _roomStreamControllers[lowerPartnerId]!.isClosed) {
-      _roomStreamControllers[lowerPartnerId] = StreamController<List<MessageModel>>.broadcast();
-    }
+    return _supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: true)
+        .map((rows) {
+          final list = <MessageModel>[];
+          final target = partnerId.toLowerCase();
+          final me = currentId.toLowerCase();
 
-    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
-    final initialList = chatIndex >= 0 ? List<MessageModel>.from(_chats[chatIndex].messages) : <MessageModel>[];
+          for (var row in rows) {
+            final s = (row['sender_id']?.toString() ?? '').toLowerCase();
+            final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
 
-    scheduleMicrotask(() {
-      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
-        _roomStreamControllers[lowerPartnerId]!.add(initialList);
-        debugPrint('--> YENİ SNAPSHOT GELDİ: ${initialList.length} adet mesaj (Oda: $partnerId)');
-      }
-    });
+            // Sadece bu iki kullanıcı arasındaki mesajları filtrele
+            final isMatch = (s == me && r == target) ||
+                (s == target && r == me) ||
+                (s == target && (r.isEmpty || r == 'user_mobile')) ||
+                (r == target && (s.isEmpty || s == 'user_mobile'));
 
-    return _roomStreamControllers[lowerPartnerId]!.stream;
+            if (isMatch) {
+              final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
+              if (text.trim().isNotEmpty) {
+                list.add(MessageModel(
+                  id: row['id']?.toString() ?? '',
+                  senderId: row['sender_id']?.toString() ?? '',
+                  receiverId: row['receiver_id']?.toString() ?? '',
+                  text: text,
+                  timestamp: row['created_at'] != null
+                      ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
+                      : DateTime.now(),
+                  status: MessageStatus.delivered,
+                ));
+              }
+            }
+          }
+
+          // Yerel nesneyi ve önbelleği güncelle
+          final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == target);
+          if (chatIndex >= 0 && list.isNotEmpty) {
+            _chats[chatIndex].messages = list;
+          }
+
+          return list;
+        });
   }
 
   void _emitRoomUpdate(String partnerId) {
-    final lowerPartnerId = partnerId.toLowerCase();
-    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
-    if (chatIndex >= 0) {
-      final freshList = List<MessageModel>.from(_chats[chatIndex].messages);
-      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
-        _roomStreamControllers[lowerPartnerId]!.add(freshList);
-        debugPrint('--> YENİ SNAPSHOT GELDİ: ${freshList.length} adet mesaj (Canlı Akış Emit Edildi: $partnerId)');
-      }
-    }
+    // Supabase reactive stream kullandığımız için controller gerekmez
   }
 
   // --- LOCAL CACHING ---
