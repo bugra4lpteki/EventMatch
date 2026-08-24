@@ -498,35 +498,29 @@ class MockMessageService extends ChangeNotifier {
       final lowerCurrent = currentId.toLowerCase();
       final lowerPartner = partnerId.toLowerCase();
 
+      final res = await _supabase
+          .from('messages')
+          .select('*')
+          .or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId')
+          .order('created_at', ascending: true);
+
       final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
-        final matchIdNum = int.tryParse(chat.id);
-
-        dynamic query = _supabase.from('messages').select('*');
-        if (matchIdNum != null) {
-          query = query.or('match_id.eq.$matchIdNum,sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId');
-        } else {
-          query = query.or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId');
-        }
-
-        final res = await query.order('created_at', ascending: true);
         bool hasNew = false;
 
         for (var row in res) {
           try {
             final s = (row['sender_id']?.toString() ?? '').toLowerCase();
             final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
-            final mIdMatch = row['match_id']?.toString();
 
             final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
                                   (s == lowerPartner && r == lowerCurrent) ||
-                                  (s == lowerPartner || r == lowerPartner) ||
-                                  (mIdMatch != null && (mIdMatch == chat.id || (matchIdNum != null && mIdMatch == matchIdNum.toString())));
+                                  (s == lowerPartner || r == lowerPartner);
 
             if (!isForThisChat) continue;
 
-            final mId = row['id']?.toString() ?? '';
+            final mId = row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
             final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
             final sender = row['sender_id']?.toString() ?? '';
             final receiver = row['receiver_id']?.toString() ?? '';
@@ -548,10 +542,9 @@ class MockMessageService extends ChangeNotifier {
                 status: MessageStatus.delivered,
               ));
               hasNew = true;
-              print('--> [CANLI SYNC BULUNDU] Yeni mesaj odaya eklendi: $text (Kimden: $sender)');
             }
           } catch (e) {
-            print('MODEL PARSE HATASI: $e');
+            debugPrint('MODEL PARSE HATASI: $e');
           }
         }
 
@@ -559,12 +552,11 @@ class MockMessageService extends ChangeNotifier {
           chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
           _sortChats();
           _saveChatsToLocalStorage();
-          _emitRoomUpdate(partnerId);
           notifyListeners();
         }
       }
     } catch (e) {
-      print('[MessageService] syncChatMessagesForPartner error: $e');
+      debugPrint('[MessageService] syncChatMessagesForPartner error: $e');
     }
   }
 

@@ -388,7 +388,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   );
                 }
 
-                final messages = snapshot.data ?? currentChat.messages;
+                final streamList = snapshot.data ?? [];
+                final fallbackList = currentChat.messages;
+                final messages = streamList.length >= fallbackList.length ? (streamList.isNotEmpty ? streamList : fallbackList) : fallbackList;
 
                 if (messages.length != _lastMessageCount) {
                   _lastMessageCount = messages.length;
