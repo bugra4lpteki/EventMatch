@@ -241,22 +241,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     );
                                   } else if (user.isPrivateProfile) {
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      'Gizli Hesap',
-                                      style: TextStyle(
-                                        color: AppColors.primaryVariant,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
+                                    return Padding(
+                                      padding: const EdgeInsets.only(top: 10),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Gizli Hesap',
+                                            style: TextStyle(
+                                              color: AppColors.primaryVariant,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                    );
+                                  }
+                                  return const SizedBox.shrink();
+                                },
+                              ),
                             ],
                           ),
                         ),
