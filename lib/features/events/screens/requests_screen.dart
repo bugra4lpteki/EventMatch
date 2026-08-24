@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_image_widget.dart';
+import '../models/match_request.dart';
 import '../services/mock_match_service.dart';
 import '../widgets/match_dialog.dart';
 import '../../messages/services/mock_message_service.dart';

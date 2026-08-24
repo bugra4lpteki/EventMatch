@@ -68,7 +68,7 @@ class ChatModel {
   final UserModel participant;
   final bool isEventBased;
   final EventModel? relatedEvent;
-  final List<MessageModel> messages;
+  List<MessageModel> messages;
   int unreadCount;
   final DateTime? expiresAt;
   bool isOnline;
