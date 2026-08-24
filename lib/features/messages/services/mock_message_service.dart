@@ -19,7 +19,8 @@ class MockMessageService extends ChangeNotifier {
     if (sessId != null && sessId.isNotEmpty) return sessId;
     final eventUserId = _eventService.currentUser.id;
     if (eventUserId.isNotEmpty) return eventUserId;
-    return '';
+    final eventUserName = _eventService.currentUser.name.replaceAll(' ', '_').toLowerCase();
+    return eventUserName.isNotEmpty ? 'user_$eventUserName' : 'user_mobile_guest';
   }
 
   final Set<String> _blockedUserIds = {};
@@ -838,7 +839,7 @@ class MockMessageService extends ChangeNotifier {
 
         final newMsg = MessageModel(
           id: newMsgId,
-          senderId: currentId.isNotEmpty ? currentId : 'me',
+          senderId: currentId,
           receiverId: partnerId,
           text: trimmedText,
           timestamp: now,
@@ -864,33 +865,33 @@ class MockMessageService extends ChangeNotifier {
           },
         );
 
-        await _persistMessage(chat.id, partnerId, trimmedText, newMsgId);
+        await _persistMessage(chat.id, partnerId, trimmedText, newMsgId, senderUserId: currentId);
       }
     } catch (e) {
       debugPrint('[MessageService] ❌ Send Message Error: $e');
     }
   }
 
-  Future<void> _persistMessage(String chatId, String partnerId, String text, String clientMsgId) async {
-    final currentId = currentUserId;
-    if (currentId.isEmpty) return;
+  Future<void> _persistMessage(String chatId, String partnerId, String text, String clientMsgId, {String? senderUserId}) async {
+    final effectiveSenderId = (senderUserId != null && senderUserId.isNotEmpty) ? senderUserId : currentUserId;
+    if (effectiveSenderId.isEmpty) return;
 
     try {
       int? numericMatchId = int.tryParse(chatId);
 
-      if (numericMatchId == null && partnerId.isNotEmpty && _isValidUuid(currentId) && _isValidUuid(partnerId)) {
+      if (numericMatchId == null && partnerId.isNotEmpty) {
         try {
           final existingMatch = await _supabase
               .from('matches')
               .select('id')
-              .or('and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId),and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId)')
+              .or('and(user_id_1.eq.$effectiveSenderId,user_id_2.eq.$partnerId),and(user_id_1.eq.$partnerId,user_id_2.eq.$effectiveSenderId)')
               .maybeSingle();
 
           if (existingMatch != null) {
             numericMatchId = int.tryParse(existingMatch['id'].toString());
           } else {
             final inserted = await _supabase.from('matches').insert({
-              'user_id_1': currentId,
+              'user_id_1': effectiveSenderId,
               'user_id_2': partnerId,
               'status': 'matched',
             }).select('id').maybeSingle();
@@ -907,13 +908,13 @@ class MockMessageService extends ChangeNotifier {
               _saveChatsToLocalStorage();
             }
           }
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ Match lookup error: $e');
+        } catch (matchErr) {
+          debugPrint('[MessageService] ⚠️ Match lookup error (non-fatal): $matchErr');
         }
       }
 
       final messagePayload = <String, dynamic>{
-        'sender_id': currentId,
+        'sender_id': effectiveSenderId,
         'receiver_id': partnerId.isNotEmpty ? partnerId : null,
         'content': text,
         'created_at': DateTime.now().toUtc().toIso8601String(),
@@ -924,9 +925,9 @@ class MockMessageService extends ChangeNotifier {
       }
 
       await _supabase.from('messages').insert(messagePayload);
-      debugPrint('[MessageService] ✉️ Mesaj veritabanına kalıcı kaydedildi.');
+      debugPrint('[MessageService] ✉️ Mesaj Supabase veritabanına başarıyla yazıldı: $messagePayload');
     } catch (e) {
-      debugPrint('[MessageService] ❌ Supabase message persist error: $e');
+      debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
     }
   }
 

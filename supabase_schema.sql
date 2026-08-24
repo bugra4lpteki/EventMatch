@@ -184,9 +184,15 @@ CREATE POLICY "Allow read own matches" ON public.matches FOR SELECT USING (auth.
 CREATE POLICY "Allow manage own matches" ON public.matches FOR ALL USING (auth.uid() = user_id_1 OR auth.uid() = user_id_2);
 
 -- Messages policies
-CREATE POLICY "Allow read own messages" ON public.messages FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-CREATE POLICY "Allow insert own messages" ON public.messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+DROP POLICY IF EXISTS "Allow read own messages" ON public.messages;
+DROP POLICY IF EXISTS "Allow insert own messages" ON public.messages;
+DROP POLICY IF EXISTS "Herkes mesaj ekleyebilir" ON public.messages;
+DROP POLICY IF EXISTS "Herkes mesajları görebilir" ON public.messages;
+
+CREATE POLICY "Herkes mesaj ekleyebilir" ON public.messages FOR INSERT WITH CHECK (true);
+CREATE POLICY "Herkes mesajları görebilir" ON public.messages FOR SELECT USING (true);
 
 -- 13. ENABLE REALTIME PUBLICATION FOR MESSAGES & MATCHES
 ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;
+
