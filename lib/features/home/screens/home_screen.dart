@@ -8,8 +8,10 @@ import '../../events/screens/explore_screen.dart';
 import '../../events/screens/requests_screen.dart';
 import '../../events/screens/swipe_screen.dart';
 import '../../profile/screens/profile_screen.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../../profile/screens/settings_screen.dart';
 import '../../messages/screens/messages_screen.dart';
+import '../../messages/services/mock_message_service.dart';
 import '../../../core/theme/theme_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/screens/event_map_screen.dart';
@@ -139,83 +141,110 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                 itemCount: radarService.nearbyUsers.length,
                                 itemBuilder: (context, index) {
                                   final u = radarService.nearbyUsers[index];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 14),
-                                    padding: const EdgeInsets.all(16),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.04),
-                                      borderRadius: BorderRadius.circular(22),
-                                      border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
-                                    ),
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Container(
-                                              padding: const EdgeInsets.all(2),
-                                              decoration: const BoxDecoration(
-                                                shape: BoxShape.circle,
-                                                gradient: AppColors.primaryGradient,
-                                              ),
-                                              child: CircleAvatar(
-                                                radius: 26,
-                                                backgroundColor: AppColors.background,
-                                                backgroundImage: u.avatarUrl.startsWith('http') ? NetworkImage(u.avatarUrl) : null,
-                                              ),
-                                            ),
-                                            const SizedBox(width: 14),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(u.name, style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
-                                                  const SizedBox(height: 2),
-                                                  if (u.aboutMe != null)
-                                                    Text(u.aboutMe!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                                                ],
-                                              ),
-                                            ),
-                                            Container(
-                                              decoration: BoxDecoration(
-                                                gradient: AppColors.primaryGradient,
-                                                borderRadius: BorderRadius.circular(14),
-                                              ),
-                                              child: ElevatedButton.icon(
-                                                onPressed: () {
-                                                  HapticFeedback.mediumImpact();
-                                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${u.name} kişisine selam gönderildi! ⚡')));
-                                                  Navigator.pop(context);
-                                                },
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.transparent,
-                                                  shadowColor: Colors.transparent,
-                                                  elevation: 0,
-                                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                  return InkWell(
+                                    borderRadius: BorderRadius.circular(22),
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => UserProfileScreen(user: u)),
+                                      );
+                                    },
+                                    child: Container(
+                                      margin: const EdgeInsets.only(bottom: 14),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.04),
+                                        borderRadius: BorderRadius.circular(22),
+                                        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Container(
+                                                padding: const EdgeInsets.all(2),
+                                                decoration: const BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  gradient: AppColors.primaryGradient,
                                                 ),
-                                                icon: const Icon(Icons.waving_hand, color: Colors.white, size: 14),
-                                                label: const Text('Selam', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                child: CircleAvatar(
+                                                  radius: 26,
+                                                  backgroundColor: AppColors.background,
+                                                  backgroundImage: u.avatarUrl.startsWith('http') ? NetworkImage(u.avatarUrl) : null,
+                                                  child: !u.avatarUrl.startsWith('http')
+                                                      ? const Icon(Icons.person, color: Colors.white)
+                                                      : null,
+                                                ),
                                               ),
+                                              const SizedBox(width: 14),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(u.name, style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold)),
+                                                    const SizedBox(height: 2),
+                                                    if (u.aboutMe != null && u.aboutMe!.isNotEmpty)
+                                                      Text(u.aboutMe!, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                                                  ],
+                                                ),
+                                              ),
+                                              Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: AppColors.primaryGradient,
+                                                  borderRadius: BorderRadius.circular(14),
+                                                ),
+                                                child: ElevatedButton.icon(
+                                                  onPressed: () {
+                                                    HapticFeedback.mediumImpact();
+                                                    final msgService = context.read<MockMessageService>();
+                                                    final chat = msgService.createOrGetChatForUser(u);
+                                                    msgService.sendMessage(
+                                                      chat.id,
+                                                      'Selam! Radar üzerinden eşleştik 👋',
+                                                      receiverUserId: u.id,
+                                                    );
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(
+                                                        content: Text('${u.name} kişisine selam gönderildi! ⚡ Mesajlar sekmesinden devam edebilirsiniz.'),
+                                                        backgroundColor: AppColors.primary,
+                                                        behavior: SnackBarBehavior.floating,
+                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                      ),
+                                                    );
+                                                    Navigator.pop(context);
+                                                  },
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: Colors.transparent,
+                                                    shadowColor: Colors.transparent,
+                                                    elevation: 0,
+                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                  ),
+                                                  icon: const Icon(Icons.waving_hand, color: Colors.white, size: 14),
+                                                  label: const Text('Selam', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          if (u.tags.isNotEmpty) ...[
+                                            const SizedBox(height: 12),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 6,
+                                              children: u.tags.map((t) => Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primary.withOpacity(0.15),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                                                ),
+                                                child: Text(t, style: TextStyle(color: AppColors.primaryVariant, fontSize: 11, fontWeight: FontWeight.w600)),
+                                              )).toList(),
                                             ),
                                           ],
-                                        ),
-                                        if (u.tags.isNotEmpty) ...[
-                                          const SizedBox(height: 12),
-                                          Wrap(
-                                            spacing: 6,
-                                            runSpacing: 6,
-                                            children: u.tags.map((t) => Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: AppColors.primary.withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(10),
-                                                border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                                              ),
-                                              child: Text(t, style: TextStyle(color: AppColors.primaryVariant, fontSize: 11, fontWeight: FontWeight.w600)),
-                                            )).toList(),
-                                          ),
                                         ],
-                                      ],
+                                      ),
                                     ),
                                   );
                                 },

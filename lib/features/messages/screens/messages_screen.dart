@@ -184,7 +184,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   Widget _buildSlidableChatTile(BuildContext context, ChatModel chat, MockMessageService service) {
     final lastMsg = chat.lastMessage;
-    final isFollowing = service.isFollowing(chat.participant.id);
     final isBlocked = service.isBlocked(chat.participant.id);
 
     String timeStr = '';
@@ -315,20 +314,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       )
                     : null,
               ),
-              if (service.isUserOnline(chat.participant.id, chat.participant.name))
-                Positioned(
-                  right: 0,
-                  bottom: 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: Colors.greenAccent.shade400,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.surface, width: 2),
-                    ),
-                  ),
-                ),
             ],
           ),
         ),

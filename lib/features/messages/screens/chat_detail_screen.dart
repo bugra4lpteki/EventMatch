@@ -137,7 +137,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final msgService = context.watch<MockMessageService>();
-    final isFollowing = msgService.isFollowing(widget.chat.participant.id);
     final isBlocked = msgService.isBlocked(widget.chat.participant.id);
 
     final currentChat = msgService.individualChats.firstWhere(
@@ -207,26 +206,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Icon(Icons.arrow_forward_ios_rounded, size: 11, color: AppColors.primary),
                       ],
                     ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: msgService.isUserOnline(currentChat.participant.id, currentChat.participant.name) ? Colors.greenAccent : Colors.white38,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          msgService.isUserOnline(currentChat.participant.id, currentChat.participant.name) ? 'Çevrimiçi' : 'Çevrimdışı',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: msgService.isUserOnline(currentChat.participant.id, currentChat.participant.name) ? Colors.greenAccent.shade400 : AppColors.textSecondary,
-                            fontWeight: msgService.isUserOnline(currentChat.participant.id, currentChat.participant.name) ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      'Profili Gör',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),

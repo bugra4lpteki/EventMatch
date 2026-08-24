@@ -6,7 +6,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../auth/services/auth_service.dart';
 import '../../events/services/moderation_service.dart';
-import '../../messages/services/mock_message_service.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -18,7 +17,6 @@ class PrivacySettingsScreen extends StatefulWidget {
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _isPrivateProfile = false;
   bool _hideEventActivity = false;
-  bool _hideLastSeen = false;
   bool _enableLocationSharing = true;
 
   @override
@@ -43,9 +41,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       _hideEventActivity = prefs.getBool('${userId}_privacy_hide_events') ??
                           prefs.getBool('${userName}_privacy_hide_events') ??
                           prefs.getBool('privacy_hide_events') ?? false;
-      _hideLastSeen = prefs.getBool('${userId}_privacy_hide_last_seen') ??
-                      prefs.getBool('${userName}_privacy_hide_last_seen') ??
-                      prefs.getBool('privacy_hide_last_seen') ?? false;
       _enableLocationSharing = prefs.getBool('${userId}_privacy_location_sharing') ??
                                prefs.getBool('${userName}_privacy_location_sharing') ??
                                prefs.getBool('privacy_location_sharing') ?? true;
@@ -71,13 +66,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     eventService.updatePrivacySettings(
       privateProfile: key == 'privacy_private_profile' ? value : null,
       hideEvents: key == 'privacy_hide_events' ? value : null,
-      hideLastSeen: key == 'privacy_hide_last_seen' ? value : null,
       locationSharing: key == 'privacy_location_sharing' ? value : null,
     );
-
-    if (key == 'privacy_hide_last_seen' && mounted) {
-      context.read<MockMessageService>().toggleHideOnlineStatus(value);
-    }
   }
 
   @override
@@ -121,14 +111,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   subtitle: 'Katıldığınız konser ve buluşmalar akışınızda gizlenir.',
                   value: _hideEventActivity,
                   onChanged: (val) => _updateSetting('privacy_hide_events', val, (v) => _hideEventActivity = v),
-                ),
-                Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
-                _buildPrivacyTile(
-                  icon: Icons.access_time_rounded,
-                  title: 'Son Görülme ve Çevrimiçi',
-                  subtitle: 'Diğer kullanıcılar ne zaman aktif olduğunuzu göremez.',
-                  value: _hideLastSeen,
-                  onChanged: (val) => _updateSetting('privacy_hide_last_seen', val, (v) => _hideLastSeen = v),
                 ),
                 Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                 _buildPrivacyTile(

@@ -169,12 +169,13 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                     onTap: () {
                       _showLegalModal(
                         context,
-                        'Kullanıcı Sözleşmesi',
-                        'EventMatch Kullanım Şartları ve Hizmet Sözleşmesi:\n\n'
-                        '1. Taraf Hakları: EventMatch platformunu kullanarak diğer kullanıcılarla saygı çerçevesinde iletişim kurmayı kabul etmiş sayılırsınız.\n\n'
-                        '2. Etkinlik Katılımı: Etkinlik sahipleri ve katılımcıları etkinlik kurallarına uymakla yükümlüdür. Yanıltıcı veya uygunsuz içerik barındıran etkinlikler sistemden silinir.\n\n'
-                        '3. Sorumluluk Sınırı: EventMatch, 3. taraf bilet sağlayıcılarının (Biletix, Bubilet vb.) sunduğu hizmetlerin kesintisinden doğrudan sorumlu tutulamaz.\n\n'
-                        '4. Yaş Sınırı: Hizmetlerimizden faydalanmak için en az 18 yaşında olmanız gerekmektedir.\n\n'
+                        'Kullanıcı Sözleşmesi (EULA)',
+                        'EventMatch Son Kullanıcı Lisans Sözleşmesi (EULA) & Kullanım Şartları:\n\n'
+                        '1. Sıfır Tolerans Politikası (UGC): EventMatch platformunda taciz edici, hakaret içeren, müstehcen, nefret söylemi barındıran veya yasadışı hiçbir kullanıcı içeriğine veya davranışına tolerans gösterilmez (Zero Tolerance Policy).\n\n'
+                        '2. Moderasyon & Şikayet İnceleme: Kullanıcılar tarafından şikayet edilen veya uygunsuz bulunan içerik ve hesaplar, moderasyon ekibimiz tarafından en geç 24 saat içerisinde incelenir, gerekli görüldüğünde içerik kaldırılır ve ilgili hesap kalıcı olarak engellenir/yasaklanır.\n\n'
+                        '3. Engelleme & Güvenlik: Her kullanıcı, rahatsızlık duyduğu diğer kullanıcıları anında engelleme ve şikayet etme hakkına ve aracına sahiptir. Engellenen kullanıcılar birbirlerinin profillerini ve mesajlarını göremez.\n\n'
+                        '4. Etkinlik Kuralları: Etkinlik oluşturucuları ve katılımcıları topluluk kurallarına uymakla yükümlüdür.\n\n'
+                        '5. Yaş Sınırı: Hizmetlerimizden faydalanmak için en az 18 yaşında olmanız gerekmektedir.\n\n'
                         'Tüm hakları saklıdır. © 2026 EventMatch Inc.',
                       );
                     },

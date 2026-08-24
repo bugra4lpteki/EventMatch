@@ -43,3 +43,7 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Screenshot & utility artifacts
+resize_*.py
+screenshots_*/

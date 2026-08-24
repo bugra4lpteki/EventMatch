@@ -3,15 +3,15 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
+	<string>EventMatch, yakınınızdaki konser, festival ve etkinlikleri haritada görüntülemek ve etkinlik alanındaki diğer katılımcılarla eşleşebilmenizi sağlamak için konumunuza erişir.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
+	<string>EventMatch, katıldığınız etkinlik alanına yaklaştığınızda bildirim göndermek ve çevre etkinlikleri listelemek için konumunuza erişir.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Etkinliklerdeki diğer kişileri görebilmek ve eşleşebilmek için konumunuza ihtiyacımız var.</string>
+	<string>EventMatch, yakınınızdaki canlı etkinlikleri göstermek ve etkinlik alanındaki eşleşmeleri bildirmek için konumunuza erişir.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Profil fotoğrafınızı seçebilmeniz için fotoğraf galerinize erişim izni gerekmektedir.</string>
+	<string>EventMatch, profilinizi özelleştirmek ve diğer katılımcılara göstermek amacıyla profil fotoğrafı seçebilmeniz için fotoğraf galerinize erişim izni gerektirir.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Profil fotoğrafı çekebilmeniz için kameranıza erişim izni gerekmektedir.</string>
+	<string>EventMatch, profil fotoğrafınızı doğrudan kameranızla çekip yükleyebilmeniz için kamera erişim izni gerektirir.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

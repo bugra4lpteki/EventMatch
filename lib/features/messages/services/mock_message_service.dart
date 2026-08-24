@@ -26,11 +26,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   final Set<String> _blockedUserIds = {};
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
-  final Set<String> _onlineUserIds = {};
-  final Map<String, DateTime> _lastSeenMap = {};
-  Timer? _presenceHeartbeatTimer;
-  bool _hideOnlineStatus = false;
-  bool get hideOnlineStatus => _hideOnlineStatus;
   
   // Canlı oda stream kontrolcüleri (Persistent StreamController)
   final Map<String, StreamController<List<MessageModel>>> _roomStreamControllers = {};
@@ -38,7 +33,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   RealtimeChannel? _messagesChannel;
   RealtimeChannel? _matchesChannel;
   RealtimeChannel? _broadcastChannel;
-  RealtimeChannel? _presenceChannel;
   StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool get isLoading => _isLoading;
@@ -52,53 +46,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   List<ChatModel> get archivedChats => _chats
       .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && c.isArchived)
       .toList();
-
-  bool isUserOnline(String userId, [String? userName]) {
-    if (userId.isEmpty) return false;
-    final lowerId = userId.toLowerCase();
-    final lowerMe = currentUserId.toLowerCase();
-    final myName = _eventService.currentUser.name.toLowerCase();
-
-    // 1. Kendi kullanıcımız ise ve gizlilik modu kapalıysa her zaman aktif / çevrimiçi
-    final isMe = lowerId == lowerMe || (userName != null && userName.toLowerCase() == myName);
-    if (isMe) {
-      return !_hideOnlineStatus;
-    }
-
-    // 2. Realtime presence odasında kayıtlı mı?
-    if (_onlineUserIds.contains(lowerId)) return true;
-    if (userName != null && userName.isNotEmpty && _onlineUserIds.contains(userName.toLowerCase())) {
-      return true;
-    }
-
-    // 3. Son 2 dakika içinde aktiflik sinyali / mesaj / heartbeat verdi mi?
-    final lastSeen = _lastSeenMap[lowerId] ?? (userName != null ? _lastSeenMap[userName.toLowerCase()] : null);
-    if (lastSeen != null && DateTime.now().difference(lastSeen).inMinutes < 2) {
-      return true;
-    }
-
-    return false;
-  }
-
-  Future<void> toggleHideOnlineStatus(bool hide) async {
-    _hideOnlineStatus = hide;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('privacy_hide_last_seen', hide);
-      await prefs.setBool('${currentUserId}_privacy_hide_last_seen', hide);
-      
-      if (hide) {
-        try {
-          await _presenceChannel?.untrack();
-          _onlineUserIds.remove(currentUserId.toLowerCase());
-          _onlineUserIds.remove(_eventService.currentUser.name.toLowerCase());
-        } catch (_) {}
-      } else {
-        await _trackMyPresence();
-      }
-    } catch (_) {}
-    notifyListeners();
-  }
 
   void toggleArchiveChat(String chatId) {
     final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
@@ -127,22 +74,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _trackMyPresence();
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached || state == AppLifecycleState.inactive) {
-      try {
-        _presenceChannel?.untrack();
-      } catch (_) {}
-    }
+    // App lifecycle monitoring without presence tracking
   }
 
   Future<void> _initService() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      _hideOnlineStatus = prefs.getBool('${currentUserId}_privacy_hide_last_seen') ??
-                          prefs.getBool('privacy_hide_last_seen') ?? false;
-    } catch (_) {}
-
     await _loadChatsFromLocalStorage();
     await reloadChats();
     _subscribeToRealtime();
@@ -158,7 +93,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         _blockedUserIds.clear();
         _followingUserIds.clear();
         _deletedChatIds.clear();
-        _onlineUserIds.clear();
         notifyListeners();
       }
     });
@@ -282,176 +216,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             debugPrint('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status');
           });
 
-      // 4. Realtime Presence Channel (Online Status)
-      _presenceChannel = _supabase.channel('eventmatch_presence_channel');
-      _presenceChannel!
-          .onPresenceSync((_) {
-            try {
-              final dynamic state = _presenceChannel!.presenceState();
-              final online = <String>{};
-
-              if (state is List) {
-                for (var entry in state) {
-                  try {
-                    for (var p in (entry as dynamic).presences) {
-                      final payload = p.payload as Map?;
-                      final uId = payload?['user_id']?.toString().toLowerCase();
-                      final uName = payload?['user_name']?.toString().toLowerCase();
-                      if (uId != null && uId.isNotEmpty) {
-                        online.add(uId);
-                        _lastSeenMap[uId] = DateTime.now();
-                      }
-                      if (uName != null && uName.isNotEmpty) {
-                        online.add(uName);
-                        _lastSeenMap[uName] = DateTime.now();
-                      }
-                    }
-                  } catch (_) {
-                    try {
-                      final payload = (entry as dynamic).payload as Map?;
-                      final uId = payload?['user_id']?.toString().toLowerCase();
-                      final uName = payload?['user_name']?.toString().toLowerCase();
-                      if (uId != null && uId.isNotEmpty) {
-                        online.add(uId);
-                        _lastSeenMap[uId] = DateTime.now();
-                      }
-                      if (uName != null && uName.isNotEmpty) {
-                        online.add(uName);
-                        _lastSeenMap[uName] = DateTime.now();
-                      }
-                    } catch (_) {}
-                  }
-                }
-              } else if (state is Map) {
-                for (var presences in state.values) {
-                  if (presences is List) {
-                    for (var p in presences) {
-                      try {
-                        final payload = (p as dynamic).payload as Map?;
-                        final uId = payload?['user_id']?.toString().toLowerCase();
-                        final uName = payload?['user_name']?.toString().toLowerCase();
-                        if (uId != null && uId.isNotEmpty) {
-                          online.add(uId);
-                          _lastSeenMap[uId] = DateTime.now();
-                        }
-                        if (uName != null && uName.isNotEmpty) {
-                          online.add(uName);
-                          _lastSeenMap[uName] = DateTime.now();
-                        }
-                      } catch (_) {}
-                    }
-                  }
-                }
-              }
-
-              _onlineUserIds.clear();
-              _onlineUserIds.addAll(online);
-              if (!_hideOnlineStatus) {
-                _onlineUserIds.add(currentUserId.toLowerCase());
-                _onlineUserIds.add(_eventService.currentUser.name.toLowerCase());
-              }
-              for (var c in _chats) {
-                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
-              }
-              notifyListeners();
-            } catch (e) {
-              debugPrint('[MessageService] Presence sync parse error: $e');
-            }
-          })
-          .onPresenceJoin((payload) {
-            try {
-              final newPresences = payload.newPresences;
-              for (var p in newPresences) {
-                final uId = p.payload['user_id']?.toString().toLowerCase();
-                final uName = p.payload['user_name']?.toString().toLowerCase();
-                if (uId != null && uId.isNotEmpty) {
-                  _onlineUserIds.add(uId);
-                  _lastSeenMap[uId] = DateTime.now();
-                }
-                if (uName != null && uName.isNotEmpty) {
-                  _onlineUserIds.add(uName);
-                  _lastSeenMap[uName] = DateTime.now();
-                }
-              }
-              for (var c in _chats) {
-                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
-              }
-              notifyListeners();
-            } catch (e) {
-              debugPrint('[MessageService] Presence join parse error: $e');
-            }
-          })
-          .onPresenceLeave((payload) {
-            try {
-              final leftPresences = payload.leftPresences;
-              for (var p in leftPresences) {
-                final uId = p.payload['user_id']?.toString().toLowerCase();
-                final uName = p.payload['user_name']?.toString().toLowerCase();
-                if (uId != null) _onlineUserIds.remove(uId);
-                if (uName != null) _onlineUserIds.remove(uName);
-              }
-              for (var c in _chats) {
-                c.isOnline = isUserOnline(c.participant.id, c.participant.name);
-              }
-              notifyListeners();
-            } catch (e) {
-              debugPrint('[MessageService] Presence leave parse error: $e');
-            }
-          })
-          .subscribe((status, [error]) {
-            if (status == RealtimeSubscribeStatus.subscribed) {
-              _trackMyPresence();
-            }
-          });
-
-      // Periyodik presence nabız (heartbeat)
-      _presenceHeartbeatTimer?.cancel();
-      _presenceHeartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-        _trackMyPresence();
-      });
-
-      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları ve Presence aktif.');
+      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
-  Future<void> _trackMyPresence() async {
-    if (_hideOnlineStatus) return;
-    final id = currentUserId.toLowerCase();
-    final name = _eventService.currentUser.name.toLowerCase();
-
-    if (id.isNotEmpty) {
-      _onlineUserIds.add(id);
-      _lastSeenMap[id] = DateTime.now();
-    }
-    if (name.isNotEmpty) {
-      _onlineUserIds.add(name);
-      _lastSeenMap[name] = DateTime.now();
-    }
-
-    if (id.isNotEmpty && _presenceChannel != null) {
-      try {
-        await _presenceChannel?.track({
-          'user_id': id,
-          'user_name': name,
-          'online_at': DateTime.now().toUtc().toIso8601String(),
-        });
-      } catch (e) {
-        debugPrint('[MessageService] ⚠️ Track presence error: $e');
-      }
-    }
-  }
-
   void _unsubscribeFromRealtime() {
     try {
-      _presenceHeartbeatTimer?.cancel();
-      _presenceHeartbeatTimer = null;
-      try {
-        _presenceChannel?.untrack();
-      } catch (_) {}
-      _presenceChannel?.unsubscribe();
-      _presenceChannel = null;
       _broadcastChannel?.unsubscribe();
       _broadcastChannel = null;
       _messagesChannel?.unsubscribe();
@@ -466,16 +238,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   void _handleBroadcastMessage(Map<String, dynamic> payload) {
     try {
       final senderId = (payload['sender_id']?.toString() ?? payload['user_id']?.toString() ?? '').toLowerCase();
-      final senderName = (payload['user_name']?.toString() ?? '').toLowerCase();
-      if (senderId.isNotEmpty) {
-        _lastSeenMap[senderId] = DateTime.now();
-        _onlineUserIds.add(senderId);
-      }
-      if (senderName.isNotEmpty) {
-        _lastSeenMap[senderName] = DateTime.now();
-        _onlineUserIds.add(senderName);
-      }
-
       final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase();
       final content = payload['content']?.toString() ?? '';
       final msgId = payload['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';

@@ -11,7 +11,6 @@ import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/widgets/vibe_check_widget.dart';
 import '../../../core/widgets/report_block_sheet.dart';
-import '../../messages/services/mock_message_service.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -25,7 +24,6 @@ class UserProfileScreen extends StatefulWidget {
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
   int _currentPhotoIndex = 0;
-  bool _targetUserHideLastSeen = false;
   bool _targetUserHideEvents = false;
   bool _targetUserPrivateProfile = false;
 
@@ -39,11 +37,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     final user = widget.user;
 
-    final hideLastSeenPref = prefs.getBool('${user.id}_privacy_hide_last_seen') ??
-                             prefs.getBool('${user.name}_privacy_hide_last_seen') ??
-                             (user.username != null ? prefs.getBool('${user.username}_privacy_hide_last_seen') : null) ??
-                             user.hideLastSeen;
-
     final hideEventsPref = prefs.getBool('${user.id}_privacy_hide_events') ??
                            prefs.getBool('${user.name}_privacy_hide_events') ??
                            (user.username != null ? prefs.getBool('${user.username}_privacy_hide_events') : null) ??
@@ -56,7 +49,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     if (mounted) {
       setState(() {
-        _targetUserHideLastSeen = hideLastSeenPref;
         _targetUserHideEvents = hideEventsPref;
         _targetUserPrivateProfile = privateProfilePref;
       });
@@ -212,7 +204,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final matchService = context.watch<MockMatchService>();
     final user = widget.user;
     final isCurrentUser = (user.id == eventService.currentUser.id || user.name == eventService.currentUser.name);
-    final hideLastSeen = isCurrentUser ? eventService.currentUser.hideLastSeen : (_targetUserHideLastSeen || user.hideLastSeen);
     final hideEvents = isCurrentUser ? false : (_targetUserHideEvents || user.hideEvents);
     final isPrivateProfile = isCurrentUser ? false : (_targetUserPrivateProfile || user.isPrivateProfile);
 
@@ -227,8 +218,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
     // Sadece kullanıcının gerçekten eklediği sosyal medya bağlantıları
     final socialLinks = user.socialLinks;
-    final msgService = context.watch<MockMessageService>();
-    final isOnline = isCurrentUser ? !msgService.hideOnlineStatus : msgService.isUserOnline(user.id, user.name);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -414,47 +403,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ),
                     ],
                   ),
-                  if (!hideLastSeen && !isPrivateProfile) ...[
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            color: isOnline ? Colors.greenAccent : Colors.white30,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isOnline ? 'Çevrimiçi' : 'Çevrimdışı',
-                          style: TextStyle(
-                            color: isOnline ? Colors.greenAccent : AppColors.textSecondary,
-                            fontSize: 14,
-                            fontWeight: isOnline ? FontWeight.w600 : FontWeight.w400,
-                          ),
-                        ),
-                        if (user.points > 0) ...[
-                          const SizedBox(width: 16),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${user.points} PUAN',
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ] else if (user.points > 0) ...[
+                  if (user.points > 0) ...[
                     const SizedBox(height: 10),
                     Row(
                       children: [

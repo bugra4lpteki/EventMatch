@@ -11,7 +11,6 @@ import '../../events/models/event_model.dart';
 import '../../events/screens/event_detail_screen.dart';
 import 'edit_profile_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
-import '../../messages/services/mock_message_service.dart';
 import 'dart:async';
 
 class ProfileScreen extends StatefulWidget {
@@ -210,58 +209,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              Builder(
-                                builder: (context) {
-                                  final msgService = context.watch<MockMessageService>();
-                                  final isOnline = !msgService.hideOnlineStatus;
-
-                                  if (!user.hideLastSeen && !user.isPrivateProfile) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 10),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 9,
-                                            height: 9,
-                                            decoration: BoxDecoration(
-                                              color: isOnline ? const Color(0xFF4CAF50) : Colors.white30,
-                                              shape: BoxShape.circle,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            isOnline ? 'Çevrimiçi' : 'Çevrimdışı',
-                                            style: TextStyle(
-                                              color: isOnline ? const Color(0xFF4CAF50) : AppColors.textSecondary,
-                                              fontSize: 13,
-                                              fontWeight: isOnline ? FontWeight.w600 : FontWeight.w400,
-                                            ),
-                                          ),
-                                        ],
+                              if (user.isPrivateProfile)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'Gizli Hesap',
+                                        style: TextStyle(
+                                          color: AppColors.primaryVariant,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
-                                    );
-                                  } else if (user.isPrivateProfile) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(top: 10),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'Gizli Hesap',
-                                            style: TextStyle(
-                                              color: AppColors.primaryVariant,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }
-                                  return const SizedBox.shrink();
-                                },
-                              ),
+                                    ],
+                                  ),
+                                ),
                             ],
                           ),
                         ),
