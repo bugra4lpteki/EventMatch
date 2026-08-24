@@ -8,6 +8,7 @@ import '../../../core/services/notification_service.dart';
 import '../models/message_model.dart';
 import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
+import '../../events/services/mock_match_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 
 class ChatDetailScreen extends StatefulWidget {
