@@ -4,6 +4,12 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Top-level background message handler (Background / Terminated State)
+@pragma('vm:entry-point')
+Future<void> firebaseMessagingBackgroundHandler(Map<String, dynamic> message) async {
+  debugPrint('[NotificationService] 🌙 Arka plan bildirimi yakalandı: ${message.toString()}');
+}
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -14,7 +20,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
-  /// Kullanıcının şu an aktif olarak açık tuttuğu sohbet ID'si (Açıkken bildirim sesi/banner'ı bastırılır)
+  /// Kullanıcının açık tuttuğu aktif sohbet (Bu sohbet açıkken ses/banner bastırılır)
   String? activeChatId;
 
   Future<void> initialize() async {
@@ -44,9 +50,9 @@ class NotificationService {
       );
 
       _isInitialized = true;
-      debugPrint('[NotificationService] 🔔 WhatsApp tarzı Bildirim Servisi hazırlandı.');
+      debugPrint('[NotificationService] 🔔 Bildirim Servisi başarıyla başlatıldı.');
     } catch (e) {
-      debugPrint('[NotificationService] Initialization error: $e');
+      debugPrint('[NotificationService] ❌ Başlatma hatası: $e');
     }
   }
 
@@ -60,12 +66,13 @@ class NotificationService {
       if (supabase.auth.currentUser != null) {
         await supabase.from('users').update({
           'push_token': pushToken,
+          'fcm_token': pushToken,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', userId);
-        debugPrint('[NotificationService] 📱 Push token veritabanında güncellendi.');
+        debugPrint('[NotificationService] 📱 Push token veritabanında users/$userId/fcm_token olarak kaydedildi.');
       }
     } catch (e) {
-      debugPrint('[NotificationService] Push token register error: $e');
+      debugPrint('[NotificationService] ❌ Push token register hatası: $e');
     }
   }
 
@@ -74,11 +81,9 @@ class NotificationService {
     required String chatId,
     required String senderName,
     required String message,
-    String? avatarUrl,
   }) async {
-    // Eğer kullanıcı zaten bu sohbetteyse bildirimi bastır (WhatsApp mantığı)
     if (activeChatId != null && (activeChatId == chatId || activeChatId!.toLowerCase() == chatId.toLowerCase())) {
-      debugPrint('[NotificationService] 🔕 Kullanıcı aktif sohbette, bildirim bastırıldı.');
+      debugPrint('[NotificationService] 🔕 Kullanıcı aktif sohbette ($chatId), bildirim bastırıldı.');
       return;
     }
 
@@ -97,7 +102,6 @@ class NotificationService {
       category: AndroidNotificationCategory.message,
       enableVibration: true,
       playSound: true,
-      styleInformation: DefaultStyleInformation(true, true),
     );
 
     const iosDetails = DarwinNotificationDetails(
@@ -115,44 +119,14 @@ class NotificationService {
     try {
       await _notificationsPlugin.show(
         chatId.hashCode,
-        senderName,
+        '💬 $senderName',
         message,
         details,
         payload: 'chat_$chatId',
       );
+      debugPrint('[NotificationService] 📢 Bildirim gösterildi: $senderName -> $message');
     } catch (e) {
-      debugPrint('[NotificationService] Show message error: $e');
-    }
-  }
-
-  /// Yeni Eşleşme Bildirimi
-  Future<void> showMatchNotification(String userName, String userId) async {
-    if (kIsWeb) return;
-
-    const androidDetails = AndroidNotificationDetails(
-      'event_match_matches_channel',
-      'Eşleşme Bildirimleri',
-      channelDescription: 'Yeni eşleşme ve beğeni bildirimleri',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
-    );
-
-    try {
-      await _notificationsPlugin.show(
-        DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        '🎉 Tebrikler, Yeni Bir Eşleşme!',
-        '$userName ile eşleştiniz. Hemen sohbete başlayın! ⚡',
-        details,
-        payload: 'match_$userId',
-      );
-    } catch (e) {
-      debugPrint('[NotificationService] Show match error: $e');
+      debugPrint('[NotificationService] ❌ Bildirim gösterme hatası: $e');
     }
   }
 }

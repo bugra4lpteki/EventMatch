@@ -26,7 +26,7 @@ class MockMessageService extends ChangeNotifier {
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
   
-  // Canlı oda stream kontrolcüleri (Bellek sızıntısız persistent StreamController)
+  // Canlı oda stream kontrolcüleri (Persistent StreamController)
   final Map<String, StreamController<List<MessageModel>>> _roomStreamControllers = {};
 
   RealtimeChannel? _messagesChannel;
@@ -69,11 +69,12 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  // --- STREAM REGISTRY (Persistent StreamBuilder Provider) ---
+  // --- STREAM REGISTRY & DIAGNOSTICS ---
 
   Stream<List<MessageModel>> getMessagesStream(String partnerId) {
     final lowerPartnerId = partnerId.toLowerCase();
-    
+    debugPrint('--> DİNLENEN YOL: chats/$partnerId/messages (currentUser: $currentUserId)');
+
     if (!_roomStreamControllers.containsKey(lowerPartnerId) || _roomStreamControllers[lowerPartnerId]!.isClosed) {
       _roomStreamControllers[lowerPartnerId] = StreamController<List<MessageModel>>.broadcast();
     }
@@ -81,10 +82,10 @@ class MockMessageService extends ChangeNotifier {
     final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
     final initialList = chatIndex >= 0 ? List<MessageModel>.from(_chats[chatIndex].messages) : <MessageModel>[];
 
-    // İlk mevcut durumu microtask ile hemen yayına ver
     Future.microtask(() {
       if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
         _roomStreamControllers[lowerPartnerId]!.add(initialList);
+        debugPrint('--> YENİ SNAPSHOT GELDİ: ${initialList.length} adet mesaj (Oda: $partnerId)');
       }
     });
 
@@ -98,11 +99,12 @@ class MockMessageService extends ChangeNotifier {
       final freshList = List<MessageModel>.from(_chats[chatIndex].messages);
       if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
         _roomStreamControllers[lowerPartnerId]!.add(freshList);
+        debugPrint('--> YENİ SNAPSHOT GELDİ: ${freshList.length} adet mesaj (Canlı Akış Emit Edildi)');
       }
     }
   }
 
-  // --- LOCAL CACHING (0ms Restart Loading) ---
+  // --- LOCAL CACHING ---
 
   String _getCacheKey() {
     final id = currentUserId;
@@ -123,7 +125,7 @@ class MockMessageService extends ChangeNotifier {
           try {
             loadedChats.add(ChatModel.fromMap(Map<String, dynamic>.from(item)));
           } catch (e) {
-            debugPrint('[MessageService] Chat parse error: $e');
+            debugPrint('MODEL PARSE HATASI: $e');
           }
         }
 
@@ -172,7 +174,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      // 2. Postgres Changes Channel
+      // 2. Postgres CDC Stream
       _messagesChannel = _supabase
           .channel('public_messages_stream')
           .onPostgresChanges(
@@ -199,7 +201,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      debugPrint('[MessageService] 🚀 Multi-layer realtime channels connected.');
+      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
@@ -247,7 +249,6 @@ class MockMessageService extends ChangeNotifier {
         timestamp: timestamp,
       );
 
-      // Karşı taraftan geldiyse bildirim tetikle (aktif sohbetteyse bastırılır)
       if (senderId.toLowerCase() != currentId.toLowerCase()) {
         final chat = _chats.firstWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase(),
             orElse: () => createOrGetChatForUser(UserModel(id: partnerId, name: 'Yeni Mesaj', avatarUrl: '')));
@@ -466,38 +467,42 @@ class MockMessageService extends ChangeNotifier {
         bool hasNew = false;
 
         for (var row in res) {
-          final s = (row['sender_id']?.toString() ?? '').toLowerCase();
-          final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
-          final mIdMatch = row['match_id']?.toString();
+          try {
+            final s = (row['sender_id']?.toString() ?? '').toLowerCase();
+            final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+            final mIdMatch = row['match_id']?.toString();
 
-          final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
-                                (s == lowerPartner && r == lowerCurrent) ||
-                                (mIdMatch != null && (mIdMatch == chat.id || (int.tryParse(chat.id) != null && mIdMatch == chat.id)));
+            final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
+                                  (s == lowerPartner && r == lowerCurrent) ||
+                                  (mIdMatch != null && (mIdMatch == chat.id || (int.tryParse(chat.id) != null && mIdMatch == chat.id)));
 
-          if (!isForThisChat) continue;
+            if (!isForThisChat) continue;
 
-          final mId = row['id']?.toString() ?? '';
-          final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
-          final sender = row['sender_id']?.toString() ?? '';
-          final receiver = row['receiver_id']?.toString() ?? '';
-          final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now();
+            final mId = row['id']?.toString() ?? '';
+            final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
+            final sender = row['sender_id']?.toString() ?? '';
+            final receiver = row['receiver_id']?.toString() ?? '';
+            final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now();
 
-          if (text.trim().isEmpty) continue;
+            if (text.trim().isEmpty) continue;
 
-          final existingMsgIndex = chat.messages.indexWhere((m) =>
-              m.id == mId ||
-              (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3));
+            final existingMsgIndex = chat.messages.indexWhere((m) =>
+                m.id == mId ||
+                (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3));
 
-          if (existingMsgIndex < 0) {
-            chat.messages.add(MessageModel(
-              id: mId,
-              senderId: sender,
-              receiverId: receiver,
-              text: text,
-              timestamp: ts,
-              status: MessageStatus.delivered,
-            ));
-            hasNew = true;
+            if (existingMsgIndex < 0) {
+              chat.messages.add(MessageModel(
+                id: mId,
+                senderId: sender,
+                receiverId: receiver,
+                text: text,
+                timestamp: ts,
+                status: MessageStatus.delivered,
+              ));
+              hasNew = true;
+            }
+          } catch (e) {
+            debugPrint('MODEL PARSE HATASI: $e');
           }
         }
 
@@ -645,17 +650,21 @@ class MockMessageService extends ChangeNotifier {
 
         if (match['messages'] != null && match['messages'] is List) {
           for (var msg in match['messages']) {
-            final msgModel = MessageModel(
-              id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
-              senderId: msg['sender_id']?.toString() ?? '',
-              receiverId: msg['receiver_id']?.toString(),
-              text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
-              timestamp: msg['created_at'] != null
-                  ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
-                  : DateTime.now(),
-              status: MessageStatus.delivered,
-            );
-            messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+            try {
+              final msgModel = MessageModel(
+                id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+                senderId: msg['sender_id']?.toString() ?? '',
+                receiverId: msg['receiver_id']?.toString(),
+                text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+                timestamp: msg['created_at'] != null
+                    ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+                    : DateTime.now(),
+                status: MessageStatus.delivered,
+              );
+              messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+            } catch (e) {
+              debugPrint('MODEL PARSE HATASI: $e');
+            }
           }
         }
       }
@@ -665,18 +674,22 @@ class MockMessageService extends ChangeNotifier {
         final receiver = msg['receiver_id']?.toString() ?? '';
         final partnerId = (sender.toLowerCase() == currentId.toLowerCase() ? receiver : sender).toLowerCase();
 
-        final msgModel = MessageModel(
-          id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
-          senderId: sender,
-          receiverId: receiver,
-          text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
-          timestamp: msg['created_at'] != null
-              ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
-              : DateTime.now(),
-          status: MessageStatus.delivered,
-        );
+        try {
+          final msgModel = MessageModel(
+            id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+            senderId: sender,
+            receiverId: receiver,
+            text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+            timestamp: msg['created_at'] != null
+                ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+                : DateTime.now(),
+            status: MessageStatus.delivered,
+          );
 
-        messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+          messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+        } catch (e) {
+          debugPrint('MODEL PARSE HATASI: $e');
+        }
       }
 
       final Map<String, ChatModel> consolidatedChats = {};
@@ -820,6 +833,8 @@ class MockMessageService extends ChangeNotifier {
         _emitRoomUpdate(partnerId);
         notifyListeners();
 
+        debugPrint('--> MESAJ YAZILAN YOL: chats/$chatId/messages | sender: $currentId, receiver: $partnerId');
+
         _broadcastChannel?.sendBroadcastMessage(
           event: 'new_message',
           payload: {
@@ -891,7 +906,7 @@ class MockMessageService extends ChangeNotifier {
       }
 
       await _supabase.from('messages').insert(messagePayload);
-      debugPrint('[MessageService] ✉️ Mesaj Supabase veritabanına kalıcı kaydedildi.');
+      debugPrint('[MessageService] ✉️ Mesaj veritabanına kalıcı kaydedildi.');
     } catch (e) {
       debugPrint('[MessageService] ❌ Supabase message persist error: $e');
     }
