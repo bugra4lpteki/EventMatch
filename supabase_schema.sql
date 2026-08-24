@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   hide_events BOOLEAN DEFAULT FALSE,
   enable_location_sharing BOOLEAN DEFAULT TRUE,
   points INT DEFAULT 100,
+  push_token TEXT,
+  fcm_token TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 

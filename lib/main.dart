@@ -11,6 +11,8 @@ import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
 import 'core/services/notification_service.dart';
 import 'features/messages/services/mock_message_service.dart';
+import 'features/messages/screens/chat_detail_screen.dart';
+import 'features/events/models/user_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_config.dart';
 
@@ -93,14 +95,54 @@ void main() async {
   );
 }
 
-class EventMatchApp extends StatelessWidget {
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+class EventMatchApp extends StatefulWidget {
   const EventMatchApp({super.key});
+
+  @override
+  State<EventMatchApp> createState() => _EventMatchAppState();
+}
+
+class _EventMatchAppState extends State<EventMatchApp> {
+  @override
+  void initState() {
+    super.initState();
+    _setupNotificationNavigation();
+  }
+
+  void _setupNotificationNavigation() {
+    NotificationService.onNotificationClick.stream.listen((payload) {
+      if (payload != null && payload.startsWith('chat_')) {
+        final partnerId = payload.replaceFirst('chat_', '');
+        if (partnerId.isNotEmpty && navigatorKey.currentState != null) {
+          final context = navigatorKey.currentContext;
+          if (context != null) {
+            final msgService = context.read<MockMessageService>();
+            final chat = msgService.individualChats.firstWhere(
+              (c) => c.id == partnerId || c.participant.id.toLowerCase() == partnerId.toLowerCase(),
+              orElse: () => msgService.createOrGetChatForUser(
+                UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''),
+              ),
+            );
+
+            navigatorKey.currentState?.push(
+              MaterialPageRoute(
+                builder: (_) => ChatDetailScreen(chat: chat),
+              ),
+            );
+          }
+        }
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ThemeService>(
       builder: (context, themeService, child) {
         return MaterialApp(
+          navigatorKey: navigatorKey,
           title: 'EventMatch',
           theme: AppTheme.darkTheme,
           debugShowCheckedModeBanner: false,
