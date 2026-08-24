@@ -70,57 +70,90 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
-  // --- DIRECT SUPABASE REACTIVE STREAM API ---
+  // --- HİBRİT REACTIVE STREAM + CONTROLLER MOTORU ---
 
   Stream<List<MessageModel>> getMessagesStream(String partnerId) {
-    return _supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .order('created_at', ascending: true)
-        .map((rows) {
-          final list = <MessageModel>[];
-          final target = partnerId.toLowerCase();
-          final me = currentUserId.toLowerCase();
+    final lowerPartnerId = partnerId.toLowerCase();
+    
+    if (!_roomStreamControllers.containsKey(lowerPartnerId) || _roomStreamControllers[lowerPartnerId]!.isClosed) {
+      _roomStreamControllers[lowerPartnerId] = StreamController<List<MessageModel>>.broadcast();
+    }
 
-          for (var row in rows) {
-            try {
-              final s = (row['sender_id']?.toString() ?? '').toLowerCase();
-              final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    final initialList = chatIndex >= 0 ? List<MessageModel>.from(_chats[chatIndex].messages) : <MessageModel>[];
 
-              if ((s == me && r == target) ||
-                  (s == target && (r == me || r.isEmpty || r == 'user_mobile')) ||
-                  (r == target && (s.isEmpty || s == 'user_mobile'))) {
-                final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
-                if (text.trim().isNotEmpty) {
-                  list.add(MessageModel(
-                    id: row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
-                    senderId: row['sender_id']?.toString() ?? '',
-                    receiverId: row['receiver_id']?.toString() ?? '',
-                    text: text,
-                    timestamp: row['created_at'] != null
-                        ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
-                        : DateTime.now(),
-                    status: MessageStatus.delivered,
-                  ));
+    scheduleMicrotask(() {
+      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
+        _roomStreamControllers[lowerPartnerId]!.add(initialList);
+      }
+    });
+
+    // Supabase reactive stream'i dinle ve controller'a besle
+    try {
+      _supabase
+          .from('messages')
+          .stream(primaryKey: ['id'])
+          .order('created_at', ascending: true)
+          .listen((rows) {
+            final list = <MessageModel>[];
+            final target = lowerPartnerId;
+            final me = currentUserId.toLowerCase();
+
+            for (var row in rows) {
+              try {
+                final s = (row['sender_id']?.toString() ?? '').toLowerCase();
+                final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+
+                if ((s == me && r == target) ||
+                    (s == target && (r == me || r.isEmpty || r == 'user_mobile')) ||
+                    (r == target && (s.isEmpty || s == 'user_mobile'))) {
+                  final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
+                  if (text.trim().isNotEmpty) {
+                    list.add(MessageModel(
+                      id: row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+                      senderId: row['sender_id']?.toString() ?? '',
+                      receiverId: row['receiver_id']?.toString() ?? '',
+                      text: text,
+                      timestamp: row['created_at'] != null
+                          ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
+                          : DateTime.now(),
+                      status: MessageStatus.delivered,
+                    ));
+                  }
                 }
+              } catch (e) {
+                debugPrint('Row parse hatası: $e');
               }
-            } catch (e) {
-              debugPrint('Row parse hatası atlandı: $e');
             }
-          }
 
-          // Yerel nesneyi ve önbelleği güncelle
-          final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == target);
-          if (chatIndex >= 0 && list.isNotEmpty) {
-            _chats[chatIndex].messages = list;
-          }
+            if (list.isNotEmpty) {
+              final idx = _chats.indexWhere((c) => c.participant.id.toLowerCase() == target);
+              if (idx >= 0) {
+                _chats[idx].messages = list;
+              }
+              if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
+                _roomStreamControllers[lowerPartnerId]!.add(list);
+              }
+            }
+          }, onError: (err) {
+            debugPrint('Supabase stream dinleme hatası (Smart poller devrede): $err');
+          });
+    } catch (e) {
+      debugPrint('Supabase stream başlatma hatası: $e');
+    }
 
-          return list;
-        });
+    return _roomStreamControllers[lowerPartnerId]!.stream;
   }
 
   void _emitRoomUpdate(String partnerId) {
-    // Supabase reactive stream kullandığımız için controller gerekmez
+    final lowerPartnerId = partnerId.toLowerCase();
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    if (chatIndex >= 0) {
+      final freshList = List<MessageModel>.from(_chats[chatIndex].messages);
+      if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
+        _roomStreamControllers[lowerPartnerId]!.add(freshList);
+      }
+    }
   }
 
   // --- LOCAL CACHING ---
@@ -190,7 +223,7 @@ class MockMessageService extends ChangeNotifier {
             },
           )
           .subscribe((status, [error]) {
-            print('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status ${error != null ? "- Hata: $error" : ""}');
+            debugPrint('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status');
           });
 
       // 2. Postgres CDC Stream (Realtime Replication)
@@ -205,7 +238,7 @@ class MockMessageService extends ChangeNotifier {
             },
           )
           .subscribe((status, [error]) {
-            print('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status ${error != null ? "- Hata: $error" : ""}');
+            debugPrint('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status');
           });
 
       // 3. Matches Stream
@@ -216,15 +249,15 @@ class MockMessageService extends ChangeNotifier {
             schema: 'public',
             table: 'matches',
             callback: (payload) {
-              print('[MessageService] 🔔 Realtime match change detected');
+              debugPrint('[MessageService] 🔔 Realtime match change detected');
               reloadChats();
             },
           )
           .subscribe();
 
-      print('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
+      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
-      print('[MessageService] ⚠️ Realtime subscription error: $e');
+      debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
@@ -252,8 +285,6 @@ class MockMessageService extends ChangeNotifier {
 
       if (content.trim().isEmpty) return;
 
-      debugPrint('--> [BROADCAST CANLI MESAJ] Sender: $senderId | Receiver: $receiverId | Content: $content');
-
       final currentId = currentUserId.toLowerCase();
 
       String partnerId = '';
@@ -262,7 +293,7 @@ class MockMessageService extends ChangeNotifier {
       } else if (receiverId == currentId || receiverId.isEmpty || receiverId == 'user_mobile') {
         partnerId = senderId;
       } else {
-        partnerId = senderId; // Güvenlik ağı: yine de göndereni partner kabul et
+        partnerId = senderId;
       }
 
       if (partnerId.isEmpty) return;
@@ -298,15 +329,13 @@ class MockMessageService extends ChangeNotifier {
 
       final senderId = (record['sender_id']?.toString() ?? '').toLowerCase();
       final receiverId = (record['receiver_id']?.toString() ?? '').toLowerCase();
-      final matchId = record['match_id']?.toString();
+      final matchId = record['match_id']?.toString() ?? record['m_id']?.toString() ?? record['M_ID']?.toString();
       final content = record['content']?.toString() ?? record['message']?.toString() ?? '';
       final msgId = record['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = record['created_at']?.toString();
       final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
 
       if (content.trim().isEmpty) return;
-
-      debugPrint('--> [CANLI MESAJ YAKALANDI] Sender: $senderId | Receiver: $receiverId | Content: $content');
 
       final currentId = currentUserId.toLowerCase();
 
@@ -323,7 +352,7 @@ class MockMessageService extends ChangeNotifier {
           partnerId = senderId;
         }
       } else {
-        partnerId = senderId; // Güvenlik ağı: yine de göndereni partner kabul et
+        partnerId = senderId;
       }
 
       if (partnerId.isEmpty) return;
@@ -490,6 +519,7 @@ class MockMessageService extends ChangeNotifier {
     return newChat;
   }
 
+  // --- SMART BACKGROUND SYNC (2sn POLER) ---
   Future<void> syncChatMessagesForPartner(String partnerId) async {
     final currentId = currentUserId;
     if (partnerId.isEmpty) return;
@@ -552,6 +582,7 @@ class MockMessageService extends ChangeNotifier {
           chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
           _sortChats();
           _saveChatsToLocalStorage();
+          _emitRoomUpdate(partnerId);
           notifyListeners();
         }
       }
@@ -611,7 +642,7 @@ class MockMessageService extends ChangeNotifier {
         final otherId = u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1;
         if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase()) {
           partnerUserIds.add(otherId);
-          matchIdByPartner[otherId] = match['id']?.toString() ?? '';
+          matchIdByPartner[otherId] = match['id']?.toString() ?? match['match_id']?.toString() ?? match['m_id']?.toString() ?? match['M_ID']?.toString() ?? '';
           eventIdByPartner[otherId] = match['event_id']?.toString();
           if (match['expires_at'] != null) {
             expiresByPartner[otherId] = DateTime.tryParse(match['expires_at'].toString());
