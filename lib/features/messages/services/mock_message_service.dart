@@ -161,8 +161,6 @@ class MockMessageService extends ChangeNotifier {
   void _subscribeToRealtime() {
     try {
       _unsubscribeFromRealtime();
-      final currentId = currentUserId;
-      if (currentId.isEmpty) return;
 
       // 1. Instant WebSocket Broadcast Channel
       _broadcastChannel = _supabase
@@ -173,7 +171,9 @@ class MockMessageService extends ChangeNotifier {
               _handleBroadcastMessage(payload);
             },
           )
-          .subscribe();
+          .subscribe((status, [error]) {
+            print('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status ${error != null ? "- Hata: $error" : ""}');
+          });
 
       // 2. Postgres CDC Stream (Realtime Replication)
       _messagesChannel = _supabase
@@ -186,7 +186,9 @@ class MockMessageService extends ChangeNotifier {
               _handlePostgresMessageEvent(payload);
             },
           )
-          .subscribe();
+          .subscribe((status, [error]) {
+            print('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status ${error != null ? "- Hata: $error" : ""}');
+          });
 
       // 3. Matches Stream
       _matchesChannel = _supabase
@@ -196,15 +198,15 @@ class MockMessageService extends ChangeNotifier {
             schema: 'public',
             table: 'matches',
             callback: (payload) {
-              debugPrint('[MessageService] 🔔 Realtime match change detected');
+              print('[MessageService] 🔔 Realtime match change detected');
               reloadChats();
             },
           )
           .subscribe();
 
-      debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
+      print('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
-      debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
+      print('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
@@ -472,21 +474,25 @@ class MockMessageService extends ChangeNotifier {
 
   Future<void> syncChatMessagesForPartner(String partnerId) async {
     final currentId = currentUserId;
-    if (currentId.isEmpty || partnerId.isEmpty) return;
+    if (partnerId.isEmpty) return;
 
     try {
       final lowerCurrent = currentId.toLowerCase();
       final lowerPartner = partnerId.toLowerCase();
 
-      final res = await _supabase
-          .from('messages')
-          .select('*')
-          .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
-          .order('created_at', ascending: true);
-
       final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
+        final matchIdNum = int.tryParse(chat.id);
+
+        dynamic query = _supabase.from('messages').select('*');
+        if (matchIdNum != null) {
+          query = query.or('match_id.eq.$matchIdNum,sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId');
+        } else {
+          query = query.or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId');
+        }
+
+        final res = await query.order('created_at', ascending: true);
         bool hasNew = false;
 
         for (var row in res) {
@@ -497,7 +503,8 @@ class MockMessageService extends ChangeNotifier {
 
             final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
                                   (s == lowerPartner && r == lowerCurrent) ||
-                                  (mIdMatch != null && (mIdMatch == chat.id || (int.tryParse(chat.id) != null && mIdMatch == chat.id)));
+                                  (s == lowerPartner || r == lowerPartner) ||
+                                  (mIdMatch != null && (mIdMatch == chat.id || (matchIdNum != null && mIdMatch == matchIdNum.toString())));
 
             if (!isForThisChat) continue;
 
@@ -523,9 +530,10 @@ class MockMessageService extends ChangeNotifier {
                 status: MessageStatus.delivered,
               ));
               hasNew = true;
+              print('--> [CANLI SYNC BULUNDU] Yeni mesaj odaya eklendi: $text (Kimden: $sender)');
             }
           } catch (e) {
-            debugPrint('MODEL PARSE HATASI: $e');
+            print('MODEL PARSE HATASI: $e');
           }
         }
 
@@ -538,7 +546,7 @@ class MockMessageService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      debugPrint('[MessageService] syncChatMessagesForPartner error: $e');
+      print('[MessageService] syncChatMessagesForPartner error: $e');
     }
   }
 
