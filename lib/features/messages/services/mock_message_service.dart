@@ -108,61 +108,8 @@ class MockMessageService extends ChangeNotifier {
       if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
         _roomStreamControllers[lowerPartnerId]!.add(initialList);
       }
+      syncChatMessagesForPartner(partnerId);
     });
-
-    // Supabase reactive stream'i dinle ve controller'a besle
-    try {
-      _supabase
-          .from('messages')
-          .stream(primaryKey: ['id'])
-          .order('created_at', ascending: true)
-          .listen((rows) {
-            final list = <MessageModel>[];
-            final target = lowerPartnerId;
-            final me = currentUserId.toLowerCase();
-
-            for (var row in rows) {
-              try {
-                final s = (row['sender_id']?.toString() ?? '').toLowerCase();
-                final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
-
-                if ((s == me && r == target) ||
-                    (s == target && (r == me || r.isEmpty || r == 'user_mobile')) ||
-                    (r == target && (s.isEmpty || s == 'user_mobile'))) {
-                  final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
-                  if (text.trim().isNotEmpty) {
-                    list.add(MessageModel(
-                      id: row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
-                      senderId: row['sender_id']?.toString() ?? '',
-                      receiverId: row['receiver_id']?.toString() ?? '',
-                      text: text,
-                      timestamp: row['created_at'] != null
-                          ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
-                          : DateTime.now(),
-                      status: MessageStatus.delivered,
-                    ));
-                  }
-                }
-              } catch (e) {
-                debugPrint('Row parse hatası: $e');
-              }
-            }
-
-            if (list.isNotEmpty) {
-              final idx = _chats.indexWhere((c) => c.participant.id.toLowerCase() == target);
-              if (idx >= 0) {
-                _chats[idx].messages = list;
-              }
-              if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
-                _roomStreamControllers[lowerPartnerId]!.add(list);
-              }
-            }
-          }, onError: (err) {
-            debugPrint('Supabase stream dinleme hatası (Smart poller devrede): $err');
-          });
-    } catch (e) {
-      debugPrint('Supabase stream başlatma hatası: $e');
-    }
 
     return _roomStreamControllers[lowerPartnerId]!.stream;
   }
@@ -583,7 +530,7 @@ class MockMessageService extends ChangeNotifier {
     return newChat;
   }
 
-  // --- SMART BACKGROUND SYNC (2sn POLER) ---
+  // --- SMART BACKGROUND SYNC (CANLI ANLIK SENKRONİZASYON) ---
   Future<void> syncChatMessagesForPartner(String partnerId) async {
     final currentId = currentUserId;
     if (partnerId.isEmpty) return;
@@ -598,7 +545,12 @@ class MockMessageService extends ChangeNotifier {
           .or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId')
           .order('created_at', ascending: true);
 
-      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
+      int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
+      if (chatIndex < 0) {
+        final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''));
+        chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == lowerPartner);
+      }
+
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
         bool hasNew = false;
@@ -642,11 +594,13 @@ class MockMessageService extends ChangeNotifier {
           }
         }
 
+        chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         if (hasNew) {
-          chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
           _sortChats();
           _saveChatsToLocalStorage();
-          _emitRoomUpdate(partnerId);
+        }
+        _emitRoomUpdate(partnerId);
+        if (hasNew) {
           notifyListeners();
         }
       }
