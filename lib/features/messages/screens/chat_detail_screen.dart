@@ -63,17 +63,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _scrollToBottom({bool animated = true}) {
-    if (!_scrollController.hasClients) return;
-    final maxScroll = _scrollController.position.maxScrollExtent;
-    if (animated) {
-      _scrollController.animateTo(
-        maxScroll,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOutQuad,
-      );
-    } else {
-      _scrollController.jumpTo(maxScroll);
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      if (animated) {
+        _scrollController.animateTo(
+          maxScroll,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+        );
+      } else {
+        _scrollController.jumpTo(maxScroll);
+      }
+    });
   }
 
   void _sendMessage(MockMessageService msgService, String currentChatId, bool isBlocked) {

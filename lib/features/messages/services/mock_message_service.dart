@@ -408,6 +408,12 @@ class MockMessageService extends ChangeNotifier {
         chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         if (senderId.toLowerCase() != currentUserId.toLowerCase()) {
           chat.unreadCount += 1;
+          NotificationService().showMessageNotification(
+            chatId: partnerId,
+            senderName: chat.participant.name,
+            message: content,
+            unreadCount: chat.unreadCount,
+          );
         }
         _sortChats();
         _saveChatsToLocalStorage();

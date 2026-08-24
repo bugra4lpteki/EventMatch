@@ -81,18 +81,23 @@ class NotificationService {
     required String chatId,
     required String senderName,
     required String message,
+    int unreadCount = 1,
   }) async {
     if (activeChatId != null && (activeChatId == chatId || activeChatId!.toLowerCase() == chatId.toLowerCase())) {
       debugPrint('[NotificationService] 🔕 Kullanıcı aktif sohbette ($chatId), bildirim bastırıldı.');
       return;
     }
 
+    final String title = unreadCount > 1
+        ? '💬 $senderName ($unreadCount yeni mesaj)'
+        : '💬 $senderName';
+
     if (kIsWeb) {
-      debugPrint('[NotificationService Web] 💬 $senderName: $message');
+      debugPrint('[NotificationService Web] $title: $message');
       return;
     }
 
-    const androidDetails = AndroidNotificationDetails(
+    final androidDetails = AndroidNotificationDetails(
       'event_match_chat_channel',
       'Mesaj Bildirimleri',
       channelDescription: 'Anlık sohbet ve eşleşme mesaj bildirimleri',
@@ -100,18 +105,20 @@ class NotificationService {
       priority: Priority.high,
       showWhen: true,
       category: AndroidNotificationCategory.message,
+      number: unreadCount,
       enableVibration: true,
       playSound: true,
     );
 
-    const iosDetails = DarwinNotificationDetails(
+    final iosDetails = DarwinNotificationDetails(
       presentAlert: true,
       presentBadge: true,
+      badgeNumber: unreadCount,
       presentSound: true,
       interruptionLevel: InterruptionLevel.active,
     );
 
-    const details = NotificationDetails(
+    final details = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
@@ -119,12 +126,12 @@ class NotificationService {
     try {
       await _notificationsPlugin.show(
         chatId.hashCode,
-        '💬 $senderName',
+        title,
         message,
         details,
         payload: 'chat_$chatId',
       );
-      debugPrint('[NotificationService] 📢 Bildirim gösterildi: $senderName -> $message');
+      debugPrint('[NotificationService] 📢 Bildirim gösterildi: $title -> $message');
     } catch (e) {
       debugPrint('[NotificationService] ❌ Bildirim gösterme hatası: $e');
     }

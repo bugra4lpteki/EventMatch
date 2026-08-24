@@ -321,35 +321,46 @@ class _MessagesScreenState extends State<MessagesScreen> {
                     children: [
                       CircleAvatar(
                         radius: 28,
-                        backgroundColor: AppColors.surface,
-                        backgroundImage: chat.participant.avatarUrl.startsWith('http')
+                        backgroundColor: const Color(0xFF1E2235),
+                        backgroundImage: chat.participant.avatarUrl.startsWith('http') && !chat.participant.avatarUrl.contains('unsplash.com')
                             ? CachedNetworkImageProvider(
                                 chat.participant.avatarUrl,
                                 maxHeight: 120,
                                 maxWidth: 120,
                               )
                             : null,
-                        child: !chat.participant.avatarUrl.startsWith('http')
-                            ? Icon(Icons.person, color: AppColors.primary)
+                        child: (!chat.participant.avatarUrl.startsWith('http') || chat.participant.avatarUrl.contains('unsplash.com'))
+                            ? Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: AppColors.primaryGradient,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    chat.participant.name.trim().isNotEmpty
+                                        ? chat.participant.name.trim()[0].toUpperCase()
+                                        : '?',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              )
                             : null,
                       ),
-                      if (chat.unreadCount > 0)
+                      if (chat.isOnline)
                         Positioned(
                           right: 0,
-                          top: 0,
+                          bottom: 0,
                           child: Container(
-                            padding: const EdgeInsets.all(4),
+                            width: 12,
+                            height: 12,
                             decoration: BoxDecoration(
-                              color: AppColors.primary,
+                              color: Colors.greenAccent.shade400,
                               shape: BoxShape.circle,
-                            ),
-                            child: Text(
-                              '${chat.unreadCount}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              border: Border.all(color: AppColors.surface, width: 2),
                             ),
                           ),
                         ),
@@ -363,7 +374,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
                         chat.participant.name,
                         style: TextStyle(
                           color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary,
-                          fontWeight: FontWeight.bold,
+                          fontWeight: chat.unreadCount > 0 ? FontWeight.w800 : FontWeight.bold,
+                          fontSize: 15.5,
                           decoration: isBlocked ? TextDecoration.lineThrough : null,
                         ),
                       ),
@@ -373,7 +385,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.2),
+                          color: AppColors.primary.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text('Takip Ediliyor', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -384,7 +396,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.2),
+                          color: Colors.redAccent.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text('Engellendi', style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
@@ -400,16 +412,52 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: isBlocked
-                        ? Colors.redAccent.withOpacity(0.7)
-                        : AppColors.textSecondary,
+                        ? Colors.redAccent.withValues(alpha: 0.7)
+                        : (chat.unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary),
+                    fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 13.5,
                   ),
                 ),
-                trailing: timeStr.isNotEmpty
-                    ? Text(
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (timeStr.isNotEmpty)
+                      Text(
                         timeStr,
-                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
-                      )
-                    : null,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: chat.unreadCount > 0 ? AppColors.primary : AppColors.textSecondary,
+                          fontWeight: chat.unreadCount > 0 ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    if (chat.unreadCount > 0) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                        decoration: BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.4),
+                              blurRadius: 6,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          '${chat.unreadCount}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           );
