@@ -231,16 +231,17 @@ class MockMessageService extends ChangeNotifier {
       final createdAtStr = payload['created_at']?.toString();
       final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
 
-      // Mesajın bu kullanıcıyla ilgisi olup olmadığını büyük/küçük harf duyarsız kontrol et
-      final isForMe = receiverId == currentId || senderId == currentId;
-      if (!isForMe && receiverId.isNotEmpty && currentId.isNotEmpty) {
-        return;
+      String partnerId = '';
+      if (senderId == currentId && receiverId.isNotEmpty) {
+        partnerId = receiverId;
+      } else if (receiverId == currentId && senderId.isNotEmpty) {
+        partnerId = senderId;
+      } else if (senderId.isNotEmpty && senderId != currentId) {
+        partnerId = senderId;
       }
 
-      if (isBlocked(senderId)) return;
-
-      final partnerId = (senderId == currentId) ? receiverId : senderId;
       if (partnerId.isEmpty) return;
+      if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
         partnerId: partnerId,
@@ -276,20 +277,30 @@ class MockMessageService extends ChangeNotifier {
 
       final senderId = (record['sender_id']?.toString() ?? '').toLowerCase();
       final receiverId = (record['receiver_id']?.toString() ?? '').toLowerCase();
+      final matchId = record['match_id']?.toString();
       final content = record['content']?.toString() ?? record['message']?.toString() ?? '';
       final msgId = record['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = record['created_at']?.toString();
       final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
 
-      final isForMe = senderId == currentId || receiverId == currentId;
-      if (!isForMe && receiverId.isNotEmpty && currentId.isNotEmpty) {
-        return;
+      String partnerId = '';
+      if (senderId == currentId && receiverId.isNotEmpty) {
+        partnerId = receiverId;
+      } else if (receiverId == currentId && senderId.isNotEmpty) {
+        partnerId = senderId;
+      } else if (matchId != null) {
+        final matchedChatIndex = _chats.indexWhere((c) => c.id == matchId);
+        if (matchedChatIndex >= 0) {
+          partnerId = _chats[matchedChatIndex].participant.id.toLowerCase();
+        }
       }
 
-      if (isBlocked(senderId)) return;
+      if (partnerId.isEmpty && (senderId.isNotEmpty && senderId != currentId)) {
+        partnerId = senderId;
+      }
 
-      final partnerId = (senderId == currentId) ? receiverId : senderId;
       if (partnerId.isEmpty) return;
+      if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
         partnerId: partnerId,
@@ -884,7 +895,7 @@ class MockMessageService extends ChangeNotifier {
     try {
       int? numericMatchId = int.tryParse(chatId);
 
-      // Match tablosunda ID araması (hata alsa dahi akışı kesmez)
+      // Aktif sohbetteki match kaydını sorgula
       if (numericMatchId == null && partnerId.isNotEmpty) {
         try {
           final existingMatch = await _supabase
@@ -896,7 +907,9 @@ class MockMessageService extends ChangeNotifier {
           if (existingMatch != null) {
             numericMatchId = int.tryParse(existingMatch['id'].toString());
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('[Match Query Error]: $e');
+        }
       }
 
       // messages tablosuna doğrudan ve zorunlu insert
@@ -912,7 +925,7 @@ class MockMessageService extends ChangeNotifier {
       }
 
       await _supabase.from('messages').insert(messagePayload);
-      debugPrint('--> [TELEFON BAŞARILI] Supabase messages tablosuna yazıldı.');
+      debugPrint('--> [TELEFON BAŞARILI] Supabase messages tablosuna yazıldı: $messagePayload');
     } catch (e) {
       debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
     }
