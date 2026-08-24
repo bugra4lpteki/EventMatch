@@ -73,9 +73,6 @@ class MockMessageService extends ChangeNotifier {
   // --- DIRECT SUPABASE REACTIVE STREAM API ---
 
   Stream<List<MessageModel>> getMessagesStream(String partnerId) {
-    final currentId = currentUserId;
-    print('--> [SUPABASE STREAM BAŞLADI] Dinlenen Partner: $partnerId | CurrentUser: $currentId');
-
     return _supabase
         .from('messages')
         .stream(primaryKey: ['id'])
@@ -83,32 +80,32 @@ class MockMessageService extends ChangeNotifier {
         .map((rows) {
           final list = <MessageModel>[];
           final target = partnerId.toLowerCase();
-          final me = currentId.toLowerCase();
+          final me = currentUserId.toLowerCase();
 
           for (var row in rows) {
-            final s = (row['sender_id']?.toString() ?? '').toLowerCase();
-            final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+            try {
+              final s = (row['sender_id']?.toString() ?? '').toLowerCase();
+              final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
 
-            // Sadece bu iki kullanıcı arasındaki mesajları filtrele
-            final isMatch = (s == me && r == target) ||
-                (s == target && r == me) ||
-                (s == target && (r.isEmpty || r == 'user_mobile')) ||
-                (r == target && (s.isEmpty || s == 'user_mobile'));
-
-            if (isMatch) {
-              final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
-              if (text.trim().isNotEmpty) {
-                list.add(MessageModel(
-                  id: row['id']?.toString() ?? '',
-                  senderId: row['sender_id']?.toString() ?? '',
-                  receiverId: row['receiver_id']?.toString() ?? '',
-                  text: text,
-                  timestamp: row['created_at'] != null
-                      ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
-                      : DateTime.now(),
-                  status: MessageStatus.delivered,
-                ));
+              if ((s == me && r == target) ||
+                  (s == target && (r == me || r.isEmpty || r == 'user_mobile')) ||
+                  (r == target && (s.isEmpty || s == 'user_mobile'))) {
+                final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
+                if (text.trim().isNotEmpty) {
+                  list.add(MessageModel(
+                    id: row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+                    senderId: row['sender_id']?.toString() ?? '',
+                    receiverId: row['receiver_id']?.toString() ?? '',
+                    text: text,
+                    timestamp: row['created_at'] != null
+                        ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now()
+                        : DateTime.now(),
+                    status: MessageStatus.delivered,
+                  ));
+                }
               }
+            } catch (e) {
+              debugPrint('Row parse hatası atlandı: $e');
             }
           }
 
