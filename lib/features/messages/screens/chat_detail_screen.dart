@@ -375,7 +375,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
               stream: _messageStream,
-              initialData: currentChat.messages,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Center(

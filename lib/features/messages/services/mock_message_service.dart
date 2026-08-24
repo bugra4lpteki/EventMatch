@@ -82,7 +82,7 @@ class MockMessageService extends ChangeNotifier {
     final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
     final initialList = chatIndex >= 0 ? List<MessageModel>.from(_chats[chatIndex].messages) : <MessageModel>[];
 
-    Future.microtask(() {
+    scheduleMicrotask(() {
       if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
         _roomStreamControllers[lowerPartnerId]!.add(initialList);
         debugPrint('--> YENİ SNAPSHOT GELDİ: ${initialList.length} adet mesaj (Oda: $partnerId)');
@@ -99,7 +99,7 @@ class MockMessageService extends ChangeNotifier {
       final freshList = List<MessageModel>.from(_chats[chatIndex].messages);
       if (_roomStreamControllers.containsKey(lowerPartnerId) && !_roomStreamControllers[lowerPartnerId]!.isClosed) {
         _roomStreamControllers[lowerPartnerId]!.add(freshList);
-        debugPrint('--> YENİ SNAPSHOT GELDİ: ${freshList.length} adet mesaj (Canlı Akış Emit Edildi)');
+        debugPrint('--> YENİ SNAPSHOT GELDİ: ${freshList.length} adet mesaj (Canlı Akış Emit Edildi: $partnerId)');
       }
     }
   }
@@ -163,7 +163,7 @@ class MockMessageService extends ChangeNotifier {
       final currentId = currentUserId;
       if (currentId.isEmpty) return;
 
-      // 1. Instant WebSocket Broadcast
+      // 1. Instant WebSocket Broadcast Channel
       _broadcastChannel = _supabase
           .channel('eventmatch_global_chat')
           .onBroadcast(
@@ -174,7 +174,7 @@ class MockMessageService extends ChangeNotifier {
           )
           .subscribe();
 
-      // 2. Postgres CDC Stream
+      // 2. Postgres CDC Stream (Realtime Replication)
       _messagesChannel = _supabase
           .channel('public_messages_stream')
           .onPostgresChanges(
@@ -313,7 +313,13 @@ class MockMessageService extends ChangeNotifier {
     if (content.trim().isEmpty || partnerId.isEmpty) return;
 
     final lowerPartnerId = partnerId.toLowerCase();
-    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+
+    // Eğer sohbet listede yoksa anında oluştur
+    if (chatIndex < 0) {
+      final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı $partnerId', avatarUrl: ''));
+      chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == lowerPartnerId);
+    }
 
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
@@ -340,8 +346,6 @@ class MockMessageService extends ChangeNotifier {
         _emitRoomUpdate(partnerId);
         notifyListeners();
       }
-    } else {
-      reloadChats();
     }
   }
 
@@ -800,18 +804,32 @@ class MockMessageService extends ChangeNotifier {
     });
   }
 
+  /// 1. sendMessage İyileştirmesi: ID ve receiverUserId ikili eşleşme garantisi
   Future<void> sendMessage(String chatId, String text, {String? receiverUserId}) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
 
     try {
       final currentId = currentUserId;
-      final chatIndex = _chats.indexWhere((c) => c.id == chatId);
-      String partnerId = receiverUserId ?? '';
+
+      // 1. Önce chatId üzerinden ara
+      int chatIndex = _chats.indexWhere((c) => c.id == chatId);
+
+      // 2. Bulunamazsa receiverUserId (partner ID) üzerinden ara
+      if (chatIndex < 0 && receiverUserId != null && receiverUserId.isNotEmpty) {
+        final lowerReceiver = receiverUserId.toLowerCase();
+        chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerReceiver);
+      }
+
+      // 3. Hala yoksa otomatik oluştur
+      if (chatIndex < 0 && receiverUserId != null && receiverUserId.isNotEmpty) {
+        final newChat = createOrGetChatForUser(UserModel(id: receiverUserId, name: 'Kullanıcı', avatarUrl: ''));
+        chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == receiverUserId.toLowerCase());
+      }
 
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
-        partnerId = chat.participant.id;
+        final partnerId = receiverUserId?.isNotEmpty == true ? receiverUserId! : chat.participant.id;
 
         if (isBlocked(partnerId)) return;
 
@@ -846,7 +864,7 @@ class MockMessageService extends ChangeNotifier {
           },
         );
 
-        await _persistMessage(chatId, partnerId, trimmedText, newMsgId);
+        await _persistMessage(chat.id, partnerId, trimmedText, newMsgId);
       }
     } catch (e) {
       debugPrint('[MessageService] ❌ Send Message Error: $e');
@@ -883,7 +901,7 @@ class MockMessageService extends ChangeNotifier {
           }
 
           if (numericMatchId != null) {
-            final idx = _chats.indexWhere((c) => c.id == chatId);
+            final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == partnerId.toLowerCase());
             if (idx >= 0) {
               _chats[idx].id = numericMatchId.toString();
               _saveChatsToLocalStorage();
