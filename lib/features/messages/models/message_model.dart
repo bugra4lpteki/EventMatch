@@ -73,6 +73,8 @@ class ChatModel {
   final DateTime? expiresAt;
   bool isOnline;
   DateTime? lastSeen;
+  bool isArchived;
+  bool isMuted;
 
   ChatModel({
     required this.id,
@@ -84,6 +86,8 @@ class ChatModel {
     this.expiresAt,
     this.isOnline = true,
     this.lastSeen,
+    this.isArchived = false,
+    this.isMuted = false,
   });
 
   MessageModel? get lastMessage {
@@ -101,6 +105,8 @@ class ChatModel {
       'expires_at': expiresAt?.toIso8601String(),
       'is_online': isOnline,
       'last_seen': lastSeen?.toIso8601String(),
+      'is_archived': isArchived,
+      'is_muted': isMuted,
     };
   }
 
@@ -119,6 +125,8 @@ class ChatModel {
       expiresAt: map['expires_at'] != null ? DateTime.tryParse(map['expires_at'].toString()) : null,
       isOnline: map['is_online'] != false,
       lastSeen: map['last_seen'] != null ? DateTime.tryParse(map['last_seen'].toString()) : null,
+      isArchived: map['is_archived'] == true,
+      isMuted: map['is_muted'] == true,
     );
   }
 }

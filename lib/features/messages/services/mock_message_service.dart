@@ -40,8 +40,30 @@ class MockMessageService extends ChangeNotifier {
   List<ChatModel> _chats = [];
 
   List<ChatModel> get individualChats => _chats
-      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id))
+      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && !c.isArchived)
       .toList();
+
+  List<ChatModel> get archivedChats => _chats
+      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && c.isArchived)
+      .toList();
+
+  void toggleArchiveChat(String chatId) {
+    final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
+    if (idx >= 0) {
+      _chats[idx].isArchived = !_chats[idx].isArchived;
+      _saveChatsToLocalStorage();
+      notifyListeners();
+    }
+  }
+
+  void toggleMuteChat(String chatId) {
+    final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
+    if (idx >= 0) {
+      _chats[idx].isMuted = !_chats[idx].isMuted;
+      _saveChatsToLocalStorage();
+      notifyListeners();
+    }
+  }
 
   List<ChatModel> get eventChats => [];
 
@@ -408,12 +430,14 @@ class MockMessageService extends ChangeNotifier {
         chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
         if (senderId.toLowerCase() != currentUserId.toLowerCase()) {
           chat.unreadCount += 1;
-          NotificationService().showMessageNotification(
-            chatId: partnerId,
-            senderName: chat.participant.name,
-            message: content,
-            unreadCount: chat.unreadCount,
-          );
+          if (!chat.isMuted) {
+            NotificationService().showMessageNotification(
+              chatId: partnerId,
+              senderName: chat.participant.name,
+              message: content,
+              unreadCount: chat.unreadCount,
+            );
+          }
         }
         _sortChats();
         _saveChatsToLocalStorage();
