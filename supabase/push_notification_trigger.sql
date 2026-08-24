@@ -1,53 +1,51 @@
 -- ==============================================================================
--- EventMatch: Push Notification Database Webhook & Triggers
+-- EventMatch: Arka Plan & Kapalıyken Mesaj Bildirimleri SQL Yapılandırması
 -- ==============================================================================
--- Run this in your Supabase SQL Editor: https://supabase.com/dashboard/project/_/sql
 
--- 1. Ensure 'push_token' and 'fcm_token' columns exist in public.users
+-- 1. Push Token ve FCM Token sütunlarını users tablosuna ekle
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS push_token TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
 
--- 2. Enable pg_net extension (for making async HTTP requests from triggers)
+-- 2. Async HTTP istekleri için pg_net eklentisini aktif et
 CREATE EXTENSION IF NOT EXISTS "pg_net";
 
--- 3. Push Notification Dispatcher Function
+-- 3. Yeni mesaj geldiğinde bildirim verisini hazırlayan fonksiyon
 CREATE OR REPLACE FUNCTION public.handle_new_message_push()
 RETURNS TRIGGER AS $$
 DECLARE
   v_sender_name TEXT;
-  v_receiver_token TEXT;
-  v_payload JSONB;
 BEGIN
-  -- Get sender name
+  -- Gönderen kullanıcının adını users tablosundan al
   SELECT COALESCE(name, 'Yeni Mesaj') INTO v_sender_name
   FROM public.users
   WHERE id::text = NEW.sender_id;
 
-  -- Create payload
-  v_payload := jsonb_build_object(
-    'record', jsonb_build_object(
-      'id', NEW.id,
-      'sender_id', NEW.sender_id,
-      'sender_name', COALESCE(v_sender_name, 'Biri'),
-      'receiver_id', NEW.receiver_id,
-      'content', NEW.content,
-      'match_id', NEW.match_id,
-      'created_at', NEW.created_at
-    )
-  );
-
-  -- Note: You can also configure Supabase Webhooks directly from Dashboard -> Database -> Webhooks
-  -- Target URL: https://<YOUR-PROJECT-REF>.supabase.co/functions/v1/push-notification
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
-  -- Never fail message insert if push notification encounters an error
+  -- Bildirim hatası olsa bile mesajın kaydedilmesini asla engelleme
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. Trigger on new message insertion
+-- 4. messages tablosuna her yeni mesaj eklendiğinde tetiklenen Trigger
 DROP TRIGGER IF EXISTS tr_new_message_push ON public.messages;
 CREATE TRIGGER tr_new_message_push
   AFTER INSERT ON public.messages
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_message_push();
+
+-- 5. Realtime yayınını güvenli şekilde kontrol et (Hata vermez)
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+END $$;
