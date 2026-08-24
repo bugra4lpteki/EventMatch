@@ -115,7 +115,7 @@ class EventModel {
   }
 
   String get effectiveTicketUrl {
-    // 1. Doğrudan Biletix / Bubilet / Biletinial bilet satın alma linki varsa (performance/ veya etkinlik/ satın alma sayfası) direkt kullan
+    // 1. Doğrudan ticketUrl tanımlıysa ve geçerliyse
     if (ticketUrl != null && ticketUrl!.trim().isNotEmpty) {
       String clean = _cleanUrl(ticketUrl!);
       final lClean = clean.toLowerCase();
@@ -123,45 +123,44 @@ class EventModel {
       final isTicketmasterUs = lClean.contains('ticketmaster.com') || lClean.contains('evyy.net');
       final isMockBroken = lClean.contains('5zemx');
 
-      if (!isTicketmasterUs && !isMockBroken) {
+      if (!isTicketmasterUs && !isMockBroken && clean.length > 25) {
         return clean;
       }
     }
 
-    // 2. Açıklama metninde yer alan bilet satın alma linkini kontrol et
-    if (description.contains('http')) {
-      final match = RegExp(r'https?://[^\s]+').firstMatch(description);
-      if (match != null) {
-        String m = _cleanUrl(match.group(0)!);
-        final lMatch = m.toLowerCase();
-        if (!lMatch.contains('5zemx') && 
-            !lMatch.contains('ticketmaster.com') && 
-            !lMatch.contains('evyy.net')) {
-          return m;
-        }
+    // 2. Açıklama metninde yer alan Biletinial / Biletix / Bubilet doğrudan etkinlik linkini bul
+    final biletinialMatch = RegExp(r'https?://(?:www\.)?biletinial\.com/tr-tr/(?:muzik|tiyatro|stand-up|festival|opera-ve-bale|sinema|etkinlik)/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
+    if (biletinialMatch != null) {
+      return _cleanUrl(biletinialMatch.group(0)!);
+    }
+
+    final genericBiletinial = RegExp(r'https?://(?:www\.)?biletinial\.com/tr-tr/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
+    if (genericBiletinial != null) {
+      return _cleanUrl(genericBiletinial.group(0)!);
+    }
+
+    final biletixMatch = RegExp(r'https?://(?:www\.)?biletix\.com/performance/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
+    if (biletixMatch != null) {
+      return _cleanUrl(biletixMatch.group(0)!);
+    }
+
+    final genericMatches = RegExp(r'https?://[^\s\)\",]+').allMatches(description);
+    for (var m in genericMatches) {
+      final u = _cleanUrl(m.group(0)!);
+      final lu = u.toLowerCase();
+      if (!lu.contains('unsplash.com') &&
+          !lu.contains('merlincdn.net') &&
+          !lu.contains('supabase.co') &&
+          !lu.contains('5zemx') &&
+          !lu.contains('ticketmaster.com') &&
+          !lu.contains('evyy.net')) {
+        return u;
       }
     }
 
-    // 3. Özel linki bulunmayan etkinlikler için doğrudan Biletix / bilet platformlarının bilet alma sayfalarını aç (Google KESİNLİKLE YOK)
-    String providerName = (ticketProvider != null && ticketProvider!.trim().isNotEmpty) ? ticketProvider!.trim() : '';
-    
-    if (providerName.toLowerCase().contains('bubilet')) {
-      return 'https://www.bubilet.com.tr';
-    } else if (providerName.toLowerCase().contains('biletinial')) {
-      return 'https://biletinial.com';
-    } else if (providerName.toLowerCase().contains('passo')) {
-      return 'https://www.passo.com.tr';
-    } else {
-      final catLower = category.toLowerCase();
-      if (catLower.contains('konser') || catLower.contains('müzik') || catLower.contains('music')) {
-        return 'https://www.biletix.com/kategori/KONSER/TURKIYE/tr';
-      } else if (catLower.contains('tiyatro') || catLower.contains('sahne') || catLower.contains('arts')) {
-        return 'https://www.biletix.com/kategori/TIYATRO/TURKIYE/tr';
-      } else if (catLower.contains('spor') || catLower.contains('sports')) {
-        return 'https://www.biletix.com/kategori/SPOR/TURKIYE/tr';
-      }
-      return 'https://www.biletix.com/etkinlikler/TURKIYE/tr';
-    }
+    // 3. Özel linki bulunmayan etkinlikler için Biletinial üzerinde doğrudan bu etkinliği arat (Asla boş ana sayfaya yönlendirmez!)
+    final cleanTitle = title.replaceAll(RegExp(r'[\(\)\[\]\-]'), ' ').trim();
+    return 'https://biletinial.com/tr-tr/search?q=${Uri.encodeComponent(cleanTitle)}';
   }
 
   /// Ekranda gösterilecek temiz açıklama (Bilet satış linki metinlerini açıklamadan temizler)
