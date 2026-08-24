@@ -41,27 +41,36 @@ class RequestsScreen extends StatelessWidget {
             }
           }
 
-          if (requests.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.inbox, size: 64, color: AppColors.surface),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Şu an bekleyen istek yok.",
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: requests.length,
+          return RefreshIndicator(
+            onRefresh: () => matchService.loadIncomingRequests(),
+            color: AppColors.primary,
+            child: requests.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.25),
+                      Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.inbox, size: 64, color: AppColors.surface),
+                            const SizedBox(height: 16),
+                            Text(
+                              "Şu an bekleyen istek yok.",
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  )
+                : ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: requests.length,
             itemBuilder: (context, index) {
               final req = requests[index];
               final hasRealPhoto = req.fromUser.avatarUrl.isNotEmpty &&
@@ -171,9 +180,10 @@ class RequestsScreen extends StatelessWidget {
               ),
             );
           },
-        );
-      },
-    ),
-  );
-  }
+        ),
+      );
+    },
+  ),
+);
+}
 }

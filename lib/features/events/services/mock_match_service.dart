@@ -372,7 +372,8 @@ class MockMatchService extends ChangeNotifier {
 
     try {
       final currentId = currentUserId;
-      _seenUserIds.add(targetUser.id.toLowerCase());
+      final targetId = targetUser.id.toLowerCase();
+      _seenUserIds.add(targetId);
       _sentRequestKeys.add(targetUser.id);
       _saveCachedSeenUsers();
 
@@ -395,30 +396,30 @@ class MockMatchService extends ChangeNotifier {
 
       if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
         try {
-          // Çift kayıt oluşmaması için önce mevcut kaydı kontrol et
-          final existingMatch = await _supabase
+          // Çift kayıt oluşmaması için mevcut kayıtları kontrol et
+          final List<dynamic> existingRows = await _supabase
               .from('matches')
               .select()
-              .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)')
-              .maybeSingle();
+              .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
 
-          if (existingMatch != null) {
-            final matchRowId = existingMatch['id'];
-            final existingStatus = existingMatch['status']?.toString();
-            final u1 = existingMatch['user_id_1']?.toString() ?? '';
+          if (existingRows.isNotEmpty) {
+            final firstRow = existingRows.first;
+            final matchRowId = firstRow['id'];
+            final existingStatus = firstRow['status']?.toString();
+            final u1 = firstRow['user_id_1']?.toString() ?? '';
 
-            // Eğer karşı taraf beni daha önce beğenmişse -> matched yap
-            if (u1.toLowerCase() == targetUser.id.toLowerCase() && existingStatus == 'liked') {
+            if (existingStatus == 'matched') {
+              isMutualMatch = true;
+            } else if (u1.toLowerCase() == targetId && existingStatus == 'liked') {
+              // Karşı taraf daha önce beni beğenmiş -> İki yönlü eşleşme sağlandı
               await _supabase
                   .from('matches')
                   .update({'status': 'matched'})
-                  .eq('id', matchRowId);
-              isMutualMatch = true;
-            } else if (existingStatus == 'matched') {
+                  .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
               isMutualMatch = true;
             }
 
-            if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+            if (initialMessage != null && initialMessage.trim().isNotEmpty && matchRowId != null) {
               try {
                 await _supabase.from('messages').insert({
                   'match_id': matchRowId,
@@ -460,7 +461,7 @@ class MockMatchService extends ChangeNotifier {
         isMutualMatch = true;
       }
 
-      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetUser.id.toLowerCase());
+      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetId);
       notifyListeners();
     } catch (e) {
       debugPrint('Swipe Right Error: $e');
@@ -472,7 +473,8 @@ class MockMatchService extends ChangeNotifier {
   Future<void> swipeLeft(UserModel targetUser) async {
     try {
       final currentId = currentUserId;
-      _seenUserIds.add(targetUser.id.toLowerCase());
+      final targetId = targetUser.id.toLowerCase();
+      _seenUserIds.add(targetId);
       _saveCachedSeenUsers();
 
       if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
@@ -490,20 +492,32 @@ class MockMatchService extends ChangeNotifier {
             }
           } catch (_) {}
 
-          final matchData = <String, dynamic>{
-            'user_id_1': currentId,
-            'user_id_2': targetUser.id,
-            'status': 'rejected',
-          };
-          if (eventId != null) matchData['event_id'] = eventId;
+          final List<dynamic> existingRows = await _supabase
+              .from('matches')
+              .select()
+              .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
 
-          await _supabase.from('matches').insert(matchData);
+          if (existingRows.isNotEmpty) {
+            await _supabase
+                .from('matches')
+                .update({'status': 'rejected'})
+                .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
+          } else {
+            final matchData = <String, dynamic>{
+              'user_id_1': currentId,
+              'user_id_2': targetUser.id,
+              'status': 'rejected',
+            };
+            if (eventId != null) matchData['event_id'] = eventId;
+
+            await _supabase.from('matches').insert(matchData);
+          }
         } catch (e) {
           debugPrint('[MatchService] Swipe left Supabase hatası: $e');
         }
       }
 
-      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetUser.id.toLowerCase());
+      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetId);
       notifyListeners();
     } catch (e) {
       debugPrint('Swipe Left Error: $e');
@@ -516,10 +530,11 @@ class MockMatchService extends ChangeNotifier {
     final seen = <String>{};
     final list = <MatchRequest>[];
     for (var r in _incomingRequests) {
-      final key = '${r.fromUser.id}_${r.fromUser.name}'.toLowerCase();
-      if (!seen.contains(key) && !seen.contains(r.fromUser.id.toLowerCase())) {
-        seen.add(key);
-        seen.add(r.fromUser.id.toLowerCase());
+      final idKey = r.fromUser.id.toLowerCase();
+      final nameKey = '${r.fromUser.id}_${r.fromUser.name}'.toLowerCase();
+      if (!seen.contains(nameKey) && !seen.contains(idKey)) {
+        seen.add(nameKey);
+        seen.add(idKey);
         list.add(r);
       }
     }
@@ -532,6 +547,49 @@ class MockMatchService extends ChangeNotifier {
       _incomingRequests.clear();
 
       if (_supabase.auth.currentUser != null) {
+        // 1. Zaten eşleştiğim veya mesajlaştığım kişileri tespit et (onlardan gelen yeni istek olamaz)
+        final alreadyMatchedIds = <String>{};
+
+        try {
+          final existingMatches = await _supabase
+              .from('matches')
+              .select('user_id_1, user_id_2, status')
+              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId')
+              .eq('status', 'matched');
+
+          for (var m in existingMatches) {
+            final u1 = (m['user_id_1'] ?? '').toString().toLowerCase();
+            final u2 = (m['user_id_2'] ?? '').toString().toLowerCase();
+            final other = u1 == currentId.toLowerCase() ? u2 : u1;
+            if (other.isNotEmpty) {
+              alreadyMatchedIds.add(other);
+              _seenUserIds.add(other);
+            }
+          }
+        } catch (e) {
+          debugPrint('[MatchService] existingMatches query error: $e');
+        }
+
+        try {
+          final myMessages = await _supabase
+              .from('messages')
+              .select('sender_id, receiver_id')
+              .or('sender_id.eq.$currentId,receiver_id.eq.$currentId');
+
+          for (var row in myMessages) {
+            final s = (row['sender_id'] ?? '').toString().toLowerCase();
+            final r = (row['receiver_id'] ?? '').toString().toLowerCase();
+            final other = s == currentId.toLowerCase() ? r : s;
+            if (other.isNotEmpty) {
+              alreadyMatchedIds.add(other);
+              _seenUserIds.add(other);
+            }
+          }
+        } catch (e) {
+          debugPrint('[MatchService] myMessages query error: $e');
+        }
+
+        // 2. Bana gelen 'liked' statüsündeki kayıtları çek
         final res = await _supabase
             .from('matches')
             .select('*, users!user_id_1(*)')
@@ -540,8 +598,10 @@ class MockMatchService extends ChangeNotifier {
 
         final requesterIds = <String>[];
         for (var row in res) {
-          final fromUserId = (row['user_id_1'] ?? '').toString();
-          if (fromUserId.isNotEmpty && _isValidUuid(fromUserId)) {
+          final fromUserId = (row['user_id_1'] ?? '').toString().toLowerCase();
+          if (fromUserId.isNotEmpty &&
+              _isValidUuid(fromUserId) &&
+              !alreadyMatchedIds.contains(fromUserId)) {
             requesterIds.add(fromUserId);
           }
         }
@@ -557,7 +617,7 @@ class MockMatchService extends ChangeNotifier {
                 .order('sort_order', ascending: true);
 
             for (var p in photosRes) {
-              final uId = p['user_id']?.toString()?.toLowerCase() ?? '';
+              final uId = p['user_id']?.toString().toLowerCase() ?? '';
               final url = p['storage_url']?.toString() ?? '';
               if (!requesterPhotos.containsKey(uId) && url.isNotEmpty) {
                 requesterPhotos[uId] = url;
@@ -572,25 +632,38 @@ class MockMatchService extends ChangeNotifier {
           final fromUserId = (row['user_id_1'] ?? '').toString();
           if (fromUserId.isEmpty) continue;
 
+          final lowerFromId = fromUserId.toLowerCase();
+
+          // Zaten eşleşilmiş biriyse isteği filtrele ve Supabase'deki kaydı da matched yap
+          if (alreadyMatchedIds.contains(lowerFromId)) {
+            try {
+              final rowId = row['id'];
+              if (rowId != null) {
+                _supabase.from('matches').update({'status': 'matched'}).eq('id', rowId);
+              }
+            } catch (_) {}
+            continue;
+          }
+
           final profile = row['users'];
           final name = profile?['name']?.toString() ?? 'Kullanıcı $fromUserId';
-          
+
           // ID ve isim bazlı çift istek filtreleme
-          final uniqueKey = '${fromUserId.toLowerCase()}_${name.toLowerCase()}';
-          if (seenRequesters.contains(uniqueKey) || seenRequesters.contains(fromUserId.toLowerCase())) {
+          final uniqueKey = '${lowerFromId}_${name.toLowerCase()}';
+          if (seenRequesters.contains(uniqueKey) || seenRequesters.contains(lowerFromId)) {
             continue;
           }
           seenRequesters.add(uniqueKey);
-          seenRequesters.add(fromUserId.toLowerCase());
+          seenRequesters.add(lowerFromId);
 
           final eventId = row['event_id']?.toString() ?? '';
           final matchId = (row['id'] ?? row['match_id'] ?? row['m_id'] ?? row['M_ID'] ?? '').toString();
 
-          final photoUrl = requesterPhotos[fromUserId.toLowerCase()] ??
+          final photoUrl = requesterPhotos[lowerFromId] ??
               profile?['avatar_url']?.toString() ??
               '';
 
-          // Asla Unsplash basma
+          // Unsplash URL basma
           final cleanAvatarUrl = photoUrl.contains('unsplash.com') ? '' : photoUrl;
 
           final fromUser = UserModel(
@@ -625,7 +698,7 @@ class MockMatchService extends ChangeNotifier {
   Future<bool> acceptRequest(MatchRequest request) async {
     try {
       final partnerId = request.fromUser.id.toLowerCase();
-      final currentId = currentUserId;
+      final currentId = currentUserId.toLowerCase();
 
       _seenUserIds.add(partnerId);
       _potentialMatches.removeWhere((u) => u.id.toLowerCase() == partnerId);
@@ -651,7 +724,7 @@ class MockMatchService extends ChangeNotifier {
   Future<void> rejectRequest(MatchRequest request) async {
     try {
       final partnerId = request.fromUser.id.toLowerCase();
-      final currentId = currentUserId;
+      final currentId = currentUserId.toLowerCase();
 
       _seenUserIds.add(partnerId);
       _potentialMatches.removeWhere((u) => u.id.toLowerCase() == partnerId);
