@@ -201,9 +201,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
   }
 
   Widget _buildUserCard(UserModel user) {
-    final String photoUrl = user.avatarUrl.isNotEmpty
-        ? user.avatarUrl
-        : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
+    final bool hasValidPhoto = user.avatarUrl.isNotEmpty && user.avatarUrl.startsWith('http');
+    final String initialLetter = user.name.trim().isNotEmpty ? user.name.trim()[0].toUpperCase() : '?';
 
     return RepaintBoundary(
       child: GestureDetector(
@@ -229,16 +228,71 @@ class _SwipeScreenState extends State<SwipeScreen> {
           ),
           child: Stack(
             children: [
-              // Avatar / Profile Photo Image with memory limits
+              // Avatar / Profile Photo Image with memory limits or Stylish Default Avatar
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
-                  child: AppImageWidget(
-                    imageUrl: photoUrl,
-                    fit: BoxFit.cover,
-                    memCacheWidth: 600,
-                    memCacheHeight: 800,
-                  ),
+                  child: hasValidPhoto
+                      ? AppImageWidget(
+                          imageUrl: user.avatarUrl,
+                          fit: BoxFit.cover,
+                          memCacheWidth: 600,
+                          memCacheHeight: 800,
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                const Color(0xFF1E2235),
+                                AppColors.primary.withValues(alpha: 0.35),
+                                const Color(0xFF131522),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: AppColors.primaryGradient,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.primary.withValues(alpha: 0.4),
+                                        blurRadius: 20,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      initialLetter,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 44,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  user.name,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                 ),
               ),
               // Gradient Overlay (Sadece en alt %18'lik bantta hafif karartma)

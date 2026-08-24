@@ -15,6 +15,8 @@ class MockMatchService extends ChangeNotifier {
 
   List<UserModel> _potentialMatches = [];
   List<MatchRequest> _incomingRequests = [];
+  final Set<String> _seenUserIds = {};
+  final Set<String> _sentRequestKeys = {};
   bool _isDoubleDateMode = false;
   bool get isDoubleDateMode => _isDoubleDateMode;
 
@@ -34,6 +36,8 @@ class MockMatchService extends ChangeNotifier {
       } else {
         _potentialMatches.clear();
         _incomingRequests.clear();
+        _seenUserIds.clear();
+        _sentRequestKeys.clear();
         notifyListeners();
       }
     });
@@ -45,7 +49,19 @@ class MockMatchService extends ChangeNotifier {
       final str = prefs.getString('cached_incoming_requests_$currentUserId');
       if (str != null && str.isNotEmpty) {
         final List<dynamic> list = jsonDecode(str);
-        _incomingRequests = list.map((item) => MatchRequest.fromMap(Map<String, dynamic>.from(item))).toList();
+        final loaded = <MatchRequest>[];
+        final seen = <String>{};
+
+        for (var item in list) {
+          try {
+            final req = MatchRequest.fromMap(Map<String, dynamic>.from(item));
+            if (!seen.contains(req.fromUser.id.toLowerCase())) {
+              seen.add(req.fromUser.id.toLowerCase());
+              loaded.add(req);
+            }
+          } catch (_) {}
+        }
+        _incomingRequests = loaded;
         notifyListeners();
       }
     } catch (_) {}
@@ -91,10 +107,13 @@ class MockMatchService extends ChangeNotifier {
     }
   }
 
-  /// Test için kullanıcının geçmiş kaydırma/beğeni etkileşimlerini veritabanından sıfırlar
+  /// Test için kullanıcının geçmiş kaydırma/beğeni etkileşimlerini sıfırlar
   Future<void> resetSwipes() async {
     try {
       final currentId = currentUserId;
+      _seenUserIds.clear();
+      _sentRequestKeys.clear();
+
       if (currentId.isNotEmpty && _supabase.auth.currentUser != null) {
         await _supabase
             .from('matches')
@@ -108,19 +127,19 @@ class MockMatchService extends ChangeNotifier {
     await loadPotentialMatches();
   }
 
-  // --- SUPABASE INTEGRATION ---
+  // --- 1. POTENTIAL MATCHES & DECK DEDUPLICATION ---
 
   Future<void> loadPotentialMatches() async {
     try {
       _potentialMatches.clear();
       final excludedUserIds = <String>{};
 
+      final currentId = currentUserId;
+      excludedUserIds.add(currentId.toLowerCase());
+      excludedUserIds.addAll(_seenUserIds.map((id) => id.toLowerCase()));
+
       if (_supabase.auth.currentUser != null) {
         await _ensureUserInDatabase();
-        final currentId = currentUserId;
-        excludedUserIds.add(currentId.toLowerCase());
-
-        debugPrint('[MatchService] 🔍 loadPotentialMatches currentUser: $currentId');
 
         try {
           // 1. Benim daha önce kaydırdığım tüm kayıtlar
@@ -147,8 +166,6 @@ class MockMatchService extends ChangeNotifier {
               excludedUserIds.add(row['user_id_1'].toString().toLowerCase());
             }
           }
-
-          debugPrint('[MatchService] Hariç tutulacak ID sayısı: ${excludedUserIds.length}');
         } catch (e) {
           debugPrint('[MatchService] ⚠️ matches filtresi hatası: $e');
         }
@@ -157,7 +174,6 @@ class MockMatchService extends ChangeNotifier {
         List<Map<String, dynamic>> rawProfiles = [];
         try {
           rawProfiles = await _supabase.from('users').select();
-          debugPrint('[MatchService] users tablosundan ${rawProfiles.length} kayıt çekildi');
         } catch (e) {
           try {
             rawProfiles = await _supabase.from('user_profiles').select();
@@ -168,16 +184,19 @@ class MockMatchService extends ChangeNotifier {
 
         final filteredProfiles = <Map<String, dynamic>>[];
         final filteredUserIds = <String>[];
+        final seenProfilesInDeck = <String>{};
 
         for (var p in rawProfiles) {
-          final pId = (p['id'] ?? p['user_id'])?.toString();
-          if (pId != null && !excludedUserIds.contains(pId.toLowerCase())) {
-            filteredProfiles.add(p);
-            filteredUserIds.add(pId);
+          final pId = (p['id'] ?? p['user_id'] ?? p['m_id'] ?? p['match_id'] ?? p['M_ID'])?.toString();
+          if (pId != null && pId.isNotEmpty) {
+            final lowerPId = pId.toLowerCase();
+            if (!excludedUserIds.contains(lowerPId) && !seenProfilesInDeck.contains(lowerPId)) {
+              seenProfilesInDeck.add(lowerPId);
+              filteredProfiles.add(p);
+              filteredUserIds.add(pId);
+            }
           }
         }
-
-        debugPrint('[MatchService] Deste için uygun profil sayısı: ${filteredProfiles.length}');
 
         // 4. Fotoğrafları ve Sosyal Medya Bağlantılarını çek
         Map<String, List<String>> userPhotosMap = {};
@@ -193,9 +212,11 @@ class MockMatchService extends ChangeNotifier {
                 .order('sort_order', ascending: true);
 
             for (var photo in photosRes) {
-              final uId = photo['user_id'].toString();
-              final url = photo['storage_url'].toString();
-              userPhotosMap.putIfAbsent(uId, () => []).add(url);
+              final uId = photo['user_id']?.toString() ?? '';
+              final url = photo['storage_url']?.toString() ?? '';
+              if (uId.isNotEmpty && url.isNotEmpty) {
+                userPhotosMap.putIfAbsent(uId.toLowerCase(), () => []).add(url);
+              }
             }
           } catch (e) {
             debugPrint('[MatchService] ⚠️ user_photos hatası: $e');
@@ -208,49 +229,50 @@ class MockMatchService extends ChangeNotifier {
                 .inFilter('user_id', filteredUserIds);
 
             for (var link in socialRes) {
-              final uId = link['user_id'].toString();
-              final url = link['url'].toString();
-              userSocialLinksMap.putIfAbsent(uId, () => []).add(url);
+              final uId = link['user_id']?.toString() ?? '';
+              final url = link['url']?.toString() ?? '';
+              if (uId.isNotEmpty && url.isNotEmpty) {
+                userSocialLinksMap.putIfAbsent(uId.toLowerCase(), () => []).add(url);
+              }
             }
           } catch (e) {
             debugPrint('[MatchService] ⚠️ user_social_links hatası: $e');
           }
         }
 
-        // 5. Kullanıcı modellerini oluştur
+        // 5. Kullanıcı modellerini oluştur (Gerçek fotoğraf yoksa boş bırak, AI/Unsplash basma!)
         for (var row in filteredProfiles) {
-          final id = (row['id'] ?? row['user_id']).toString();
-          final name = row['name'] ?? 'Kullanıcı $id';
-          final username = row['username'];
-          final bio = row['bio'] ?? row['about_me'] ?? '';
-          final city = row['city'] ?? '';
-          final gender = row['gender'] ?? '';
+          final id = (row['id'] ?? row['user_id'] ?? row['m_id'] ?? row['match_id'] ?? row['M_ID'] ?? '').toString();
+          if (id.isEmpty) continue;
+
+          final name = row['name']?.toString() ?? 'Kullanıcı $id';
+          final username = row['username']?.toString();
+          final bio = row['bio']?.toString() ?? row['about_me']?.toString() ?? '';
+          final city = row['city']?.toString() ?? '';
+          final gender = row['gender']?.toString() ?? '';
 
           DateTime? birthDate;
           if (row['birth_date'] != null) {
             birthDate = DateTime.tryParse(row['birth_date'].toString());
           }
 
-          final List<String> avatarUrls = userPhotosMap[id] ?? [];
+          final List<String> avatarUrls = userPhotosMap[id.toLowerCase()] ?? [];
           final String avatarUrl = avatarUrls.isNotEmpty
               ? avatarUrls.first
-              : 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
+              : (row['avatar_url']?.toString() ?? '');
 
-          List<String> socialLinks = List<String>.from(userSocialLinksMap[id] ?? []);
+          List<String> socialLinks = List<String>.from(userSocialLinksMap[id.toLowerCase()] ?? []);
 
-          // Eğer users tablosunda da instagram/social_links sütunu varsa oku
           if (row['instagram'] != null && row['instagram'].toString().isNotEmpty) {
             final insta = row['instagram'].toString();
             if (!socialLinks.any((s) => s.contains(insta))) {
               socialLinks.add('instagram.com/$insta');
             }
           }
-          if (row['social_links'] != null) {
-            if (row['social_links'] is List) {
-              for (var s in row['social_links']) {
-                if (s != null && !socialLinks.contains(s.toString())) {
-                  socialLinks.add(s.toString());
-                }
+          if (row['social_links'] != null && row['social_links'] is List) {
+            for (var s in row['social_links']) {
+              if (s != null && !socialLinks.contains(s.toString())) {
+                socialLinks.add(s.toString());
               }
             }
           }
@@ -296,13 +318,14 @@ class MockMatchService extends ChangeNotifier {
     return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
   }
 
-  // --- SWIPE / MATCH LOGIC ---
+  // --- 2. SWIPE / LIKE DEDUPLICATION ---
 
   Future<bool> swipeRight(UserModel targetUser, {String? initialMessage}) async {
     bool isMutualMatch = false;
 
     try {
       final currentId = currentUserId;
+      _seenUserIds.add(targetUser.id.toLowerCase());
       _sentRequestKeys.add(targetUser.id);
 
       debugPrint('[MatchService] ➡️ swipeRight: $currentId -> ${targetUser.id}');
@@ -324,30 +347,27 @@ class MockMatchService extends ChangeNotifier {
 
       if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
         try {
-          final existingIncomingLikes = await _supabase
+          // Çift kayıt oluşmaması için önce mevcut kaydı kontrol et
+          final existingMatch = await _supabase
               .from('matches')
               .select()
-              .eq('user_id_1', targetUser.id)
-              .eq('user_id_2', currentId)
-              .eq('status', 'liked');
+              .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)')
+              .maybeSingle();
 
-          if (existingIncomingLikes.isNotEmpty) {
-            final matchRow = existingIncomingLikes.first;
-            final matchRowId = matchRow['id'];
+          if (existingMatch != null) {
+            final matchRowId = existingMatch['id'];
+            final existingStatus = existingMatch['status']?.toString();
+            final u1 = existingMatch['user_id_1']?.toString() ?? '';
 
-            try {
+            // Eğer karşı taraf beni daha önce beğenmişse -> matched yap
+            if (u1.toLowerCase() == targetUser.id.toLowerCase() && existingStatus == 'liked') {
               await _supabase
                   .from('matches')
                   .update({'status': 'matched'})
                   .eq('id', matchRowId);
-            } catch (_) {
-              final matchData = <String, dynamic>{
-                'user_id_1': currentId,
-                'user_id_2': targetUser.id,
-                'status': 'matched',
-              };
-              if (eventId != null) matchData['event_id'] = eventId;
-              await _supabase.from('matches').insert(matchData);
+              isMutualMatch = true;
+            } else if (existingStatus == 'matched') {
+              isMutualMatch = true;
             }
 
             if (initialMessage != null && initialMessage.trim().isNotEmpty) {
@@ -359,14 +379,10 @@ class MockMatchService extends ChangeNotifier {
                   'content': initialMessage.trim(),
                   'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
-              } catch (e) {
-                debugPrint('[MatchService] initialMessage kaydetme hatası: $e');
-              }
+              } catch (_) {}
             }
-
-            isMutualMatch = true;
-            debugPrint('[MatchService] 🎉 Karşılıklı Eşleşme Başarılı! Match ID: $matchRowId');
           } else {
+            // Kayıt yoksa yeni 'liked' isteği oluştur
             final matchData = <String, dynamic>{
               'user_id_1': currentId,
               'user_id_2': targetUser.id,
@@ -374,22 +390,20 @@ class MockMatchService extends ChangeNotifier {
             };
             if (eventId != null) matchData['event_id'] = eventId;
 
-            try {
-              final insertedMatch = await _supabase.from('matches').insert(matchData).select().maybeSingle();
-              if (initialMessage != null && initialMessage.trim().isNotEmpty && insertedMatch != null) {
+            final inserted = await _supabase.from('matches').insert(matchData).select().maybeSingle();
+            final matchRowId = inserted?['id'];
+
+            if (initialMessage != null && initialMessage.trim().isNotEmpty && matchRowId != null) {
+              try {
                 await _supabase.from('messages').insert({
-                  'match_id': insertedMatch['id'],
+                  'match_id': matchRowId,
                   'sender_id': currentId,
                   'receiver_id': targetUser.id,
                   'content': initialMessage.trim(),
                   'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
-              }
-            } catch (e) {
-              debugPrint('[MatchService] Beğeni/Mesaj veritabanı ekleme hatası: $e');
+              } catch (_) {}
             }
-
-            debugPrint('[MatchService] 👍 Beğeni ve mesaj kaydedildi: $currentId -> ${targetUser.id}');
           }
         } catch (e) {
           debugPrint('[MatchService] Supabase swipe hatası: $e');
@@ -398,7 +412,7 @@ class MockMatchService extends ChangeNotifier {
         isMutualMatch = true;
       }
 
-      _potentialMatches.removeWhere((u) => u.id == targetUser.id);
+      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetUser.id.toLowerCase());
       notifyListeners();
     } catch (e) {
       debugPrint('Swipe Right Error: $e');
@@ -410,6 +424,7 @@ class MockMatchService extends ChangeNotifier {
   Future<void> swipeLeft(UserModel targetUser) async {
     try {
       final currentId = currentUserId;
+      _seenUserIds.add(targetUser.id.toLowerCase());
 
       if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
         try {
@@ -439,14 +454,14 @@ class MockMatchService extends ChangeNotifier {
         }
       }
 
-      _potentialMatches.removeWhere((u) => u.id == targetUser.id);
+      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetUser.id.toLowerCase());
       notifyListeners();
     } catch (e) {
       debugPrint('Swipe Left Error: $e');
     }
   }
 
-  // --- INCOMING REQUESTS ---
+  // --- 3. INCOMING REQUESTS & DEDUPLICATION ---
 
   List<MatchRequest> get incomingRequests => _incomingRequests;
 
@@ -462,15 +477,22 @@ class MockMatchService extends ChangeNotifier {
             .eq('user_id_2', currentId)
             .eq('status', 'liked');
 
+        final seenRequesters = <String>{};
+
         for (var row in res) {
-          final fromUserId = row['user_id_1'].toString();
+          final fromUserId = (row['user_id_1'] ?? '').toString();
+          if (fromUserId.isEmpty) continue;
+
+          // Aynı kullanıcıdan gelen çift istekleri filtrele
+          if (seenRequesters.contains(fromUserId.toLowerCase())) continue;
+          seenRequesters.add(fromUserId.toLowerCase());
+
           final eventId = row['event_id']?.toString() ?? '';
-          final matchId = row['id'].toString();
+          final matchId = (row['id'] ?? row['match_id'] ?? row['m_id'] ?? row['M_ID'] ?? '').toString();
 
           final profile = row['users'];
-          final name = profile?['name'] ?? 'Kullanıcı $fromUserId';
-          final avatarUrl = profile?['avatar_url'] ??
-              'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=600';
+          final name = profile?['name']?.toString() ?? 'Kullanıcı $fromUserId';
+          final avatarUrl = profile?['avatar_url']?.toString() ?? '';
 
           final fromUser = UserModel(
             id: fromUserId,
@@ -544,8 +566,6 @@ class MockMatchService extends ChangeNotifier {
 
   List<GroupModel> getPotentialGroups() => [];
 
-  final Set<String> _sentRequestKeys = {};
-
   void sendRequest(String eventId, UserModel toUser) {
     _sentRequestKeys.add('${eventId}_${toUser.id}');
     _sentRequestKeys.add(toUser.id);
@@ -560,6 +580,7 @@ class MockMatchService extends ChangeNotifier {
   void clearMatchData() {
     _potentialMatches.clear();
     _incomingRequests.clear();
+    _seenUserIds.clear();
     _sentRequestKeys.clear();
     notifyListeners();
   }

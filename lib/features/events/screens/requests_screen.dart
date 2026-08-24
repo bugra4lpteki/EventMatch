@@ -63,14 +63,29 @@ class RequestsScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       ClipOval(
-                        child: AppImageWidget(
-                          imageUrl: req.fromUser.avatarUrl,
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          memCacheWidth: 120,
-                          memCacheHeight: 120,
-                        ),
+                        child: req.fromUser.avatarUrl.startsWith('http')
+                            ? AppImageWidget(
+                                imageUrl: req.fromUser.avatarUrl,
+                                width: 60,
+                                height: 60,
+                                fit: BoxFit.cover,
+                                memCacheWidth: 120,
+                                memCacheHeight: 120,
+                              )
+                            : Container(
+                                width: 60,
+                                height: 60,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: AppColors.primaryGradient,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    req.fromUser.name.isNotEmpty ? req.fromUser.name[0].toUpperCase() : '?',
+                                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 16),
                     Expanded(

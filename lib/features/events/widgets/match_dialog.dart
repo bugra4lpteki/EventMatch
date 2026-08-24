@@ -34,16 +34,8 @@ class MatchDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultAvatar =
-        'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
-
-    final userAvatar = (currentAvatarUrl != null && currentAvatarUrl!.isNotEmpty)
-        ? currentAvatarUrl!
-        : defaultAvatar;
-
-    final matchAvatar = matchedUser.avatarUrl.isNotEmpty
-        ? matchedUser.avatarUrl
-        : defaultAvatar;
+    final userAvatar = currentAvatarUrl ?? '';
+    final matchAvatar = matchedUser.avatarUrl;
 
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -68,11 +60,11 @@ class MatchDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Badge / Icon Header
+            // Animated Heart/Sparkle Icon
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.2),
+                color: Colors.redAccent.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
@@ -128,8 +120,12 @@ class MatchDialog extends StatelessWidget {
                         ),
                         child: CircleAvatar(
                           radius: 40,
+                          backgroundColor: const Color(0xFF1E2235),
                           backgroundImage: userAvatar.startsWith('http')
                               ? NetworkImage(userAvatar)
+                              : null,
+                          child: !userAvatar.startsWith('http')
+                              ? const Icon(Icons.person, color: Colors.white, size: 36)
                               : null,
                         ),
                       ),
@@ -138,14 +134,21 @@ class MatchDialog extends StatelessWidget {
                       right: 10,
                       child: Container(
                         padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
+                        decoration: BoxDecoration(
                           color: Colors.pinkAccent,
                           shape: BoxShape.circle,
                         ),
                         child: CircleAvatar(
                           radius: 40,
+                          backgroundColor: const Color(0xFF1E2235),
                           backgroundImage: matchAvatar.startsWith('http')
                               ? NetworkImage(matchAvatar)
+                              : null,
+                          child: !matchAvatar.startsWith('http')
+                              ? Text(
+                                  matchedUser.name.isNotEmpty ? matchedUser.name[0].toUpperCase() : '?',
+                                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                                )
                               : null,
                         ),
                       ),
