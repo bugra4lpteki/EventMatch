@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 import '../models/message_model.dart';
 import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
@@ -242,6 +243,30 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     builder: (context) => UserProfileScreen(user: currentChat.participant),
                   ),
                 );
+              } else if (value == 'block') {
+                ReportBlockSheet.showBlockConfirmDialog(
+                  context,
+                  userId: currentChat.participant.id,
+                  userName: currentChat.participant.name,
+                  onUserBlocked: () {
+                    msgService.toggleBlockUser(currentChat.participant.id);
+                    if (mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                );
+              } else if (value == 'report') {
+                ReportBlockSheet.showReportDialog(
+                  context,
+                  userId: currentChat.participant.id,
+                  userName: currentChat.participant.name,
+                  onUserBlocked: () {
+                    msgService.toggleBlockUser(currentChat.participant.id);
+                    if (mounted) {
+                      Navigator.pop(context);
+                    }
+                  },
+                );
               } else if (value == 'end_match') {
                 _showEndMatchConfirmDialog(context, msgService, currentChat.id, currentChat.participant.id);
               }
@@ -254,6 +279,33 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     Icon(Icons.person_outline_rounded, color: AppColors.primary, size: 20),
                     const SizedBox(width: 12),
                     Text('Profili Görüntüle', style: TextStyle(color: AppColors.textPrimary)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'block',
+                child: Row(
+                  children: [
+                    Icon(
+                      isBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
+                      color: Colors.orangeAccent,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      isBlocked ? 'Engeli Kaldır' : 'Kullanıcıyı Engelle',
+                      style: const TextStyle(color: Colors.orangeAccent),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, color: Colors.amber, size: 20),
+                    SizedBox(width: 12),
+                    Text('Şikayet Et', style: TextStyle(color: Colors.amber)),
                   ],
                 ),
               ),
