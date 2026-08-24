@@ -128,47 +128,28 @@ class _SwipeScreenState extends State<SwipeScreen> {
                         'Şu an için yeni eşleşme bulunamadı.',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                       ),
-                      const SizedBox(height: 16),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              await matchService.loadPotentialMatches();
-                              if (mounted) {
-                                setState(() {
-                                  _refreshCount++;
-                                });
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.surface,
-                            ),
-                            icon: const Icon(Icons.refresh, color: Colors.white),
-                            label: const Text('Yenile', style: TextStyle(color: Colors.white)),
+                      const SizedBox(height: 20),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          await matchService.loadPotentialMatches();
+                          if (mounted) {
+                            setState(() {
+                              _refreshCount++;
+                            });
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          const SizedBox(width: 12),
-                          ElevatedButton.icon(
-                            onPressed: () async {
-                              await matchService.resetSwipes();
-                              if (mounted) {
-                                setState(() {
-                                  _refreshCount++;
-                                });
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Profiller yeniden yüklendi. 🔄'),
-                                  ),
-                                );
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                            ),
-                            icon: const Icon(Icons.restore, color: Colors.white),
-                            label: const Text('Sıfırla & Yeniden Yükle', style: TextStyle(color: Colors.white)),
-                          ),
-                        ],
+                        ),
+                        icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                        label: const Text(
+                          'Yenile',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                        ),
                       ),
                     ],
                   ),
