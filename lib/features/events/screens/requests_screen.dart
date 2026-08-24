@@ -27,7 +27,19 @@ class RequestsScreen extends StatelessWidget {
       ),
       body: Consumer<MockMatchService>(
         builder: (context, matchService, child) {
-          final requests = matchService.incomingRequests;
+          final rawRequests = matchService.incomingRequests;
+          final seenKeys = <String>{};
+          final requests = <MatchRequest>[];
+
+          for (var r in rawRequests) {
+            final key = '${r.fromUser.id}_${r.fromUser.name}'.toLowerCase();
+            if (!seenKeys.contains(key) && !seenKeys.contains(r.fromUser.id.toLowerCase())) {
+              seenKeys.add(key);
+              seenKeys.add(r.fromUser.id.toLowerCase());
+              requests.add(r);
+            }
+          }
+
           if (requests.isEmpty) {
             return Center(
               child: Column(
@@ -51,6 +63,9 @@ class RequestsScreen extends StatelessWidget {
             itemCount: requests.length,
             itemBuilder: (context, index) {
               final req = requests[index];
+              final hasRealPhoto = req.fromUser.avatarUrl.isNotEmpty &&
+                  req.fromUser.avatarUrl.startsWith('http') &&
+                  !req.fromUser.avatarUrl.contains('unsplash.com');
               return RepaintBoundary(
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 16),
@@ -63,7 +78,7 @@ class RequestsScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       ClipOval(
-                        child: req.fromUser.avatarUrl.startsWith('http')
+                        child: hasRealPhoto
                             ? AppImageWidget(
                                 imageUrl: req.fromUser.avatarUrl,
                                 width: 60,

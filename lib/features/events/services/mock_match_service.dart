@@ -74,8 +74,13 @@ class MockMatchService extends ChangeNotifier {
         for (var item in list) {
           try {
             final req = MatchRequest.fromMap(Map<String, dynamic>.from(item));
-            if (!seen.contains(req.fromUser.id.toLowerCase())) {
-              seen.add(req.fromUser.id.toLowerCase());
+            // Unsplash URL'lerini temizle
+            if (req.fromUser.avatarUrl.contains('unsplash.com')) {
+              req.fromUser.avatarUrl = '';
+            }
+            final key = '${req.fromUser.id}_${req.fromUser.name}'.toLowerCase();
+            if (!seen.contains(key)) {
+              seen.add(key);
               loaded.add(req);
             }
           } catch (_) {}
@@ -498,7 +503,19 @@ class MockMatchService extends ChangeNotifier {
 
   // --- 3. INCOMING REQUESTS & DEDUPLICATION ---
 
-  List<MatchRequest> get incomingRequests => _incomingRequests;
+  List<MatchRequest> get incomingRequests {
+    final seen = <String>{};
+    final list = <MatchRequest>[];
+    for (var r in _incomingRequests) {
+      final key = '${r.fromUser.id}_${r.fromUser.name}'.toLowerCase();
+      if (!seen.contains(key) && !seen.contains(r.fromUser.id.toLowerCase())) {
+        seen.add(key);
+        seen.add(r.fromUser.id.toLowerCase());
+        list.add(r);
+      }
+    }
+    return list;
+  }
 
   Future<void> loadIncomingRequests() async {
     try {
@@ -512,27 +529,65 @@ class MockMatchService extends ChangeNotifier {
             .eq('user_id_2', currentId)
             .eq('status', 'liked');
 
+        final requesterIds = <String>[];
+        for (var row in res) {
+          final fromUserId = (row['user_id_1'] ?? '').toString();
+          if (fromUserId.isNotEmpty && _isValidUuid(fromUserId)) {
+            requesterIds.add(fromUserId);
+          }
+        }
+
+        Map<String, String> requesterPhotos = {};
+        if (requesterIds.isNotEmpty) {
+          try {
+            final photosRes = await _supabase
+                .from('user_photos')
+                .select('user_id, storage_url')
+                .inFilter('user_id', requesterIds)
+                .eq('is_active', true)
+                .order('sort_order', ascending: true);
+
+            for (var p in photosRes) {
+              final uId = p['user_id']?.toString()?.toLowerCase() ?? '';
+              final url = p['storage_url']?.toString() ?? '';
+              if (!requesterPhotos.containsKey(uId) && url.isNotEmpty) {
+                requesterPhotos[uId] = url;
+              }
+            }
+          } catch (_) {}
+        }
+
         final seenRequesters = <String>{};
 
         for (var row in res) {
           final fromUserId = (row['user_id_1'] ?? '').toString();
           if (fromUserId.isEmpty) continue;
 
-          // Aynı kullanıcıdan gelen çift istekleri filtrele
-          if (seenRequesters.contains(fromUserId.toLowerCase())) continue;
+          final profile = row['users'];
+          final name = profile?['name']?.toString() ?? 'Kullanıcı $fromUserId';
+          
+          // ID ve isim bazlı çift istek filtreleme
+          final uniqueKey = '${fromUserId.toLowerCase()}_${name.toLowerCase()}';
+          if (seenRequesters.contains(uniqueKey) || seenRequesters.contains(fromUserId.toLowerCase())) {
+            continue;
+          }
+          seenRequesters.add(uniqueKey);
           seenRequesters.add(fromUserId.toLowerCase());
 
           final eventId = row['event_id']?.toString() ?? '';
           final matchId = (row['id'] ?? row['match_id'] ?? row['m_id'] ?? row['M_ID'] ?? '').toString();
 
-          final profile = row['users'];
-          final name = profile?['name']?.toString() ?? 'Kullanıcı $fromUserId';
-          final avatarUrl = profile?['avatar_url']?.toString() ?? '';
+          final photoUrl = requesterPhotos[fromUserId.toLowerCase()] ??
+              profile?['avatar_url']?.toString() ??
+              '';
+
+          // Asla Unsplash basma
+          final cleanAvatarUrl = photoUrl.contains('unsplash.com') ? '' : photoUrl;
 
           final fromUser = UserModel(
             id: fromUserId,
             name: name,
-            avatarUrl: avatarUrl,
+            avatarUrl: cleanAvatarUrl,
           );
 
           final currentUserModel = UserModel(
@@ -561,18 +616,21 @@ class MockMatchService extends ChangeNotifier {
   Future<bool> acceptRequest(MatchRequest request) async {
     try {
       final partnerId = request.fromUser.id.toLowerCase();
+      final currentId = currentUserId;
+
       _seenUserIds.add(partnerId);
       _potentialMatches.removeWhere((u) => u.id.toLowerCase() == partnerId);
+      _incomingRequests.removeWhere((r) => r.fromUser.id.toLowerCase() == partnerId || r.id == request.id);
       _saveCachedSeenUsers();
+      _saveCachedRequests();
 
       if (_supabase.auth.currentUser != null) {
         await _supabase
             .from('matches')
             .update({'status': 'matched'})
-            .eq('id', request.id);
+            .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
       }
-      _incomingRequests.removeWhere((r) => r.id == request.id);
-      _saveCachedRequests();
+
       notifyListeners();
       return true;
     } catch (e) {
@@ -584,18 +642,21 @@ class MockMatchService extends ChangeNotifier {
   Future<void> rejectRequest(MatchRequest request) async {
     try {
       final partnerId = request.fromUser.id.toLowerCase();
+      final currentId = currentUserId;
+
       _seenUserIds.add(partnerId);
       _potentialMatches.removeWhere((u) => u.id.toLowerCase() == partnerId);
+      _incomingRequests.removeWhere((r) => r.fromUser.id.toLowerCase() == partnerId || r.id == request.id);
       _saveCachedSeenUsers();
+      _saveCachedRequests();
 
       if (_supabase.auth.currentUser != null) {
         await _supabase
             .from('matches')
             .update({'status': 'rejected'})
-            .eq('id', request.id);
+            .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
       }
-      _incomingRequests.removeWhere((r) => r.id == request.id);
-      _saveCachedRequests();
+
       notifyListeners();
     } catch (e) {
       debugPrint('Reject Request Error: $e');
