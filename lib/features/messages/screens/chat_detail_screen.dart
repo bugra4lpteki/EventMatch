@@ -204,24 +204,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         ),
                         const SizedBox(width: 6),
                         Icon(Icons.arrow_forward_ios_rounded, size: 11, color: AppColors.primary),
-                        if (isFollowing) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'Takip',
-                              style: TextStyle(
-                                color: AppColors.primary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                     Row(
@@ -260,8 +242,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     builder: (context) => UserProfileScreen(user: currentChat.participant),
                   ),
                 );
-              } else if (value == 'follow') {
-                msgService.toggleFollowUser(currentChat.participant.id);
               } else if (value == 'end_match') {
                 _showEndMatchConfirmDialog(context, msgService, currentChat.id, currentChat.participant.id);
               }
@@ -274,23 +254,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     Icon(Icons.person_outline_rounded, color: AppColors.primary, size: 20),
                     const SizedBox(width: 12),
                     Text('Profili Görüntüle', style: TextStyle(color: AppColors.textPrimary)),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'follow',
-                child: Row(
-                  children: [
-                    Icon(
-                      isFollowing ? Icons.person_remove_rounded : Icons.person_add_alt_1_rounded,
-                      color: isFollowing ? Colors.amber : AppColors.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      isFollowing ? 'Takibi Bırak' : 'Takip Et',
-                      style: TextStyle(color: isFollowing ? Colors.amber : AppColors.textPrimary),
-                    ),
                   ],
                 ),
               ),

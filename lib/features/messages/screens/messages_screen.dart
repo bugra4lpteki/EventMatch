@@ -350,17 +350,6 @@ class _MessagesScreenState extends State<MessagesScreen> {
               const SizedBox(width: 5),
               Icon(Icons.notifications_off_rounded, size: 14, color: AppColors.textSecondary.withValues(alpha: 0.7)),
             ],
-            if (isFollowing) ...[
-              const SizedBox(width: 5),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('Takip', style: TextStyle(color: AppColors.primary, fontSize: 10, fontWeight: FontWeight.bold)),
-              ),
-            ],
             if (isBlocked) ...[
               const SizedBox(width: 5),
               Container(
