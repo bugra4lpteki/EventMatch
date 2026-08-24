@@ -171,58 +171,41 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          title: Text(
-            'Mesajlar',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(Icons.refresh_rounded, color: AppColors.primary),
-              tooltip: 'Mesajları Yenile',
-              onPressed: () {
-                context.read<MockMessageService>().reloadChats();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Mesajlar yenileniyor... 🔄'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              },
-            ),
-          ],
-          bottom: TabBar(
-            indicatorColor: AppColors.primary,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textSecondary,
-            tabs: const [
-              Tab(text: "Bireysel"),
-              Tab(text: "Etkinlikler"),
-            ],
+        elevation: 0,
+        centerTitle: false,
+        title: Text(
+          'Mesajlar',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.bold,
+            fontSize: 24,
           ),
         ),
-        body: Consumer<MockMessageService>(
-          builder: (context, messageService, child) {
-            final indChats = messageService.individualChats;
-            final evtChats = messageService.eventChats;
-
-            return TabBarView(
-              children: [
-                _buildChatList(context, indChats, messageService),
-                _buildChatList(context, evtChats, messageService),
-              ],
-            );
-          },
-        ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.refresh_rounded, color: AppColors.primary),
+            tooltip: 'Mesajları Yenile',
+            onPressed: () {
+              context.read<MockMessageService>().reloadChats();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Mesajlar yenileniyor... 🔄'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Consumer<MockMessageService>(
+        builder: (context, messageService, child) {
+          final chats = messageService.individualChats;
+          return _buildChatList(context, chats, messageService);
+        },
       ),
     );
   }
