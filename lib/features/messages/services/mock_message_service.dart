@@ -444,6 +444,40 @@ class MockMessageService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> endMatchAndRemoveChat(String chatId, String partnerId) async {
+    final lowerPartnerId = partnerId.toLowerCase();
+    _chats.removeWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == lowerPartnerId);
+    _deletedChatIds.remove(chatId);
+    _deletedChatIds.remove(lowerPartnerId);
+    _saveChatsToLocalStorage();
+    _emitRoomUpdate(partnerId);
+    notifyListeners();
+
+    try {
+      final currentId = currentUserId;
+      if (currentId.isNotEmpty) {
+        // 1. Karşılıklı mesajları sil
+        await _supabase
+            .from('messages')
+            .delete()
+            .or('and(sender_id.eq.$currentId,receiver_id.eq.$partnerId),and(sender_id.eq.$partnerId,receiver_id.eq.$currentId)');
+
+        // 2. Karşılıklı eşleşme kaydını sil
+        await _supabase
+            .from('matches')
+            .delete()
+            .or('and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId),and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId)');
+
+        if (int.tryParse(chatId) != null) {
+          await _supabase.from('messages').delete().eq('match_id', int.parse(chatId));
+          await _supabase.from('matches').delete().eq('id', int.parse(chatId));
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ endMatchAndRemoveChat error: $e');
+    }
+  }
+
   Future<void> deleteChat(String chatId) async {
     _deletedChatIds.add(chatId);
     final removed = _chats.where((c) => c.id == chatId).toList();

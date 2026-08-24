@@ -93,14 +93,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
   }
 
-  void _showDeleteConfirmDialog(BuildContext context, MockMessageService service, String currentChatId) {
+  void _showEndMatchConfirmDialog(BuildContext context, MockMessageService service, String currentChatId, String partnerId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Sohbeti Sil', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
-        content: Text('Bu sohbeti silmek istediğinizden emin misiniz?', style: TextStyle(color: AppColors.textSecondary)),
+        title: Text('Eşleşmeyi Bitir', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        content: Text(
+          '${widget.chat.participant.name} ile eşleşmeyi bitirmek ve sohbeti silmek istediğinizden emin misiniz? İleride birbirinizi tekrar keşfedip eşleşebilirsiniz.',
+          style: TextStyle(color: AppColors.textSecondary, height: 1.3),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -113,15 +116,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
             onPressed: () async {
               Navigator.pop(context);
-              await service.deleteChat(currentChatId);
+              await service.endMatchAndRemoveChat(currentChatId, partnerId);
               if (mounted) {
+                context.read<MockMatchService>().unmarkSeenUser(partnerId);
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('${widget.chat.participant.name} ile sohbet silindi.')),
+                  SnackBar(content: Text('${widget.chat.participant.name} ile eşleşme sonlandırıldı.')),
                 );
               }
             },
-            child: const Text('Sil', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Eşleşmeyi Bitir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -257,10 +261,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 );
               } else if (value == 'follow') {
                 msgService.toggleFollowUser(currentChat.participant.id);
-              } else if (value == 'block') {
-                msgService.toggleBlockUser(currentChat.participant.id);
-              } else if (value == 'delete') {
-                _showDeleteConfirmDialog(context, msgService, currentChat.id);
+              } else if (value == 'end_match') {
+                _showEndMatchConfirmDialog(context, msgService, currentChat.id, currentChat.participant.id);
               }
             },
             itemBuilder: (context) => [
@@ -291,31 +293,14 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ],
                 ),
               ),
-              PopupMenuItem(
-                value: 'block',
-                child: Row(
-                  children: [
-                    Icon(
-                      isBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
-                      color: Colors.orangeAccent,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      isBlocked ? 'Engeli Kaldır' : 'Kullanıcıyı Engelle',
-                      style: const TextStyle(color: Colors.orangeAccent),
-                    ),
-                  ],
-                ),
-              ),
               const PopupMenuDivider(),
               const PopupMenuItem(
-                value: 'delete',
+                value: 'end_match',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 20),
+                    Icon(Icons.heart_broken_rounded, color: Colors.redAccent, size: 20),
                     SizedBox(width: 12),
-                    Text('Sohbeti Sil', style: TextStyle(color: Colors.redAccent)),
+                    Text('Eşleşmeyi Bitir', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),

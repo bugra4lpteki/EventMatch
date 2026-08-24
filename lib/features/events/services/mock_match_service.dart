@@ -62,6 +62,15 @@ class MockMatchService extends ChangeNotifier {
     } catch (_) {}
   }
 
+  void unmarkSeenUser(String userId) {
+    final lowerId = userId.toLowerCase();
+    _seenUserIds.remove(lowerId);
+    _sentRequestKeys.remove(lowerId);
+    _saveCachedSeenUsers();
+    loadPotentialMatches();
+    notifyListeners();
+  }
+
   Future<void> _loadCachedRequests() async {
     try {
       final prefs = await SharedPreferences.getInstance();
