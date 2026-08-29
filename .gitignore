@@ -47,3 +47,11 @@ app.*.map.json
 # Screenshot & utility artifacts
 resize_*.py
 screenshots_*/
+
+# Environment & Secrets
+.env*
+*.env
+*.pem
+*.key
+*.jks
+*.keystore
