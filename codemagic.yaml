@@ -20,7 +20,12 @@ workflows:
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
-        script: flutter build ipa --release --export-options-plist=/Users/builder/export_options.plist
+        script: |
+          BUILD_NUM=${BUILD_NUMBER:-4}
+          if [ "$BUILD_NUM" -lt 4 ]; then
+            BUILD_NUM=4
+          fi
+          flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=/Users/builder/export_options.plist
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
