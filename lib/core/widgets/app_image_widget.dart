@@ -7,6 +7,7 @@ import '../constants/app_colors.dart';
 class AppImageWidget extends StatelessWidget {
   final String imageUrl;
   final BoxFit fit;
+  final Alignment alignment;
   final double? width;
   final double? height;
   final int? memCacheWidth;
@@ -18,6 +19,7 @@ class AppImageWidget extends StatelessWidget {
     super.key,
     required this.imageUrl,
     this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
     this.width,
     this.height,
     this.memCacheWidth,
@@ -48,6 +50,7 @@ class AppImageWidget extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        alignment: alignment,
         memCacheWidth: calculatedMemWidth,
         memCacheHeight: calculatedMemHeight,
         maxHeightDiskCache: 1200,
@@ -77,6 +80,7 @@ class AppImageWidget extends StatelessWidget {
         width: width,
         height: height,
         fit: fit,
+        alignment: alignment,
         cacheWidth: calculatedMemWidth,
         cacheHeight: calculatedMemHeight,
         errorBuilder: (context, error, stackTrace) => _buildFallbackWidget(),
@@ -106,32 +110,18 @@ class AppImageWidget extends StatelessWidget {
             AppColors.surface,
             AppColors.surfaceLight,
             AppColors.surface,
+            AppColors.background,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
       ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          Image.network(
-            'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop',
-            fit: fit,
-            errorBuilder: (_, __, ___) => Container(
-              color: AppColors.surfaceLight,
-              child: Center(
-                child: Icon(
-                  Icons.music_note_rounded,
-                  color: Colors.white24,
-                  size: (height != null && height! < 50) ? 20 : 36,
-                ),
-              ),
-            ),
-          ),
-          Container(
-            color: Colors.black.withOpacity(0.35),
-          ),
-        ],
+      child: Center(
+        child: Icon(
+          Icons.music_note_rounded,
+          color: Colors.white24,
+          size: (height != null && height! < 50) ? 20 : 36,
+        ),
       ),
     );
   }

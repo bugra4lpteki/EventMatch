@@ -331,14 +331,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final event = widget.event;
     final hasCoordinates = event.latitude != null && event.longitude != null;
     final richDesc = _getRichDescription();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final spotifyHeaderHeight = (screenWidth * 0.90).clamp(340.0, 385.0);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: CustomScrollView(
         slivers: [
-          // Full-Bleed Edge-to-Edge Hero Sliver App Bar
+          // Full-Bleed Edge-to-Edge Hero Sliver App Bar (Spotify Mobile Artist Header Dimensions)
           SliverAppBar(
-            expandedHeight: 300,
+            expandedHeight: spotifyHeaderHeight,
             pinned: true,
             backgroundColor: AppColors.background,
             leading: Padding(
@@ -355,26 +357,25 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Hero(
                     tag: 'event_image_${event.id}',
                     child: AppImageWidget(
-                      imageUrl: (_isMusicEvent && _spotifyArtist != null && _spotifyArtist!.imageUrl.isNotEmpty)
-                          ? _spotifyArtist!.imageUrl
-                          : event.imageUrl,
+                      imageUrl: event.imageUrl,
                       fit: BoxFit.cover,
+                      alignment: const Alignment(0, -0.2), // Spotify mobile artist framing
                       memCacheWidth: 1080,
                     ),
                   ),
-                  // Dark Gradient Overlay for text contrast
+                  // Dark Gradient Overlay for text contrast (Spotify smooth fade)
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.black.withOpacity(0.6),
+                          Colors.black.withOpacity(0.35),
                           Colors.transparent,
-                          AppColors.background.withOpacity(0.85),
+                          AppColors.background.withOpacity(0.75),
                           AppColors.background,
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        stops: const [0.0, 0.4, 0.85, 1.0],
+                        stops: const [0.0, 0.45, 0.85, 1.0],
                       ),
                     ),
                   ),

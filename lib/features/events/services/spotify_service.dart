@@ -91,8 +91,11 @@ class SpotifyService {
   final Map<String, SpotifyArtist?> _artistCache = {};
   final Map<String, List<SpotifyTrack>> _topTracksCache = {};
 
+  bool _tokenFailedPermanently = false;
+
   /// Spotify Client Credentials Token alma
   Future<String?> _getAccessToken() async {
+    if (_tokenFailedPermanently) return null;
     if (_accessToken != null && _tokenExpiry != null && DateTime.now().isBefore(_tokenExpiry!)) {
       return _accessToken;
     }
@@ -106,7 +109,7 @@ class SpotifyService {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: {'grant_type': 'client_credentials'},
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 2));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -115,10 +118,12 @@ class SpotifyService {
         _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
         return _accessToken;
       } else {
-        debugPrint('[SpotifyService] Token error: ${response.statusCode} - ${response.body}');
+        _tokenFailedPermanently = true;
+        debugPrint('[SpotifyService] Spotify token kullanılamıyor, doğrudan Universal Deezer motoruna geçiliyor.');
       }
     } catch (e) {
-      debugPrint('[SpotifyService] Token exception: $e');
+      _tokenFailedPermanently = true;
+      debugPrint('[SpotifyService] Token exception: $e, Deezer motoru devrede.');
     }
     return null;
   }
@@ -482,26 +487,39 @@ class SpotifyService {
   }
 
 
-  /// Etkinlik başlığından sanatçı adını ayıklama (Örn: "Duman Harbiye Konseri" -> "Duman")
+  /// Etkinlik başlığından sanatçı adını ayıklama (Örn: "Maximum Sunar: Yann Tiersen" -> "Yann Tiersen")
   String _cleanArtistName(String raw) {
     String name = raw.trim();
 
-    // " - " veya " | " veya " @ " ile ayrılmışsa ilk kısmı al
+    // 1. Öncü sponsor/organizatör ve festival başlıklarını kaldır
+    name = name.replaceAll(RegExp(r'^(?:.*?)\s*(?:sunar|presents)\s*:\s*', caseSensitive: false), '');
+    name = name.replaceAll(RegExp(r'^(?:Maximum|Biletix|Red Bull|Garanti BBVA|Vodafone|Turkcell)\s+', caseSensitive: false), '');
+    name = name.replaceAll(RegExp(r'^K-Pop\s+Festivali\s*\d*:\s*', caseSensitive: false), '');
+
+    // 2. Tire veya bölücüler
     if (name.contains(' - ')) {
-      name = name.split(' - ').first.trim();
+      final parts = name.split(' - ').map((s) => s.trim()).toList();
+      if (parts[0].toLowerCase().contains('fest') && parts.length > 1) {
+        name = parts[1];
+      } else {
+        name = parts[0];
+      }
     } else if (name.contains(' | ')) {
       name = name.split(' | ').first.trim();
     } else if (name.contains(' @ ')) {
       name = name.split(' @ ').first.trim();
     }
 
-    // Yaygın ekleri ve mekan/turne isimlerini kaldır
+    // 3. İki nokta veya ayraçtan sonrasını temizle
+    name = name.replaceAll(RegExp(r'[\:\@\|\/].*$'), '').trim();
+
+    // 4. Turne / Konser / Mekan ve Yıl eklerini kaldır
     final suffixes = [
-      ' Konseri', ' Konser', ' Live', ' Turnesi', ' Gösterisi',
-      ' Akustik', ' Sahnesi', ' Festivali', ' & ', ' Harbiye',
+      ' World Tour', ' Konseri', ' Konser', ' Live', ' Turnesi', ' Gösterisi',
+      ' Akustik', ' Teneffüs', ' Sahnesi', ' Festivali', ' & ', ' Harbiye',
       ' Açık Hava', ' Açıkhava', ' Jolly Joker', ' Bostancı Gösteri Merkezi',
       ' Dorock XL', ' IF Performance', ' Zorlu PSM', ' Biletleri',
-      ' 2024', ' 2025', ' 2026'
+      ' 2024', ' 2025', ' 2026', ' 2027'
     ];
 
     for (var s in suffixes) {
@@ -533,7 +551,7 @@ class SpotifyService {
     return SpotifyArtist(
       id: 'fb_${name.hashCode}',
       name: name,
-      imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=800&auto=format&fit=crop',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/ece5cdbf56a3cb10203a25d304543123/1000x1000-000000-80-0-0.jpg',
       genres: ['Pop', 'Rock', 'Canlı Sahne'],
       followers: 450000,
       spotifyUrl: 'https://open.spotify.com/search/${Uri.encodeComponent(name)}',
@@ -576,7 +594,7 @@ class SpotifyService {
         id: 'track_1',
         title: '$artistName - Canlı Performans (Live)',
         artistName: artistName,
-        albumCoverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=600&auto=format&fit=crop',
+        albumCoverUrl: 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg',
         previewUrl: sampleAudios[0],
         spotifyUrl: 'https://open.spotify.com/search/${Uri.encodeComponent(artistName)}',
         durationMs: 30000,
@@ -698,7 +716,7 @@ class SpotifyService {
     ),
     'the black keys': _ArtistCatalogEntry(
       name: 'The Black Keys',
-      imageUrl: 'https://i.scdn.co/image/ab67618600001016d97c724773c3cbdf1fe251b5',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/3b27055c39125c3e3133a595990e86a1/1000x1000-000000-80-0-0.jpg',
       genres: ['Blues Rock', 'Garage Rock', 'Indie Rock'],
       followers: 4300000,
       tracks: [
@@ -709,7 +727,7 @@ class SpotifyService {
     ),
     'buray': _ArtistCatalogEntry(
       name: 'Buray',
-      imageUrl: 'https://i.scdn.co/image/ab6761860000101683beeb732a3fc267923707ce',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/7601b814af177071f16380fe73103faa/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', 'Akustik'],
       followers: 2500000,
       tracks: [
@@ -720,7 +738,7 @@ class SpotifyService {
     ),
     'duman': _ArtistCatalogEntry(
       name: 'Duman',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010167c13286dc5ce2665e7178ebf',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/420bd789cacec4d562f981f6eae6c76e/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Rock', 'Alternatif Rock'],
       followers: 3200000,
       tracks: [
@@ -731,7 +749,7 @@ class SpotifyService {
     ),
     'levent yüksel': _ArtistCatalogEntry(
       name: 'Levent Yüksel',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010166ea344d18ecab55225c571e2',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/0af8ab7eb496aeb157a23b771211f859/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', '90lar Pop'],
       followers: 1800000,
       tracks: [
@@ -742,7 +760,7 @@ class SpotifyService {
     ),
     'gülşen': _ArtistCatalogEntry(
       name: 'Gülşen',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010168bfa17a42a083aa426d400e9',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/b9794826785692d4d53b3a305733a0f0/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', 'Dans'],
       followers: 2400000,
       tracks: [
@@ -753,7 +771,7 @@ class SpotifyService {
     ),
     'blok3': _ArtistCatalogEntry(
       name: 'Blok3',
-      imageUrl: 'https://i.scdn.co/image/ab67618600001016a27e46fcb99cb5a3cb53ea24',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/bcd7669bc107dd4b066deb45a31b1f9d/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Rap', 'Trap'],
       followers: 2100000,
       tracks: [
@@ -764,7 +782,7 @@ class SpotifyService {
     ),
     'teoman': _ArtistCatalogEntry(
       name: 'Teoman',
-      imageUrl: 'https://i.scdn.co/image/ab67618600001016629ad14cbb11eaef917e7939',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Rock', 'Akustik'],
       followers: 2900000,
       tracks: [
@@ -775,7 +793,7 @@ class SpotifyService {
     ),
     'manga': _ArtistCatalogEntry(
       name: 'maNga',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010164c0cfb2e0be38cf4dc1dc1df',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/3438c965f84d51d075f6418b4d5e81b8/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Rock', 'Nu Metal'],
       followers: 2200000,
       tracks: [
@@ -786,7 +804,7 @@ class SpotifyService {
     ),
     'mor ve ötesi': _ArtistCatalogEntry(
       name: 'Mor ve Ötesi',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010161b9ee77e9ec8fca3bb5976b9',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aee2502f3565318f12a5b90e9fb3d67c/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Rock', 'Alternatif'],
       followers: 2000000,
       tracks: [
@@ -797,7 +815,7 @@ class SpotifyService {
     ),
     'athena': _ArtistCatalogEntry(
       name: 'Athena',
-      imageUrl: 'https://i.scdn.co/image/ab67618600001016f4da31ce9c5658e0a30b58e6',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/e03f47be49d673d8f4b41cf03b5cf6b2/1000x1000-000000-80-0-0.jpg',
       genres: ['Ska Punk', 'Türkçe Rock'],
       followers: 1900000,
       tracks: [
@@ -808,7 +826,7 @@ class SpotifyService {
     ),
     'kenan doğulu': _ArtistCatalogEntry(
       name: 'Kenan Doğulu',
-      imageUrl: 'https://i.scdn.co/image/ab676186000010166ea344d18ecab55225c571e2',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/c6676b89507b2f30a5ac8d67013beb7e/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', 'Funk'],
       followers: 2100000,
       tracks: [
@@ -819,7 +837,7 @@ class SpotifyService {
     ),
     'sezen aksu': _ArtistCatalogEntry(
       name: 'Sezen Aksu',
-      imageUrl: 'https://i.scdn.co/image/ab6761860000101633d1c14cb5ee9a6927a7aa37',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/9c62f746db8e41bb49eb13a3c254f597/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', 'Klasik'],
       followers: 4000000,
       tracks: [
@@ -830,7 +848,7 @@ class SpotifyService {
     ),
     'tarkan': _ArtistCatalogEntry(
       name: 'Tarkan',
-      imageUrl: 'https://i.scdn.co/image/ab6761860000101683995f5733f11d13a96860d5',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/28634a4ad808e5b6bbb6714f06bd5fe8/1000x1000-000000-80-0-0.jpg',
       genres: ['Türkçe Pop', 'Dans'],
       followers: 4500000,
       tracks: [
@@ -841,7 +859,7 @@ class SpotifyService {
     ),
     'melike şahin': _ArtistCatalogEntry(
       name: 'Melike Şahin',
-      imageUrl: 'https://i.scdn.co/image/ab6761860000101639d67b2521f7c32bf26fb2ae',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/f54fb6a9276c943722a6dcb8c36852f4/1000x1000-000000-80-0-0.jpg',
       genres: ['Alternatif Pop', 'Retro'],
       followers: 1600000,
       tracks: [
@@ -852,7 +870,7 @@ class SpotifyService {
     ),
     'madrigal': _ArtistCatalogEntry(
       name: 'Madrigal',
-      imageUrl: 'https://i.scdn.co/image/ab67618600001016911c42f026131362e49c716a',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/8705441c2e05aef465c76186af096845/1000x1000-000000-80-0-0.jpg',
       genres: ['Indie Rock', 'Synthpop'],
       followers: 1900000,
       tracks: [
@@ -863,7 +881,7 @@ class SpotifyService {
     ),
     'coldplay': _ArtistCatalogEntry(
       name: 'Coldplay',
-      imageUrl: 'https://i.scdn.co/image/ab6761860000101693be6657dd8cf45dc82c572a',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/3087954bca22f306324912e5ac8375c3/1000x1000-000000-80-0-0.jpg',
       genres: ['Alternative Rock', 'Pop'],
       followers: 55000000,
       tracks: [

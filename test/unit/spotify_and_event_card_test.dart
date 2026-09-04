@@ -79,14 +79,14 @@ void main() {
       expect(tracks[0].previewUrl, isNotEmpty);
     });
 
-    test('Konser ve müzik sanatçılarında Spotify header görseli dönmelidir', () async {
+    test('Konser ve müzik sanatçılarında resmi sanatçı görseli dönmelidir', () async {
       final buray = await spotifyService.searchArtist('Buray', category: 'Konser');
       expect(buray, isNotNull);
-      expect(buray!.imageUrl, contains('ab6761860000101683beeb732a3fc267923707ce'));
+      expect(buray!.imageUrl, contains('7601b814af177071f16380fe73103faa'));
 
       final blackKeys = await spotifyService.searchArtist('The Black Keys', category: 'Konser');
       expect(blackKeys, isNotNull);
-      expect(blackKeys!.imageUrl, contains('ab67618600001016d97c724773c3cbdf1fe251b5'));
+      expect(blackKeys!.imageUrl, contains('3b27055c39125c3e3133a595990e86a1'));
     });
   });
 
@@ -120,7 +120,7 @@ void main() {
       expect(emptyEvent.imageUrl, startsWith('http'));
     });
 
-    test('The Black Keys için minivan yerine Spotify grup bannerı atanmalıdır', () {
+    test('The Black Keys için minivan yerine resmi sanatçı bannerı atanmalıdır', () {
       final event = EventModel(
         id: 'tbk_1',
         title: 'The Black Keys',
@@ -131,7 +131,7 @@ void main() {
         imageUrl: 'https://example.com/minivan.jpg',
       );
 
-      expect(event.imageUrl, contains('ab67618600001016d97c724773c3cbdf1fe251b5'));
+      expect(event.imageUrl, contains('3b27055c39125c3e3133a595990e86a1'));
     });
 
     test('Tiyatro ve Stand-up etkinlikleri müzik kapaklarıyla ezilmemelidir', () {
@@ -341,7 +341,7 @@ void main() {
         location: 'Harbiye Açıkhava',
         dateTime: DateTime.now().add(const Duration(days: 10)),
         description: 'Buray konseri',
-        imageUrl: 'https://i.scdn.co/image/ab6761860000101683beeb732a3fc267923707ce',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/7601b814af177071f16380fe73103faa/1000x1000-000000-80-0-0.jpg',
         ticketProvider: 'Biletix',
       );
 

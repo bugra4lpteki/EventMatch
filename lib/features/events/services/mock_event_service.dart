@@ -20,7 +20,6 @@ class MockEventService extends ChangeNotifier {
   Future<void> fetchEvents() async {
     try {
       _events.clear();
-      final now = DateTime.now();
 
       // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden tüm turne ve kategorileri eş zamanlı çek
       try {
@@ -51,10 +50,8 @@ class MockEventService extends ChangeNotifier {
         debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
 
-      // 3. Eğer API ve Supabase'den canlı etkinlik gelmediyse zengin yedek etkinlikleri yükle
-      if (_events.isEmpty) {
-        _populateFallbackEvents();
-      }
+      // 3. Popüler garantili sanatçı etkinliklerini ekle (Sıla, Duman, Mabel Matiz vb.)
+      _populateFallbackEvents();
 
       // 4. Supabase'den gerçek kayıtlı katılımcıları çek
       await _loadSupabaseAttendees();
@@ -72,11 +69,12 @@ class MockEventService extends ChangeNotifier {
     }
   }
 
-  /// Konser ve müzik etkinliklerini Spotify'dan gelen gerçek sanatçı görselleriyle güncelleme
+  /// Konser ve müzik etkinliklerini Spotify/Deezer sanatçı görselleriyle hızlıca paralel güncelleme
   Future<void> _enrichEventsWithSpotifyArtistImages() async {
     final spotifyService = SpotifyService();
     bool updated = false;
 
+    final musicIndices = <int>[];
     for (int i = 0; i < _events.length; i++) {
       final event = _events[i];
       final catLower = event.category.toLowerCase().trim();
@@ -115,15 +113,23 @@ class MockEventService extends ChangeNotifier {
                            catLower.contains('festival');
 
       if (isMusicEvent) {
-        try {
-          final artistImg = await spotifyService.getArtistImageUrl(event.title, category: event.category);
-          if (artistImg != null && artistImg.isNotEmpty && artistImg != event.imageUrl) {
-            _events[i] = event.copyWith(imageUrl: artistImg);
-            updated = true;
-          }
-        } catch (_) {}
+        musicIndices.add(i);
       }
     }
+
+    if (musicIndices.isEmpty) return;
+
+    // Paralel olarak tüm müzik etkinliklerinin sanatçı fotoğraflarını çek
+    await Future.wait(musicIndices.map((idx) async {
+      final event = _events[idx];
+      try {
+        final artistImg = await spotifyService.getArtistImageUrl(event.title, category: event.category);
+        if (artistImg != null && artistImg.isNotEmpty && artistImg != event.imageUrl) {
+          _events[idx] = event.copyWith(imageUrl: artistImg);
+          updated = true;
+        }
+      } catch (_) {}
+    }));
 
     if (updated) {
       notifyListeners();
@@ -161,13 +167,28 @@ class MockEventService extends ChangeNotifier {
     final now = DateTime.now();
     final mockList = [
       EventModel(
-        id: '1',
+        id: 'sila_bursa_1',
+        title: 'Sıla Konseri',
+        category: 'Konser',
+        location: 'Bursa Kültürpark Açıkhava Tiyatrosu, Bursa',
+        dateTime: now.add(const Duration(days: 2, hours: 21)),
+        description: 'Sıla güçlü sesi ve hit şarkılarıyla Bursa Açıkhava Sahnesi’nde sevenleriyle buluşuyor.',
+        imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',
+        latitude: 40.1932,
+        longitude: 29.0492,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '✨ Unutulmaz',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'duman_1',
         title: 'Duman Konseri',
         category: 'Konser',
         location: 'KüçükÇiftlik Park, İstanbul',
-        dateTime: now.add(const Duration(days: 2, hours: 4)),
+        dateTime: now.add(const Duration(days: 4, hours: 20)),
         description: 'Duman efsaneleşmiş şarkılarıyla İstanbul KüçükÇiftlik Park sahnesinde sevenleriyle buluşuyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/420bd789cacec4d562f981f6eae6c76e/1000x1000-000000-80-0-0.jpg',
         latitude: 41.0422,
         longitude: 28.9897,
         ticketUrl: 'https://www.biletix.com',
@@ -176,13 +197,73 @@ class MockEventService extends ChangeNotifier {
         isPopular: true,
       ),
       EventModel(
-        id: '2',
+        id: 'mabel_1',
+        title: 'Mabel Matiz Canlı',
+        category: 'Konser',
+        location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
+        dateTime: now.add(const Duration(days: 6, hours: 21)),
+        description: 'Mabel Matiz büyüleyici sahne performansı ve Fatih albümü şarkılarıyla Harbiye sahnesinde.',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/200a518f2a5b6e5c3f215111275bac10/1000x1000-000000-80-0-0.jpg',
+        latitude: 41.0468,
+        longitude: 28.9882,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '💖 Duygusal',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'morveotesi_1',
+        title: 'Mor ve Ötesi Senfonik',
+        category: 'Konser',
+        location: 'Zorlu PSM - Turkcell Sahnesi, İstanbul',
+        dateTime: now.add(const Duration(days: 8, hours: 20)),
+        description: 'Mor ve Ötesi dev senfoni orkestrası eşliğinde unutulmaz bir rock gecesi sunuyor.',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aee2502f3565318f12a5b90e9fb3d67c/1000x1000-000000-80-0-0.jpg',
+        latitude: 41.0664,
+        longitude: 29.0172,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎸 Efsane',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'teoman_1',
+        title: 'Teoman - Koyu Antoloji',
+        category: 'Konser',
+        location: 'Bostancı Gösteri Merkezi, İstanbul',
+        dateTime: now.add(const Duration(days: 10, hours: 21)),
+        description: 'Teoman en sevilen şarkıları ve özel akustik düzenlemeleriyle sahnede.',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg',
+        latitude: 40.9634,
+        longitude: 29.0945,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '🍷 Büyüleyici',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'zeynep_1',
+        title: 'Zeynep Bastık',
+        category: 'Konser',
+        location: 'Maximum UNIQ Açıkhava, İstanbul',
+        dateTime: now.add(const Duration(days: 12, hours: 21)),
+        description: 'Zeynep Bastık hit akustik ve pop parçalarıyla yaz akşamını renklendiriyor.',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/641b9164594081e14059fdf87404eb8d/1000x1000-000000-80-0-0.jpg',
+        latitude: 41.1114,
+        longitude: 29.0233,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '🌟 Enerjik',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'baturay_1',
         title: 'Baturay Özdemir - Stand Up',
         category: 'Stand-up',
         location: 'DasDas, İstanbul',
-        dateTime: now.add(const Duration(days: 3, hours: 2)),
+        dateTime: now.add(const Duration(days: 5, hours: 20)),
         description: 'Baturay Özdemir tek kişilik yeni komedi gösterisiyle DasDas sahnesinde kahkaha dolu bir gece sunuyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop',
+        imageUrl: 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg',
         latitude: 41.0082,
         longitude: 29.0494,
         ticketUrl: 'https://www.biletix.com',
@@ -191,41 +272,11 @@ class MockEventService extends ChangeNotifier {
         isPopular: true,
       ),
       EventModel(
-        id: '3',
-        title: 'Alice Müzikali',
-        category: 'Tiyatro',
-        location: 'Zorlu PSM, İstanbul',
-        dateTime: now.add(const Duration(days: 5, hours: 5)),
-        description: 'Lewis Carroll tarafından yazılan ve bugüne kadar 40’tan fazla dile çevrilen efsanevi eser Zorlu PSM’de sahneleniyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1503095396549-807759245b35?q=80&w=1200&auto=format&fit=crop',
-        latitude: 41.0664,
-        longitude: 29.0172,
-        ticketUrl: 'https://www.biletix.com',
-        ticketProvider: 'Biletix',
-        atmosphere: '✨ Büyüleyici',
-        isPopular: false,
-      ),
-      EventModel(
-        id: '4',
-        title: 'Mor ve Ötesi Canlı',
-        category: 'Konser',
-        location: 'Harbiye Açıkhava, İstanbul',
-        dateTime: now.add(const Duration(days: 7, hours: 3)),
-        description: 'Mor ve Ötesi Harbiye Açıkhava Sahnesi senfonik performansıyla unutulmaz bir müzik ziyafeti vaat ediyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=1200&auto=format&fit=crop',
-        latitude: 41.0468,
-        longitude: 28.9882,
-        ticketUrl: 'https://www.biletix.com',
-        ticketProvider: 'Biletix',
-        atmosphere: '🎸 Efsane',
-        isPopular: false,
-      ),
-      EventModel(
-        id: '5',
+        id: 'fenerbahce_1',
         title: 'Fenerbahçe Beko vs Anadolu Efes',
         category: 'Spor',
         location: 'Ülker Spor ve Etkinlik Salonu, İstanbul',
-        dateTime: now.add(const Duration(days: 4, hours: 6)),
+        dateTime: now.add(const Duration(days: 7, hours: 19)),
         description: 'EuroLeague ve Türkiye Sigorta Basketbol Süper Ligi dev derbisinde Ülker Arena sahnesinde kıyasıya mücadele.',
         imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop',
         latitude: 40.9934,
@@ -238,7 +289,7 @@ class MockEventService extends ChangeNotifier {
     ];
 
     for (var m in mockList) {
-      if (!_events.any((e) => e.id == m.id)) {
+      if (!_events.any((e) => e.id == m.id || e.title.toLowerCase() == m.title.toLowerCase())) {
         _events.add(m);
       }
     }

@@ -329,7 +329,7 @@ class ExternalEventService {
         'city': 'Ankara',
         'date': now.add(const Duration(days: 12, hours: 20)),
         'description': 'Doğu Demirkol, tek kişilik eğlenceli stand-up gösterisiyle Ankaralı sevenleriyle buluşuyor.',
-        'imageUrl': 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop',
+        'imageUrl': 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop',
         'lat': 39.9334,
         'lng': 32.8597,
         'ticketUrl': 'https://biletinial.com/tr-tr/tiyatro/dogu-demirkol',
@@ -468,6 +468,6 @@ class ExternalEventService {
     } else if (catLower.contains('fest') || titleLower.contains('fest')) {
       return 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?q=80&w=1200&auto=format&fit=crop';
     }
-    return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop';
+    return 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg';
   }
 }
