@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import 'external_event_service.dart';
+import 'spotify_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -58,6 +59,9 @@ class MockEventService extends ChangeNotifier {
       // 4. Supabase'den gerçek kayıtlı katılımcıları çek
       await _loadSupabaseAttendees();
 
+      // 5. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
+      await _enrichEventsWithSpotifyArtistImages();
+
       notifyListeners();
     } catch (e) {
       debugPrint('Events fetch error: $e');
@@ -67,6 +71,65 @@ class MockEventService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  /// Konser ve müzik etkinliklerini Spotify'dan gelen gerçek sanatçı görselleriyle güncelleme
+  Future<void> _enrichEventsWithSpotifyArtistImages() async {
+    final spotifyService = SpotifyService();
+    bool updated = false;
+
+    for (int i = 0; i < _events.length; i++) {
+      final event = _events[i];
+      final catLower = event.category.toLowerCase().trim();
+      final titleLower = event.title.toLowerCase().trim();
+
+      // Tiyatro, Stand-up, Gösteri ve Komedi etkinlikleri Spotify'dan hariç tutulur
+      if (catLower.contains('tiyatro') ||
+          catLower.contains('theatre') ||
+          catLower.contains('arts') ||
+          catLower.contains('stand-up') ||
+          catLower.contains('standup') ||
+          catLower.contains('komedi') ||
+          catLower.contains('comedy') ||
+          catLower.contains('sahne') ||
+          catLower.contains('spor') ||
+          catLower.contains('sport') ||
+          catLower.contains('sergi') ||
+          catLower.contains('atölye') ||
+          catLower.contains('sinema') ||
+          titleLower.contains('stand-up') ||
+          titleLower.contains('stand up') ||
+          titleLower.contains('tiyatro') ||
+          titleLower.contains('gösteri') ||
+          titleLower.contains('oyun') ||
+          titleLower.contains('tek kişilik')) {
+        continue;
+      }
+
+      final isMusicEvent = catLower.contains('konser') ||
+                           catLower.contains('müzik') ||
+                           catLower.contains('music') ||
+                           catLower.contains('rock') ||
+                           catLower.contains('pop') ||
+                           catLower.contains('rap') ||
+                           catLower.contains('akustik') ||
+                           catLower.contains('festival');
+
+      if (isMusicEvent) {
+        try {
+          final artistImg = await spotifyService.getArtistImageUrl(event.title, category: event.category);
+          if (artistImg != null && artistImg.isNotEmpty && artistImg != event.imageUrl) {
+            _events[i] = event.copyWith(imageUrl: artistImg);
+            updated = true;
+          }
+        } catch (_) {}
+      }
+    }
+
+    if (updated) {
+      notifyListeners();
+    }
+  }
+
 
   Future<void> _loadSupabaseAttendees() async {
     try {

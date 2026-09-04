@@ -109,39 +109,6 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Top Left: Provider Badge (Biletix, Biletinial, Bubilet)
-                  if (event.ticketProvider != null && event.ticketProvider!.isNotEmpty)
-                    Positioned(
-                      top: 14,
-                      left: 14,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                        decoration: BoxDecoration(
-                          color: event.ticketProvider!.toLowerCase().contains('biletinial')
-                              ? const Color(0xFFE11D48)
-                              : event.ticketProvider!.toLowerCase().contains('bubilet')
-                                  ? const Color(0xFFF59E0B)
-                                  : const Color(0xFF0284C7),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.4),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          event.ticketProvider!.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.6,
-                          ),
-                        ),
-                      ),
-                    ),
                   // Popular / High Match / Upcoming Badge
                   Positioned(
                     top: 14,
@@ -170,11 +137,7 @@ class EventCard extends StatelessWidget {
                           badgeGradient = AppColors.accentGradient;
                           shadowColor = const Color(0xFF06B6D4);
                         } else {
-                          badgeText = '✨ ETKİNLİK';
-                          badgeGradient = const LinearGradient(
-                            colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                          );
-                          shadowColor = const Color(0xFF6366F1);
+                          return const SizedBox.shrink();
                         }
 
                         return Container(
@@ -302,11 +265,9 @@ class EventCard extends StatelessWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  event.ticketProvider != null && event.ticketProvider!.isNotEmpty
-                                      ? '${event.ticketProvider} Bilet'
-                                      : 'Bilet Al',
-                                  style: const TextStyle(
+                                const Text(
+                                  'Biletler',
+                                  style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,

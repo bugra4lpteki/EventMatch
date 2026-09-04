@@ -33,9 +33,13 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   RealtimeChannel? _messagesChannel;
   RealtimeChannel? _matchesChannel;
   RealtimeChannel? _broadcastChannel;
+  RealtimeChannel? _presenceChannel;
+  final Set<String> _onlineUserIds = {};
   StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+
+  bool isUserOnline(String userId) => _onlineUserIds.contains(userId.toLowerCase().trim());
 
   List<ChatModel> _chats = [];
 
@@ -74,7 +78,35 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // App lifecycle monitoring without presence tracking
+    if (state == AppLifecycleState.resumed) {
+      _trackCurrentPresence();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _untrackCurrentPresence();
+    }
+  }
+
+  void _trackCurrentPresence() {
+    try {
+      final currentId = currentUserId;
+      if (currentId.isNotEmpty && _presenceChannel != null) {
+        _presenceChannel!.track({
+          'user_id': currentId,
+          'online_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Track presence error: $e');
+    }
+  }
+
+  void _untrackCurrentPresence() {
+    try {
+      if (_presenceChannel != null) {
+        _presenceChannel!.untrack();
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Untrack presence error: $e');
+    }
   }
 
   Future<void> _initService() async {
@@ -197,6 +229,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               _handleBroadcastMessage(payload);
             },
           )
+          .onBroadcast(
+            event: 'messages_read',
+            callback: (payload) {
+              _handleMessagesReadEvent(payload);
+            },
+          )
           .subscribe((status, [error]) {
             debugPrint('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status');
           });
@@ -216,14 +254,67 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             debugPrint('📡 [SUPABASE REALTIME] Messages CDC akışı durumu: $status');
           });
 
+      // 3. Online Presence Sync Channel (Gerçek Zamanlı Çevrimiçi Takibi)
+      _presenceChannel = _supabase.channel('eventmatch_online_presence');
+      _presenceChannel!
+          .onPresenceSync((_) {
+            _handlePresenceSync();
+          })
+          .subscribe((status, [error]) async {
+            debugPrint('📡 [SUPABASE REALTIME] Presence kanalı durumu: $status');
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              _trackCurrentPresence();
+            }
+          });
+
       debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
     }
   }
 
+  void _handlePresenceSync() {
+    try {
+      if (_presenceChannel == null) return;
+      final presenceState = _presenceChannel!.presenceState();
+      final currentOnline = <String>{};
+
+      for (var entry in presenceState) {
+        for (var presence in entry.presences) {
+          final pMap = presence.payload;
+          final uid = pMap['user_id']?.toString().toLowerCase().trim();
+          if (uid != null && uid.isNotEmpty) {
+            currentOnline.add(uid);
+          }
+        }
+      }
+
+      _onlineUserIds.clear();
+      _onlineUserIds.addAll(currentOnline);
+
+      // Chat modellerinin isOnline durumlarını anında güncelle
+      bool hasChange = false;
+      for (var chat in _chats) {
+        final shouldBeOnline = _onlineUserIds.contains(chat.participant.id.toLowerCase().trim());
+        if (chat.isOnline != shouldBeOnline) {
+          chat.isOnline = shouldBeOnline;
+          hasChange = true;
+        }
+      }
+
+      if (hasChange) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Presence sync error: $e');
+    }
+  }
+
   void _unsubscribeFromRealtime() {
     try {
+      _untrackCurrentPresence();
+      _presenceChannel?.unsubscribe();
+      _presenceChannel = null;
       _broadcastChannel?.unsubscribe();
       _broadcastChannel = null;
       _messagesChannel?.unsubscribe();
@@ -235,10 +326,40 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void _handleMessagesReadEvent(Map<String, dynamic> payload) {
+    try {
+      final readerId = (payload['reader_id']?.toString() ?? '').toLowerCase().trim();
+      final partnerId = (payload['partner_id']?.toString() ?? '').toLowerCase().trim();
+      final currentId = currentUserId.toLowerCase().trim();
+
+      // Bu bildirim bize mi gelmiş? (partner_id == currentId ve reader_id bizim mesajlaştığımız kişi)
+      if (currentId.isEmpty || partnerId != currentId || readerId.isEmpty) return;
+
+      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == readerId);
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        bool changed = false;
+        for (var m in chat.messages) {
+          if (m.senderId.toLowerCase() == currentId && m.status != MessageStatus.read) {
+            m.status = MessageStatus.read;
+            changed = true;
+          }
+        }
+        if (changed) {
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handleMessagesReadEvent error: $e');
+    }
+  }
+
   void _handleBroadcastMessage(Map<String, dynamic> payload) {
     try {
-      final senderId = (payload['sender_id']?.toString() ?? payload['user_id']?.toString() ?? '').toLowerCase();
-      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase();
+      final senderId = (payload['sender_id']?.toString() ?? payload['user_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
       final content = payload['content']?.toString() ?? '';
       final msgId = payload['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = payload['created_at']?.toString();
@@ -246,18 +367,22 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (content.trim().isEmpty) return;
 
-      final currentId = currentUserId.toLowerCase();
+      final currentId = currentUserId.toLowerCase().trim();
+      if (currentId.isEmpty) return;
 
-      String partnerId = '';
-      if (senderId == currentId && receiverId.isNotEmpty) {
-        partnerId = receiverId;
-      } else if (receiverId == currentId || receiverId.isEmpty || receiverId == 'user_mobile') {
-        partnerId = senderId;
-      } else {
-        partnerId = senderId;
+      // KESİN GÜVENLİK FİLTRESİ:
+      // SADECE mevcut kullanıcı bu mesajın göndericisi VEYA alıcısı ise işle!
+      final isSender = senderId == currentId;
+      final isReceiver = receiverId == currentId;
+
+      if (!isSender && !isReceiver) {
+        // Bu mesaj tamamen başka iki kullanıcı arasındaki özel bir mesajlaşmadır!
+        // Başka hesaplara sızmasını kesinlikle engelliyoruz.
+        return;
       }
 
-      if (partnerId.isEmpty) return;
+      final partnerId = isSender ? receiverId : senderId;
+      if (partnerId.isEmpty || partnerId == currentId) return;
       if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
@@ -269,7 +394,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         timestamp: timestamp,
       );
 
-      if (senderId != currentId) {
+      // Bildirim sadece mesajı alan alıcıya (isReceiver) gösterilir
+      if (isReceiver) {
         final chat = _chats.firstWhere((c) => c.participant.id.toLowerCase() == partnerId,
             orElse: () => createOrGetChatForUser(UserModel(id: partnerId, name: 'Yeni Mesaj', avatarUrl: '')));
         NotificationService().showMessageNotification(
@@ -288,9 +414,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final record = payload.newRecord;
       if (record.isEmpty) return;
 
-      final senderId = (record['sender_id']?.toString() ?? '').toLowerCase();
-      final receiverId = (record['receiver_id']?.toString() ?? '').toLowerCase();
-      final matchId = record['match_id']?.toString() ?? record['m_id']?.toString() ?? record['M_ID']?.toString();
+      final senderId = (record['sender_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (record['receiver_id']?.toString() ?? '').toLowerCase().trim();
       final content = record['content']?.toString() ?? record['message']?.toString() ?? '';
       final msgId = record['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = record['created_at']?.toString();
@@ -298,25 +423,21 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (content.trim().isEmpty) return;
 
-      final currentId = currentUserId.toLowerCase();
+      final currentId = currentUserId.toLowerCase().trim();
+      if (currentId.isEmpty) return;
 
-      String partnerId = '';
-      if (senderId == currentId && receiverId.isNotEmpty) {
-        partnerId = receiverId;
-      } else if (receiverId == currentId || receiverId.isEmpty || receiverId == 'user_mobile') {
-        partnerId = senderId;
-      } else if (matchId != null) {
-        final matchedChatIndex = _chats.indexWhere((c) => c.id == matchId);
-        if (matchedChatIndex >= 0) {
-          partnerId = _chats[matchedChatIndex].participant.id.toLowerCase();
-        } else {
-          partnerId = senderId;
-        }
-      } else {
-        partnerId = senderId;
+      // KESİN GÜVENLİK FİLTRESİ:
+      // SADECE mevcut kullanıcı bu mesajın göndericisi VEYA alıcısı ise işle!
+      final isSender = senderId == currentId;
+      final isReceiver = receiverId == currentId;
+
+      if (!isSender && !isReceiver) {
+        // Bu mesaj başka hesaplara ait, kesinlikle bu hesaba eklenemez!
+        return;
       }
 
-      if (partnerId.isEmpty) return;
+      final partnerId = isSender ? receiverId : senderId;
+      if (partnerId.isEmpty || partnerId == currentId) return;
       if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
@@ -342,7 +463,20 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   }) {
     if (content.trim().isEmpty || partnerId.isEmpty) return;
 
-    final lowerPartnerId = partnerId.toLowerCase();
+    final lowerCurrent = currentUserId.toLowerCase().trim();
+    final lowerPartnerId = partnerId.toLowerCase().trim();
+    final lowerSender = senderId.toLowerCase().trim();
+    final lowerReceiver = receiverId.toLowerCase().trim();
+
+    // Mesajın gerçekten bu iki taraf arasında olduğunu doğrula
+    final isValidPair = (lowerSender == lowerCurrent && lowerReceiver == lowerPartnerId) ||
+                        (lowerSender == lowerPartnerId && lowerReceiver == lowerCurrent);
+
+    if (!isValidPair) {
+      debugPrint('[MessageService] 🛑 injectMessage engellendi: Mesaj bu sohbete ait değil ($lowerSender -> $lowerReceiver, current: $lowerCurrent, partner: $lowerPartnerId)');
+      return;
+    }
+
     int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
 
     if (chatIndex < 0) {
@@ -354,7 +488,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final chat = _chats[chatIndex];
       final exists = chat.messages.any((m) =>
           m.id == msgId ||
-          (m.text == content && m.senderId.toLowerCase() == senderId.toLowerCase() && m.timestamp.difference(timestamp).abs().inSeconds < 3));
+          (m.text == content && m.senderId.toLowerCase() == lowerSender && m.timestamp.difference(timestamp).abs().inSeconds < 3));
 
       if (!exists) {
         final newMsg = MessageModel(
@@ -367,7 +501,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         );
         chat.messages.add(newMsg);
         chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        if (senderId.toLowerCase() != currentUserId.toLowerCase()) {
+        if (lowerSender != lowerCurrent) {
           chat.unreadCount += 1;
           if (!chat.isMuted) {
             NotificationService().showMessageNotification(
@@ -410,8 +544,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> endMatchAndRemoveChat(String chatId, String partnerId) async {
     final lowerPartnerId = partnerId.toLowerCase();
     _chats.removeWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == lowerPartnerId);
-    _deletedChatIds.remove(chatId);
-    _deletedChatIds.remove(lowerPartnerId);
+    _deletedChatIds.add(chatId);
+    _deletedChatIds.add(lowerPartnerId);
     _saveChatsToLocalStorage();
     _emitRoomUpdate(partnerId);
     notifyListeners();
@@ -496,6 +630,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       isEventBased: true,
       unreadCount: 0,
       messages: [],
+      isOnline: isUserOnline(user.id),
     );
 
     if (initialMessage != null && initialMessage.trim().isNotEmpty) {
@@ -524,22 +659,26 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   // --- SMART BACKGROUND SYNC (CANLI ANLIK SENKRONİZASYON) ---
   Future<void> syncChatMessagesForPartner(String partnerId) async {
-    final currentId = currentUserId;
-    if (partnerId.isEmpty) return;
+    final currentId = currentUserId.trim();
+    final partner = partnerId.trim();
+    if (partner.isEmpty || currentId.isEmpty) return;
 
     try {
       final lowerCurrent = currentId.toLowerCase();
-      final lowerPartner = partnerId.toLowerCase();
+      final lowerPartner = partner.toLowerCase();
 
+      if (lowerCurrent == lowerPartner) return;
+
+      // SADECE ve SADECE bu iki kullanıcı arasındaki karşılıklı mesajları sorgula
       final res = await _supabase
           .from('messages')
           .select('*')
-          .or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$partnerId,receiver_id.eq.$partnerId')
+          .or('and(sender_id.eq.$currentId,receiver_id.eq.$partner),and(sender_id.eq.$partner,receiver_id.eq.$currentId)')
           .order('created_at', ascending: true);
 
       int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartner);
       if (chatIndex < 0) {
-        final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''));
+        final newChat = createOrGetChatForUser(UserModel(id: partner, name: 'Kullanıcı', avatarUrl: ''));
         chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == lowerPartner);
       }
 
@@ -549,12 +688,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
         for (var row in res) {
           try {
-            final s = (row['sender_id']?.toString() ?? '').toLowerCase();
-            final r = (row['receiver_id']?.toString() ?? '').toLowerCase();
+            final s = (row['sender_id']?.toString() ?? '').toLowerCase().trim();
+            final r = (row['receiver_id']?.toString() ?? '').toLowerCase().trim();
 
             final isForThisChat = (s == lowerCurrent && r == lowerPartner) ||
-                                  (s == lowerPartner && r == lowerCurrent) ||
-                                  (s == lowerPartner || r == lowerPartner);
+                                  (s == lowerPartner && r == lowerCurrent);
 
             if (!isForThisChat) continue;
 
@@ -568,7 +706,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
             final existingMsgIndex = chat.messages.indexWhere((m) =>
                 m.id == mId ||
-                (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase() && m.timestamp.difference(ts).abs().inSeconds < 3));
+                (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase().trim() && m.timestamp.difference(ts).abs().inSeconds < 3));
 
             if (existingMsgIndex < 0) {
               chat.messages.add(MessageModel(
@@ -726,13 +864,25 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final Map<String, List<MessageModel>> messagesByPartner = {};
 
       for (var match in matchesRes) {
-        final u1 = match['user_id_1']?.toString() ?? '';
-        final u2 = match['user_id_2']?.toString() ?? '';
-        final partnerId = (u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1).toLowerCase();
+        final u1 = (match['user_id_1']?.toString() ?? '').trim();
+        final u2 = (match['user_id_2']?.toString() ?? '').trim();
+        final lowerCurrent = currentId.toLowerCase();
+        final partnerId = (u1.toLowerCase() == lowerCurrent ? u2 : u1);
+        final lowerPartnerId = partnerId.toLowerCase();
+
+        if (partnerId.isEmpty || lowerPartnerId == lowerCurrent) continue;
 
         if (match['messages'] != null && match['messages'] is List) {
           for (var msg in match['messages']) {
             try {
+              final s = (msg['sender_id']?.toString() ?? '').toLowerCase().trim();
+              final r = (msg['receiver_id']?.toString() ?? '').toLowerCase().trim();
+
+              final isValid = (s == lowerCurrent && r == lowerPartnerId) ||
+                              (s == lowerPartnerId && r == lowerCurrent) ||
+                              (r.isEmpty && (s == lowerCurrent || s == lowerPartnerId));
+              if (!isValid) continue;
+
               final msgModel = MessageModel(
                 id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
                 senderId: msg['sender_id']?.toString() ?? '',
@@ -743,7 +893,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                     : DateTime.now(),
                 status: MessageStatus.delivered,
               );
-              messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+              messagesByPartner.putIfAbsent(lowerPartnerId, () => []).add(msgModel);
             } catch (e) {
               debugPrint('MODEL PARSE HATASI: $e');
             }
@@ -752,9 +902,20 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       for (var msg in directMessagesRes) {
-        final sender = msg['sender_id']?.toString() ?? '';
-        final receiver = msg['receiver_id']?.toString() ?? '';
-        final partnerId = (sender.toLowerCase() == currentId.toLowerCase() ? receiver : sender).toLowerCase();
+        final sender = (msg['sender_id']?.toString() ?? '').trim();
+        final receiver = (msg['receiver_id']?.toString() ?? '').trim();
+        final lowerCurrent = currentId.toLowerCase();
+        final lowerSender = sender.toLowerCase();
+        final lowerReceiver = receiver.toLowerCase();
+
+        String partnerId = '';
+        if (lowerSender == lowerCurrent && lowerReceiver.isNotEmpty && lowerReceiver != lowerCurrent) {
+          partnerId = receiver;
+        } else if (lowerReceiver == lowerCurrent && lowerSender.isNotEmpty && lowerSender != lowerCurrent) {
+          partnerId = sender;
+        } else {
+          continue;
+        }
 
         try {
           final msgModel = MessageModel(
@@ -768,7 +929,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             status: MessageStatus.delivered,
           );
 
-          messagesByPartner.putIfAbsent(partnerId, () => []).add(msgModel);
+          messagesByPartner.putIfAbsent(partnerId.toLowerCase(), () => []).add(msgModel);
         } catch (e) {
           debugPrint('MODEL PARSE HATASI: $e');
         }
@@ -823,8 +984,15 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
         final rawMessages = messagesByPartner[lowerPartnerId] ?? [];
         if (existingChat != null) {
+          final lowerCurrent = currentId.toLowerCase();
           for (var localMsg in existingChat.messages) {
-            rawMessages.add(localMsg);
+            final s = localMsg.senderId.toLowerCase().trim();
+            final r = (localMsg.receiverId ?? '').toLowerCase().trim();
+            final isLocalValid = (s == lowerCurrent && (r == lowerPartnerId || r.isEmpty)) ||
+                                 (s == lowerPartnerId && (r == lowerCurrent || r.isEmpty));
+            if (isLocalValid) {
+              rawMessages.add(localMsg);
+            }
           }
         }
 
@@ -850,6 +1018,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           unreadCount: existingChat?.unreadCount ?? 0,
           messages: dedupedMessages,
           expiresAt: expiresByPartner[partnerId],
+          isOnline: isUserOnline(partnerId),
         );
       }
 
@@ -908,6 +1077,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       if (chatIndex >= 0) {
         final chat = _chats[chatIndex];
         final partnerId = receiverUserId?.isNotEmpty == true ? receiverUserId! : chat.participant.id;
+
+        if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) {
+          debugPrint('[MessageService] ⚠️ sendMessage iptal: Geçersiz partnerId ($partnerId)');
+          return;
+        }
 
         if (isBlocked(partnerId)) return;
 
@@ -997,17 +1171,51 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void markAsRead(String chatId) {
-    final chatIndex = _chats.indexWhere((c) => c.id == chatId);
+  Future<void> markAsRead(String chatId, {String? partnerId}) async {
+    final lowerPartner = partnerId?.toLowerCase().trim();
+    final lowerChatId = chatId.toLowerCase().trim();
+    final chatIndex = _chats.indexWhere((c) =>
+        c.id.toLowerCase() == lowerChatId ||
+        c.participant.id.toLowerCase() == lowerChatId ||
+        (lowerPartner != null && c.participant.id.toLowerCase() == lowerPartner));
+
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
       chat.unreadCount = 0;
+      final currentId = currentUserId.trim();
+      final lowerCurrent = currentId.toLowerCase();
+
       for (var m in chat.messages) {
-        m.status = MessageStatus.read;
+        if (m.senderId.toLowerCase() != lowerCurrent) {
+          m.status = MessageStatus.read;
+        }
       }
       _saveChatsToLocalStorage();
       _emitRoomUpdate(chat.participant.id);
       notifyListeners();
+
+      // Karşı tarafa gerçek zamanlı okundu sinyali gönder (Mavi tık için)
+      try {
+        _broadcastChannel?.sendBroadcastMessage(
+          event: 'messages_read',
+          payload: {
+            'chat_id': chat.id,
+            'reader_id': currentId,
+            'partner_id': chat.participant.id,
+          },
+        );
+      } catch (_) {}
+
+      // Veritabanında da okundu olarak güncelle
+      try {
+        if (currentId.isNotEmpty && chat.participant.id.isNotEmpty) {
+          await _supabase
+              .from('messages')
+              .update({'is_read': true})
+              .eq('receiver_id', currentId)
+              .eq('sender_id', chat.participant.id);
+        }
+      } catch (_) {}
     }
   }
 

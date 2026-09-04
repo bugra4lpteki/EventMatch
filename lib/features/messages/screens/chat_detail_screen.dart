@@ -43,12 +43,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animated: false);
-      msgService.markAsRead(widget.chat.id);
+      msgService.markAsRead(widget.chat.id, partnerId: widget.chat.participant.id);
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // 1 saniyelik canlı senkronizasyon emniyet sübabı
-    _liveSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+    // 4 saniyelik canlı senkronizasyon emniyet sübabı (WebSocket anlık çalıştığı için ağ kotası korunur)
+    _liveSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
       }
@@ -206,12 +206,40 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Icon(Icons.arrow_forward_ios_rounded, size: 11, color: AppColors.primary),
                       ],
                     ),
-                    Text(
-                      'Profili Gör',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
-                      ),
+                    Builder(
+                      builder: (context) {
+                        final isOnline = msgService.isUserOnline(currentChat.participant.id) || currentChat.isOnline;
+                        if (isOnline && !isBlocked) {
+                          return Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF10B981),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              const Text(
+                                'Çevrimiçi',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF10B981),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        return Text(
+                          'Profili Gör',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -418,11 +446,25 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
                     final message = messages[index];
-                    final isMe = message.senderId == msgService.currentUserId ||
-                        message.senderId == 'me' ||
-                        (msgService.currentUserId.isEmpty && message.senderId != currentChat.participant.id);
+                    final currentId = msgService.currentUserId.toLowerCase().trim();
+                    final senderId = message.senderId.toLowerCase().trim();
+                    final isMe = senderId == currentId ||
+                        senderId == 'me' ||
+                        (currentId.isEmpty && senderId != currentChat.participant.id.toLowerCase().trim());
 
-                    return _buildWhatsAppMessageBubble(message, isMe);
+                    final showDateHeader = index == 0 || !_isSameDay(messages[index].timestamp, messages[index - 1].timestamp);
+                    final bubble = _buildWhatsAppMessageBubble(message, isMe);
+
+                    if (showDateHeader) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildDateBadge(_formatDateHeader(message.timestamp)),
+                          bubble,
+                        ],
+                      );
+                    }
+                    return bubble;
                   },
                 );
               },
@@ -430,6 +472,45 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
           _buildMessageComposer(msgService, currentChat.id, isBlocked),
         ],
+      ),
+    );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  String _formatDateHeader(DateTime date) {
+    final now = DateTime.now();
+    if (_isSameDay(date, now)) {
+      return 'Bugün';
+    } else if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
+      return 'Dün';
+    } else if (date.year == now.year) {
+      return DateFormat('d MMMM', 'tr_TR').format(date);
+    } else {
+      return DateFormat('d MMMM yyyy', 'tr_TR').format(date);
+    }
+  }
+
+  Widget _buildDateBadge(String label) {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2235).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
     );
   }

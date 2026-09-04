@@ -54,6 +54,7 @@ dependencies:
   latlong2: ^0.10.1
   cached_network_image: ^3.4.1
   flutter_slidable: ^4.0.3
+  audioplayers: ^6.7.1
 
 dev_dependencies:
   excel: ^4.0.6

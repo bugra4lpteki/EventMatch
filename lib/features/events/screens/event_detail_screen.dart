@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
@@ -12,6 +13,7 @@ import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
+import '../services/spotify_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
 
@@ -26,6 +28,192 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isDescriptionExpanded = false;
+
+  // Spotify & Audio Preview State
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final SpotifyService _spotifyService = SpotifyService();
+  SpotifyArtist? _spotifyArtist;
+  List<SpotifyTrack> _spotifyTracks = [];
+  bool _isLoadingSpotify = true;
+  String? _playingTrackId;
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+
+  bool get _isMusicEvent {
+    final cat = widget.event.category.toLowerCase().trim();
+    final title = widget.event.title.toLowerCase().trim();
+
+    // Tiyatro, stand-up, komedi, gösteri, sahne sanatları, spor, atölye, sinema kesinlikle müzik değildir!
+    if (cat.contains('tiyatro') ||
+        cat.contains('theatre') ||
+        cat.contains('arts') ||
+        cat.contains('stand-up') ||
+        cat.contains('standup') ||
+        cat.contains('komedi') ||
+        cat.contains('comedy') ||
+        cat.contains('sahne') ||
+        cat.contains('spor') ||
+        cat.contains('sport') ||
+        cat.contains('sergi') ||
+        cat.contains('atölye') ||
+        cat.contains('workshop') ||
+        cat.contains('sinema') ||
+        cat.contains('cinema') ||
+        title.contains('stand-up') ||
+        title.contains('stand up') ||
+        title.contains('tiyatro') ||
+        title.contains('gösteri') ||
+        title.contains('oyun') ||
+        title.contains('tek kişilik')) {
+      return false;
+    }
+
+    return cat.contains('konser') ||
+        cat.contains('concert') ||
+        cat.contains('müzik') ||
+        cat.contains('music') ||
+        cat.contains('akustik') ||
+        cat.contains('festival');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initAudioListeners();
+    if (_isMusicEvent) {
+      _loadSpotifyData();
+    } else {
+      _isLoadingSpotify = false;
+    }
+  }
+
+  void _initAudioListeners() {
+    _audioPlayer.setPlayerMode(PlayerMode.mediaPlayer);
+    _audioPlayer.setReleaseMode(ReleaseMode.stop);
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = state == PlayerState.playing;
+      });
+    });
+
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (!mounted) return;
+      setState(() {
+        _currentPosition = pos;
+      });
+    });
+
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (!mounted) return;
+      setState(() {
+        _isPlaying = false;
+        _playingTrackId = null;
+        _currentPosition = Duration.zero;
+      });
+    });
+  }
+
+  Future<void> _loadSpotifyData() async {
+    if (!_isMusicEvent) {
+      if (mounted) {
+        setState(() {
+          _isLoadingSpotify = false;
+        });
+      }
+      return;
+    }
+    try {
+      final artist = await _spotifyService.searchArtist(widget.event.title, category: widget.event.category);
+      if (artist != null && mounted) {
+        final tracks = await _spotifyService.getArtistTopTracks(artist.id, artistName: artist.name);
+        if (mounted) {
+          setState(() {
+            _spotifyArtist = artist;
+            _spotifyTracks = tracks;
+            _isLoadingSpotify = false;
+          });
+        }
+      } else if (mounted) {
+        setState(() {
+          _isLoadingSpotify = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingSpotify = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _togglePlayTrack(SpotifyTrack track) async {
+    HapticFeedback.selectionClick();
+
+    try {
+      if (_playingTrackId == track.id && _isPlaying) {
+        await _audioPlayer.pause();
+        setState(() {
+          _isPlaying = false;
+        });
+        return;
+      }
+
+      if (_playingTrackId != track.id) {
+        await _audioPlayer.stop();
+        _currentPosition = Duration.zero;
+      }
+
+      final audioUrl = (track.previewUrl != null && track.previewUrl!.isNotEmpty)
+          ? track.previewUrl!
+          : 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+
+      try {
+        await _audioPlayer.play(UrlSource(audioUrl));
+        setState(() {
+          _playingTrackId = track.id;
+          _isPlaying = true;
+        });
+      } catch (innerError) {
+        debugPrint("Primary audio preview failed, attempting fallback: $innerError");
+        const fallbackUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+        await _audioPlayer.play(UrlSource(fallbackUrl));
+        setState(() {
+          _playingTrackId = track.id;
+          _isPlaying = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("Audio preview error: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.music_off_rounded, color: Colors.white70),
+                SizedBox(width: 10),
+                Expanded(child: Text('Ses önizlemesi yüklenemedi. Spotify üzerinden dinleyebilirsiniz.')),
+              ],
+            ),
+            backgroundColor: AppColors.surfaceLight,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        );
+      }
+    }
+  }
+
+
+  @override
+  void dispose() {
+    _audioPlayer.stop();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
+
 
   String _getTurkishMonthName(int month) {
     const months = [
@@ -167,7 +355,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Hero(
                     tag: 'event_image_${event.id}',
                     child: AppImageWidget(
-                      imageUrl: event.imageUrl,
+                      imageUrl: (_isMusicEvent && _spotifyArtist != null && _spotifyArtist!.imageUrl.isNotEmpty)
+                          ? _spotifyArtist!.imageUrl
+                          : event.imageUrl,
                       fit: BoxFit.cover,
                       memCacheWidth: 1080,
                     ),
@@ -470,11 +660,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 await UrlLauncherHelper.launchURL(targetUrl);
                               },
                               icon: const Icon(Icons.confirmation_number_outlined, color: Colors.white, size: 20),
-                              label: Text(
-                                event.ticketProvider != null && event.ticketProvider!.isNotEmpty
-                                    ? "${event.ticketProvider!.toUpperCase()}'DEN BİLET AL"
-                                    : 'BİLETİX\'TEN BİLET AL',
-                                style: const TextStyle(
+                              label: const Text(
+                                'BİLETLER',
+                                style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,
@@ -535,9 +723,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     ),
                                     children: [
                                       TileLayer(
-                                        urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-                                        subdomains: const ['a', 'b', 'c', 'd'],
+                                        urlTemplate: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
                                         userAgentPackageName: 'com.eventmatch.app',
+                                        tileProvider: NetworkTileProvider(),
                                       ),
                                       MarkerLayer(
                                         markers: [
@@ -653,6 +841,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
 
                   const SizedBox(height: 32),
+
+                  // --- SPOTIFY ARTIST PREVIEW & TOP 3 TRACKS SECTION (Sadece Müzik/Konser) ---
+                  if (_isMusicEvent)
+                    _buildSpotifyPreviewSection(),
 
                   // --- ETKİNLİK HAKKINDA SECTION ---
                   const Text(
@@ -1088,4 +1280,404 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       child: child,
     );
   }
+
+  Widget _buildSpotifyPreviewSection() {
+    if (!_isMusicEvent) {
+      return const SizedBox.shrink();
+    }
+    if (_isLoadingSpotify) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 32),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: const Color(0xFF121212).withOpacity(0.7),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: const Color(0xFF1DB954).withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF1DB954)),
+            ),
+            const SizedBox(width: 14),
+            Text(
+              "Spotify sanatçı bilgileri ve şarkılar yükleniyor...",
+              style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_spotifyTracks.isEmpty && _spotifyArtist == null) {
+      return const SizedBox.shrink();
+    }
+
+    const spotifyGreen = Color(0xFF1DB954);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 32),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF0F2617), // Deep Spotify tinted dark
+            const Color(0xFF121212).withOpacity(0.9),
+            AppColors.surface.withOpacity(0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: spotifyGreen.withOpacity(0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: spotifyGreen.withOpacity(0.12),
+            blurRadius: 24,
+            spreadRadius: 1,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row: Spotify Logo, Badge & "Aç" Action
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: const BoxDecoration(
+                          color: spotifyGreen,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.music_note_rounded, color: Colors.black, size: 16),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        "SPOTIFY",
+                        style: TextStyle(
+                          color: spotifyGreen,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          "En Popüler 3 Şarkı",
+                          style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_spotifyArtist?.spotifyUrl != null && _spotifyArtist!.spotifyUrl.isNotEmpty)
+                    InkWell(
+                      onTap: () => UrlLauncherHelper.launchURL(_spotifyArtist!.spotifyUrl),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withOpacity(0.15)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              "Spotify'da Aç",
+                              style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                            SizedBox(width: 4),
+                            Icon(Icons.open_in_new_rounded, color: Colors.white, size: 12),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Artist Profile Card
+              if (_spotifyArtist != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
+                  ),
+                  child: Row(
+                    children: [
+                      // Artist Avatar
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: spotifyGreen.withOpacity(0.8), width: 2),
+                          boxShadow: [
+                            BoxShadow(color: spotifyGreen.withOpacity(0.3), blurRadius: 10),
+                          ],
+                        ),
+                        child: ClipOval(
+                          child: _spotifyArtist!.imageUrl.isNotEmpty
+                              ? Image.network(
+                                  _spotifyArtist!.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white),
+                                )
+                              : const Icon(Icons.person, color: Colors.white),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _spotifyArtist!.name,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 16),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              _spotifyArtist!.genres.isNotEmpty
+                                  ? _spotifyArtist!.genres.take(2).join(' • ').toUpperCase()
+                                  : 'SANATÇI',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              const SizedBox(height: 14),
+
+              // Tracks List
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                itemCount: _spotifyTracks.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 10),
+                itemBuilder: (context, index) {
+                  final track = _spotifyTracks[index];
+                  final isCurrentTrack = _playingTrackId == track.id;
+                  final isPlayingThis = isCurrentTrack && _isPlaying;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isPlayingThis
+                          ? spotifyGreen.withOpacity(0.12)
+                          : Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isPlayingThis ? spotifyGreen.withOpacity(0.4) : Colors.white.withOpacity(0.06),
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            // Track Number or Equalizer
+                            SizedBox(
+                              width: 20,
+                              child: isPlayingThis
+                                  ? const Icon(Icons.graphic_eq_rounded, color: spotifyGreen, size: 18)
+                                  : Text(
+                                      '${index + 1}',
+                                      style: TextStyle(
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                            ),
+                            const SizedBox(width: 8),
+
+                            // Album Thumbnail
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: SizedBox(
+                                width: 44,
+                                height: 44,
+                                child: track.albumCoverUrl.isNotEmpty
+                                    ? Image.network(
+                                        track.albumCoverUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => Container(
+                                          color: Colors.white12,
+                                          child: const Icon(Icons.music_note, color: Colors.white70),
+                                        ),
+                                      )
+                                    : Container(
+                                        color: Colors.white12,
+                                        child: const Icon(Icons.music_note, color: Colors.white70),
+                                      ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+
+                            // Track Info
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    track.title,
+                                    style: TextStyle(
+                                      color: isPlayingThis ? spotifyGreen : Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    track.artistName,
+                                    style: TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11.5,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Play / Pause Circle Button
+                            InkWell(
+                              onTap: () => _togglePlayTrack(track),
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isPlayingThis ? spotifyGreen : Colors.white.withOpacity(0.12),
+                                  shape: BoxShape.circle,
+                                  boxShadow: isPlayingThis
+                                      ? [
+                                          BoxShadow(
+                                            color: spotifyGreen.withOpacity(0.5),
+                                            blurRadius: 10,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: Icon(
+                                  isPlayingThis ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                  color: isPlayingThis ? Colors.black : Colors.white,
+                                  size: 22,
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(width: 8),
+
+                            // Open in Spotify Button
+                            if (track.spotifyUrl.isNotEmpty)
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: EdgeInsets.zero,
+                                icon: Icon(
+                                  Icons.open_in_new_rounded,
+                                  color: Colors.white.withOpacity(0.4),
+                                  size: 16,
+                                ),
+                                onPressed: () => UrlLauncherHelper.launchURL(track.spotifyUrl),
+                              ),
+                          ],
+                        ),
+
+                        // Progress indicator for playing track (30s preview)
+                        if (isPlayingThis) ...[
+                          const SizedBox(height: 10),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: (_currentPosition.inMilliseconds / 30000.0).clamp(0.0, 1.0),
+                              backgroundColor: Colors.white12,
+                              valueColor: const AlwaysStoppedAnimation<Color>(spotifyGreen),
+                              minHeight: 3,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "0:${_currentPosition.inSeconds.toString().padLeft(2, '0')}",
+                                style: const TextStyle(color: spotifyGreen, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                              const Text(
+                                "0:30 (Önizleme)",
+                                style: TextStyle(color: Colors.white38, fontSize: 10),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  "🎵 30 saniyelik önizleme dinlemektesiniz • Tam sürüm için Spotify'a geçin",
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.45),
+                    fontSize: 10.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
+

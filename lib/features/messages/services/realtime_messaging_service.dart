@@ -51,8 +51,11 @@ class RealtimeMessagingService {
         'created_at': DateTime.now().toIso8601String(),
       });
 
-      // Local push notification test trigger
-      NotificationService().showMessageNotification(senderName, messageText.trim());
+      NotificationService().showMessageNotification(
+        chatId: receiverId,
+        senderName: senderName,
+        message: messageText.trim(),
+      );
     } catch (e) {
       debugPrint('[RealtimeMessaging] Send error: $e');
     }

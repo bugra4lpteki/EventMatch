@@ -99,14 +99,41 @@ class AppImageWidget extends StatelessWidget {
     return Container(
       width: width,
       height: height,
-      color: AppColors.surface,
-      child: Center(
-        child: Icon(
-          Icons.event_outlined,
-          color: AppColors.textMuted,
-          size: (height != null && height! < 50) ? 20 : 32,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        gradient: LinearGradient(
+          colors: [
+            AppColors.surface,
+            AppColors.surfaceLight,
+            AppColors.surface,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop',
+            fit: fit,
+            errorBuilder: (_, __, ___) => Container(
+              color: AppColors.surfaceLight,
+              child: Center(
+                child: Icon(
+                  Icons.music_note_rounded,
+                  color: Colors.white24,
+                  size: (height != null && height! < 50) ? 20 : 36,
+                ),
+              ),
+            ),
+          ),
+          Container(
+            color: Colors.black.withOpacity(0.35),
+          ),
+        ],
       ),
     );
   }
 }
+

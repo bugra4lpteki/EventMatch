@@ -18,12 +18,21 @@ class MessagesScreen extends StatefulWidget {
 }
 
 class _MessagesScreenState extends State<MessagesScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MockMessageService>().reloadChats();
     });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<bool?> _showEndMatchConfirmDialog(BuildContext context, String partnerName) {
@@ -51,6 +60,44 @@ class _MessagesScreenState extends State<MessagesScreen> {
             child: const Text('Sil ve Bitir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: TextField(
+        controller: _searchController,
+        style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
+        onChanged: (val) {
+          setState(() {
+            _searchQuery = val.trim();
+          });
+        },
+        decoration: InputDecoration(
+          hintText: 'Sohbetlerde veya kişilerde ara...',
+          hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13.5),
+          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 18, color: Colors.white60),
+                  onPressed: () {
+                    _searchController.clear();
+                    setState(() {
+                      _searchQuery = '';
+                    });
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
       ),
     );
   }
@@ -108,23 +155,57 @@ class _MessagesScreenState extends State<MessagesScreen> {
             );
           }
 
-          return RefreshIndicator(
-            color: AppColors.primary,
-            backgroundColor: AppColors.surface,
-            onRefresh: () => messageService.reloadChats(),
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: chats.length + (archivedChats.isNotEmpty ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (archivedChats.isNotEmpty && index == 0) {
-                  return _buildArchivedBanner(context, archivedChats.length);
-                }
+          final filteredChats = _searchQuery.isEmpty
+              ? chats
+              : chats.where((c) {
+                  final q = _searchQuery.toLowerCase();
+                  final nameMatch = c.participant.name.toLowerCase().contains(q);
+                  final msgMatch = c.lastMessage?.text.toLowerCase().contains(q) ?? false;
+                  return nameMatch || msgMatch;
+                }).toList();
 
-                final chatIndex = archivedChats.isNotEmpty ? index - 1 : index;
-                final chat = chats[chatIndex];
-                return _buildSlidableChatTile(context, chat, messageService);
-              },
-            ),
+          return Column(
+            children: [
+              _buildSearchBar(),
+              Expanded(
+                child: RefreshIndicator(
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.surface,
+                  onRefresh: () => messageService.reloadChats(),
+                  child: filteredChats.isEmpty && _searchQuery.isNotEmpty
+                      ? ListView(
+                          children: [
+                            const SizedBox(height: 60),
+                            Center(
+                              child: Column(
+                                children: [
+                                  Icon(Icons.search_off_rounded, size: 48, color: AppColors.textSecondary),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    '"$_searchQuery" ile eşleşen sohbet bulunamadı.',
+                                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          itemCount: filteredChats.length + (archivedChats.isNotEmpty && _searchQuery.isEmpty ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (archivedChats.isNotEmpty && _searchQuery.isEmpty && index == 0) {
+                              return _buildArchivedBanner(context, archivedChats.length);
+                            }
+
+                            final chatIndex = (archivedChats.isNotEmpty && _searchQuery.isEmpty) ? index - 1 : index;
+                            final chat = filteredChats[chatIndex];
+                            return _buildSlidableChatTile(context, chat, messageService);
+                          },
+                        ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -314,6 +395,20 @@ class _MessagesScreenState extends State<MessagesScreen> {
                       )
                     : null,
               ),
+              if (chat.isOnline)
+                Positioned(
+                  right: 2,
+                  bottom: 2,
+                  child: Container(
+                    width: 13,
+                    height: 13,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.background, width: 2),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

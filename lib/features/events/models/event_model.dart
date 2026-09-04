@@ -40,11 +40,117 @@ class EventModel {
     final titleLower = title.toLowerCase();
     final catLower = category.toLowerCase();
 
+    // Tiyatro, Stand-up ve Komedi etkinlikleri müzik sanatçısı eşleştirmelerinden hariç tutulur
+    final isNonMusic = catLower.contains('theatre') ||
+        catLower.contains('tiyatro') ||
+        catLower.contains('arts') ||
+        catLower.contains('stand-up') ||
+        catLower.contains('standup') ||
+        catLower.contains('komedi') ||
+        catLower.contains('sahne') ||
+        titleLower.contains('stand up') ||
+        titleLower.contains('stand-up') ||
+        titleLower.contains('tiyatro') ||
+        titleLower.contains('gösteri') ||
+        titleLower.contains('oyun') ||
+        titleLower.contains('tek kişilik');
+
+    if (isNonMusic) {
+      if (titleLower.contains('baturay') || titleLower.contains('özdemir')) {
+        return 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg';
+      }
+      if (url.isNotEmpty && !url.contains('photo-1470225620780') && !url.contains('photo-1514525253161')) {
+        return url;
+      }
+      return 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop';
+    }
+
+    // 1. Konser / Sanatçı Etkinlikleri İçin Gerçek Spotify Sanatçı Kapak (Artist Header) Görselleri
+    if (titleLower.contains('sıla') || titleLower.contains('sila')) {
+      // Sıla - Spotify Resmi Sanatçı Header/Profil Kapak Fotoğrafı (Siyah-Beyaz Çatı/Teras Oturan Sanatçı)
+      return 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1';
+    }
+    if (titleLower.contains('the sisters of mercy') || titleLower.contains('sisters of mercy')) {
+      // The Sisters of Mercy - Resmi HD Sanatçı / Grup Görseli
+      return 'https://cdn-images.dzcdn.net/images/artist/d9ac1fd697d5ac6124413fa0441db6f1/1000x1000-000000-80-0-0.jpg';
+    }
+    if (titleLower.contains('the black keys') || titleLower.contains('black keys')) {
+      // The Black Keys - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab67618600001016d97c724773c3cbdf1fe251b5';
+    }
+    if (titleLower.contains('buray')) {
+      // Buray - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı (Alacalı)
+      return 'https://i.scdn.co/image/ab6761860000101683beeb732a3fc267923707ce';
+    }
+    if (titleLower.contains('duman')) {
+      // Duman - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab676186000010167c13286dc5ce2665e7178ebf';
+    }
+    if (titleLower.contains('levent yüksel') || titleLower.contains('levent yuksel')) {
+      // Levent Yüksel - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab676186000010166ea344d18ecab55225c571e2';
+    }
+    if (titleLower.contains('gülşen') || titleLower.contains('gulsen')) {
+      // Gülşen - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab676186000010168bfa17a42a083aa426d400e9';
+    }
+    if (titleLower.contains('blok3') || titleLower.contains('blok 3')) {
+      // Blok3 - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab67618600001016a27e46fcb99cb5a3cb53ea24';
+    }
+    if (titleLower.contains('teoman')) {
+      // Teoman - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab67618600001016629ad14cbb11eaef917e7939';
+    }
+    if (titleLower.contains('mor ve ötesi') || titleLower.contains('mor ve otesi')) {
+      // Mor ve Ötesi - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab676186000010161b9ee77e9ec8fca3bb5976b9';
+    }
+    if (titleLower.contains('manga')) {
+      // maNga - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab676186000010164c0cfb2e0be38cf4dc1dc1df';
+    }
+    if (titleLower.contains('athena')) {
+      // Athena - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab67618600001016f4da31ce9c5658e0a30b58e6';
+    }
+    if (titleLower.contains('sezen aksu')) {
+      // Sezen Aksu - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab6761860000101633d1c14cb5ee9a6927a7aa37';
+    }
+    if (titleLower.contains('tarkan')) {
+      // Tarkan - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab6761860000101683995f5733f11d13a96860d5';
+    }
+    if (titleLower.contains('melike şahin') || titleLower.contains('melike sahin')) {
+      // Melike Şahin - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab6761860000101639d67b2521f7c32bf26fb2ae';
+    }
+    if (titleLower.contains('madrigal')) {
+      // Madrigal - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab67618600001016911c42f026131362e49c716a';
+    }
+    if (titleLower.contains('coldplay')) {
+      // Coldplay - Spotify Resmi Sanatçı Header/Kapak Fotoğrafı
+      return 'https://i.scdn.co/image/ab6761860000101693be6657dd8cf45dc82c572a';
+    }
+
+    // 2. Stand-up ve Komedi İçin Gerçek Görsel
+    if (titleLower.contains('baturay') || titleLower.contains('özdemir')) {
+      return 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg';
+    }
+
     if (url.contains('a0f0fa47') || titleLower.contains('mavi')) {
       return 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?q=80&w=1470&auto=format&fit=crop';
     }
 
-    if (url.isEmpty || url.contains('photo-1470225620780-dba8ba36b745')) {
+    // Generic, boş veya bozuk stok fotoğrafları kategorisine göre eşle (Hiçbir etkinlik boş kalmaz)
+    final trimmedUrl = url.trim();
+    if (trimmedUrl.isEmpty ||
+        trimmedUrl.contains('weserv.nl') ||
+        trimmedUrl.contains('placeholder') ||
+        trimmedUrl.contains('photo-1470225620780-dba8ba36b745') ||
+        trimmedUrl.contains('photo-1514525253161-7a46d19cd819')) {
       if (catLower.contains('theatre') || catLower.contains('tiyatro') || catLower.contains('arts') || titleLower.contains('stand up') || titleLower.contains('gösteri')) {
         return 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?q=80&w=1200&auto=format&fit=crop';
       } else if (catLower.contains('sports') || catLower.contains('spor') || titleLower.contains('maç')) {
@@ -55,7 +161,8 @@ class EventModel {
       return 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=1200&auto=format&fit=crop';
     }
 
-    return url;
+    return trimmedUrl;
+
   }
 
   final String atmosphere;
@@ -179,5 +286,41 @@ class EventModel {
     } catch (_) {
       return null;
     }
+  }
+
+  EventModel copyWith({
+    String? id,
+    String? title,
+    String? category,
+    String? location,
+    DateTime? dateTime,
+    String? description,
+    String? imageUrl,
+    List<UserModel>? attendees,
+    double? latitude,
+    double? longitude,
+    String? ticketUrl,
+    String? ticketProvider,
+    bool? isActive,
+    String? atmosphere,
+    bool? isPopular,
+  }) {
+    return EventModel(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      category: category ?? this.category,
+      location: location ?? this.location,
+      dateTime: dateTime ?? this.dateTime,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      attendees: attendees ?? this.attendees,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      ticketUrl: ticketUrl ?? this.ticketUrl,
+      ticketProvider: ticketProvider ?? this.ticketProvider,
+      isActive: isActive ?? this.isActive,
+      atmosphere: atmosphere ?? this.atmosphere,
+      isPopular: isPopular ?? this.isPopular,
+    );
   }
 }

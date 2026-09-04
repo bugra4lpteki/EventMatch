@@ -41,28 +41,33 @@ DROP POLICY IF EXISTS "Allow insert own messages" ON public.messages;
 DROP POLICY IF EXISTS "Sadece eslesme taraflari mesajlari gorebilir" ON public.messages;
 DROP POLICY IF EXISTS "Sadece eslesme taraflari mesaj gonderebilir" ON public.messages;
 
--- YENİ SIKI POLİTİKALAR: Yalnızca ilgili eşleşmenin (match) tarafları mesajları görebilir
+-- YENİ SIKI POLİTİKALAR: Yalnızca mesajın tarafları (gönderici/alıcı) veya eşleşme tarafları mesajları görebilir
 CREATE POLICY "Sadece eslesme taraflari mesajlari gorebilir" 
 ON public.messages 
 FOR SELECT 
 USING (
-  EXISTS (
+  sender_id::text = auth.uid()::text 
+  OR receiver_id::text = auth.uid()::text
+  OR EXISTS (
     SELECT 1 FROM public.matches m
     WHERE m.id = messages.match_id
       AND (m.user_id_1::text = auth.uid()::text OR m.user_id_2::text = auth.uid()::text)
   )
 );
 
--- Sadece eşleşmenin tarafları ve gönderici kendisi olanlar mesaj ekleyebilir
+-- Sadece gönderici kendisi olan ve alıcısı veya eşleşmesi olanlar mesaj ekleyebilir
 CREATE POLICY "Sadece eslesme taraflari mesaj gonderebilir" 
 ON public.messages 
 FOR INSERT 
 WITH CHECK (
   sender_id::text = auth.uid()::text
-  AND EXISTS (
-    SELECT 1 FROM public.matches m
-    WHERE m.id = messages.match_id
-      AND (m.user_id_1::text = auth.uid()::text OR m.user_id_2::text = auth.uid()::text)
+  AND (
+    (receiver_id IS NOT NULL AND receiver_id::text != '')
+    OR EXISTS (
+      SELECT 1 FROM public.matches m
+      WHERE m.id = messages.match_id
+        AND (m.user_id_1::text = auth.uid()::text OR m.user_id_2::text = auth.uid()::text)
+    )
   )
 );
 

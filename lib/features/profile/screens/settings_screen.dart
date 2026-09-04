@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
+import '../../events/services/mock_event_service.dart';
 import 'account_settings_screen.dart';
 import 'security_settings_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -222,6 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             onPressed: () {
               Navigator.pop(dialogContext);
+              context.read<MockEventService>().clearUserData();
               context.read<AuthService>().logout();
               Navigator.pushAndRemoveUntil(
                 context,
