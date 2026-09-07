@@ -11,7 +11,9 @@ import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
-import 'core/services/notification_service.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'services/notification_service.dart';
 import 'features/messages/services/mock_message_service.dart';
 import 'features/messages/screens/chat_detail_screen.dart';
 import 'features/events/models/user_model.dart';
@@ -21,6 +23,18 @@ import 'core/constants/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Firebase Başlatma & Arka Plan Mesaj Dinleyicisi
+  try {
+    await Firebase.initializeApp();
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    debugPrint('[Firebase] 🔥 Firebase başarıyla başlatıldı ve arka plan dinleyicisi bağlandı.');
+  } catch (e) {
+    debugPrint('[Firebase] ⚠️ Firebase başlatma uyarısı: $e');
+  }
+
+  // 2. Yüksek Öncelikli Bildirim Servisi Başlatma (FCM, Local Notifications, high_importance_channel)
+  await NotificationService().initialize();
 
   // Sanatçı görsel cache'ini sıfırla: eski albüm kapağı URL'leri kalmasın,
   // Wikipedia / Deezer'dan gerçek sanatçı fotoğrafı çekilsin.
@@ -47,19 +61,19 @@ void main() async {
       color: Color(0xFF08080C),
       child: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: EdgeInsets.all(24.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded, color: Color(0xFFEC4899), size: 48),
-              const SizedBox(height: 16),
-              const Text(
+              Icon(Icons.error_outline_rounded, color: Color(0xFFEC4899), size: 48),
+              SizedBox(height: 16),
+              Text(
                 'Görünüm Yüklenirken Bir Hata Oluştu',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 8),
-              const Text(
+              SizedBox(height: 8),
+              Text(
                 'Lütfen uygulamayı yenileyin veya tekrar deneyin.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white70, fontSize: 13),
@@ -70,8 +84,6 @@ void main() async {
       ),
     );
   };
-
-  await NotificationService().initialize();
 
   await Supabase.initialize(
     url: SupabaseConfig.url,
