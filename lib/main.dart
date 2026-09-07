@@ -134,6 +134,10 @@ class _EventMatchAppState extends State<EventMatchApp> {
 
       if (event == AuthChangeEvent.signedIn) {
         ctx.read<MockEventService>().loadUserProfile();
+        final userId = data.session?.user.id;
+        if (userId != null) {
+          NotificationService().syncUserWithOneSignal(userId);
+        }
       } else if (event == AuthChangeEvent.passwordRecovery) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),

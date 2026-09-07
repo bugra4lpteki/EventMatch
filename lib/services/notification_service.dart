@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../core/constants/onesignal_config.dart';
 
-/// %100 Saf Supabase & Flutter Yerel Bildirim Servisi (WhatsApp Tarzı Heads-up)
+/// EventMatch Gelişmiş Bildirim Servisi (OneSignal + Yerel Heads-up WhatsApp Bildirimleri)
 class NotificationService with WidgetsBindingObserver {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -59,7 +61,7 @@ class NotificationService with WidgetsBindingObserver {
     if (_isInitialized) return;
 
     try {
-      // 1. Yerel Bildirim Ayarları
+      // 1. Yerel Bildirim Motorunu Başlat (Local Notifications)
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
@@ -75,7 +77,7 @@ class NotificationService with WidgetsBindingObserver {
       await _notificationsPlugin.initialize(
         initSettings,
         onDidReceiveNotificationResponse: (response) {
-          debugPrint('[NotificationService] 🔔 Bildirime tıklandı: ${response.payload}');
+          debugPrint('[NotificationService] 🔔 Yerel bildirime tıklandı: ${response.payload}');
           if (response.payload != null) {
             onNotificationClick.add(response.payload);
           }
@@ -87,18 +89,97 @@ class NotificationService with WidgetsBindingObserver {
         final androidImpl = _notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
-        // Android 13+ bildirim izni iste
-        final granted = await androidImpl?.requestNotificationsPermission();
-        debugPrint('[NotificationService] 📱 Android Bildirim İzni Durumu: $granted');
-
+        await androidImpl?.requestNotificationsPermission();
         await androidImpl?.createNotificationChannel(highImportanceChannel);
         debugPrint('[NotificationService] 📢 Android high_importance_channel kanalı başarıyla kaydedildi.');
       }
 
+      // 3. OneSignal Başlatma (Uygulama tamamen kapalıyken bile Apple/Google üzerinden push atar)
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        await _initOneSignal();
+      }
+
       _isInitialized = true;
-      debugPrint('[NotificationService] 🔔 Saf Supabase Bildirim Servisi başarıyla başlatıldı.');
+      debugPrint('[NotificationService] 🔔 OneSignal & Yerel Bildirim Servisi başarıyla başlatıldı.');
     } catch (e) {
       debugPrint('[NotificationService] ❌ Bildirim servisi başlatma hatası: $e');
+    }
+  }
+
+  Future<void> _initOneSignal() async {
+    try {
+      if (kDebugMode) {
+        OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+      }
+
+      // OneSignal App ID ile başlat
+      OneSignal.initialize(OneSignalConfig.appId);
+
+      // iOS & Android 13+ Bildirim İzni İste
+      final permission = await OneSignal.Notifications.requestPermission(true);
+      debugPrint('[OneSignal] 📱 Bildirim izni sonucu: $permission');
+
+      // Bildirime tıklandığında sohbete yönlendir
+      OneSignal.Notifications.addClickListener((event) {
+        final data = event.notification.additionalData;
+        debugPrint('[OneSignal Click] 🚀 Bildirime tıklandı: $data');
+        final chatId = data?['chat_id']?.toString() ?? data?['sender_id']?.toString();
+        if (chatId != null && chatId.isNotEmpty) {
+          onNotificationClick.add('chat_$chatId');
+        }
+      });
+
+      // Ön plandayken bildirim davranışını yönet
+      OneSignal.Notifications.addForegroundWillDisplayListener((event) {
+        final data = event.notification.additionalData;
+        final chatId = data?['chat_id']?.toString() ?? data?['sender_id']?.toString();
+
+        // Eğer kullanıcı o anda o sohbet ekranındaysa ön plan bildirimini bastır
+        if (isAppInForeground && activeChatId != null && chatId != null &&
+            (activeChatId == chatId || activeChatId!.toLowerCase() == chatId.toLowerCase())) {
+          event.preventDefault();
+        } else {
+          event.notification.display();
+        }
+      });
+
+      // Eğer kullanıcı zaten giriş yapmışsa OneSignal ile bağla
+      final currentUser = Supabase.instance.client.auth.currentUser;
+      if (currentUser != null) {
+        syncUserWithOneSignal(currentUser.id);
+      }
+    } catch (e) {
+      debugPrint('[OneSignal] ⚠️ Başlatma hatası: $e');
+    }
+  }
+
+  /// Kullanıcı giriş yaptığında OneSignal External ID ve Push Token'ını Supabase ile senkronize eder
+  Future<void> syncUserWithOneSignal(String userId) async {
+    try {
+      if (kIsWeb) return;
+
+      // 1. OneSignal external_id olarak Supabase User ID'sini bağla
+      await OneSignal.login(userId);
+      debugPrint('[OneSignal] 👤 OneSignal login yapıldı: $userId');
+
+      // 2. Cihaz Player/Subscription ID'sini al ve Supabase'e kaydet
+      final pushSubscriptionId = OneSignal.User.pushSubscription.id;
+      final pushToken = OneSignal.User.pushSubscription.token;
+
+      final tokenToSave = pushSubscriptionId ?? pushToken;
+      if (tokenToSave != null && tokenToSave.isNotEmpty) {
+        await registerDeviceToken(userId, tokenToSave);
+      }
+
+      // Subscription değişikliklerini dinle
+      OneSignal.User.pushSubscription.addObserver((state) {
+        final newId = state.current.id;
+        if (newId != null && newId.isNotEmpty) {
+          registerDeviceToken(userId, newId);
+        }
+      });
+    } catch (e) {
+      debugPrint('[OneSignal] ⚠️ Sync hatası: $e');
     }
   }
 
@@ -112,9 +193,10 @@ class NotificationService with WidgetsBindingObserver {
       if (supabase.auth.currentUser != null) {
         await supabase.from('users').update({
           'push_token': pushToken,
+          'fcm_token': pushToken,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', userId);
-        debugPrint('[NotificationService] 📱 Push token veritabanında users/$userId güncellendi.');
+        debugPrint('[NotificationService] 📱 OneSignal/Push token veritabanında users/$userId güncellendi: $pushToken');
       }
     } catch (e) {
       debugPrint('[NotificationService] ❌ Push token kaydetme hatası: $e');
@@ -129,7 +211,6 @@ class NotificationService with WidgetsBindingObserver {
     int unreadCount = 1,
     String? messageId,
   }) async {
-    // 1. Mükerrer bildirim engelleme (debouncing)
     final dedupeKey = messageId ?? '$chatId:${message.trim()}';
     final now = DateTime.now();
     if (_recentNotifications.containsKey(dedupeKey)) {
@@ -145,8 +226,7 @@ class NotificationService with WidgetsBindingObserver {
       _recentNotifications.removeWhere((_, time) => now.difference(time).inSeconds > 30);
     }
 
-    // 2. Eğer kullanıcı uygulama İÇİNDEYSE ve O SOHBETTEYSE bildirimi bastır (ekranda yazışıyor zaten)
-    // ANCAK: Kullanıcı uygulamada değilse (arka planda / kilitli ekranda), bildirim HER ZAMAN ÇALMALIDIR!
+    // Kullanıcı uygulama içinde ve o sohbette ise bildirimi bastır
     if (isAppInForeground && activeChatId != null &&
         (activeChatId == chatId || activeChatId!.toLowerCase() == chatId.toLowerCase())) {
       debugPrint('[NotificationService] 🔕 Kullanıcı ön planda ve aktif sohbette ($chatId), bildirim bastırıldı.');
