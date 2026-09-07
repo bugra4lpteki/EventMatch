@@ -26,7 +26,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     final body = message.data['body']?.toString() ?? message.data['content']?.toString() ?? 'Bir mesajınız var.';
     final chatId = message.data['chat_id']?.toString() ?? message.data['sender_id']?.toString() ?? '';
 
-    final androidDetails = AndroidNotificationDetails(
+    const androidDetails = AndroidNotificationDetails(
       'high_importance_channel',
       'Yüksek Öncelikli Mesaj Bildirimleri',
       channelDescription: 'WhatsApp tarzı sesli, titreşimli ve tepeden inen mesaj bildirimleri',
@@ -42,7 +42,7 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       chatId.hashCode.abs(),
       title,
       body,
-      NotificationDetails(android: androidDetails),
+      const NotificationDetails(android: androidDetails),
       payload: 'chat_$chatId',
     );
   }
