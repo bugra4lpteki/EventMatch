@@ -11,8 +11,6 @@ import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'services/notification_service.dart';
 import 'features/messages/services/mock_message_service.dart';
 import 'features/messages/screens/chat_detail_screen.dart';
@@ -24,16 +22,7 @@ import 'core/constants/supabase_config.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Firebase Başlatma & Arka Plan Mesaj Dinleyicisi
-  try {
-    await Firebase.initializeApp();
-    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    debugPrint('[Firebase] 🔥 Firebase başarıyla başlatıldı ve arka plan dinleyicisi bağlandı.');
-  } catch (e) {
-    debugPrint('[Firebase] ⚠️ Firebase başlatma uyarısı: $e');
-  }
-
-  // 2. Yüksek Öncelikli Bildirim Servisi Başlatma (FCM, Local Notifications, high_importance_channel)
+  // Yüksek Öncelikli WhatsApp Tarzı Bildirim Servisini Başlat
   await NotificationService().initialize();
 
   // Sanatçı görsel cache'ini sıfırla: eski albüm kapağı URL'leri kalmasın,

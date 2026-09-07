@@ -3,51 +3,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// En üst seviye (top-level) arka plan & kapalı durum FCM bildirim dinleyicisi
-@pragma('vm:entry-point')
-Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  debugPrint('[FCM Background] 🌙 Arka plan / Kapalı durumda bildirim yakalandı: ${message.messageId}');
-  debugPrint('[FCM Background] Veri: ${message.data}');
-
-  // Eğer bildirim sadece data payload olarak geldiyse heads-up göstermek için local notifications oluşturulur
-  if (message.notification == null && message.data.isNotEmpty) {
-    final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosSettings = DarwinInitializationSettings();
-    await flutterLocalNotificationsPlugin.initialize(
-      const InitializationSettings(android: androidSettings, iOS: iosSettings),
-    );
-
-    final title = message.data['title']?.toString() ?? '💬 Yeni Mesaj';
-    final body = message.data['body']?.toString() ?? message.data['content']?.toString() ?? 'Bir mesajınız var.';
-    final chatId = message.data['chat_id']?.toString() ?? message.data['sender_id']?.toString() ?? '';
-
-    const androidDetails = AndroidNotificationDetails(
-      'high_importance_channel',
-      'Yüksek Öncelikli Mesaj Bildirimleri',
-      channelDescription: 'WhatsApp tarzı sesli, titreşimli ve tepeden inen mesaj bildirimleri',
-      importance: Importance.max,
-      priority: Priority.high,
-      category: AndroidNotificationCategory.message,
-      enableVibration: true,
-      playSound: true,
-      visibility: NotificationVisibility.public,
-    );
-
-    await flutterLocalNotificationsPlugin.show(
-      chatId.hashCode.abs(),
-      title,
-      body,
-      const NotificationDetails(android: androidDetails),
-      payload: 'chat_$chatId',
-    );
-  }
-}
-
+/// %100 Saf Supabase & Flutter Yerel Bildirim Servisi (WhatsApp Tarzı Heads-up)
 class NotificationService with WidgetsBindingObserver {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -58,7 +17,6 @@ class NotificationService with WidgetsBindingObserver {
   static final StreamController<String?> onNotificationClick = StreamController<String?>.broadcast();
 
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
-  final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   bool _isInitialized = false;
 
   /// Kullanıcının açık tuttuğu aktif sohbet (Bu sohbet açıkken ve uygulama ön plandayken banner bastırılır)
@@ -67,7 +25,7 @@ class NotificationService with WidgetsBindingObserver {
   /// Uygulamanın ön planda olup olmadığını takip eder
   bool isAppInForeground = true;
 
-  /// Mükerrer bildirim engelleme önbelleği
+  /// Mükerrer bildirim engelleme önbelleği (2 saniyelik debouncing)
   final Map<String, DateTime> _recentNotifications = {};
 
   /// Android Yüksek Öncelikli WhatsApp Bildirim Kanalı
@@ -101,7 +59,7 @@ class NotificationService with WidgetsBindingObserver {
     if (_isInitialized) return;
 
     try {
-      // 1. Local Notifications Başlatma
+      // 1. Yerel Bildirim Ayarları
       const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
@@ -129,131 +87,37 @@ class NotificationService with WidgetsBindingObserver {
         final androidImpl = _notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
-        await androidImpl?.requestNotificationsPermission();
+        // Android 13+ bildirim izni iste
+        final granted = await androidImpl?.requestNotificationsPermission();
+        debugPrint('[NotificationService] 📱 Android Bildirim İzni Durumu: $granted');
+
         await androidImpl?.createNotificationChannel(highImportanceChannel);
         debugPrint('[NotificationService] 📢 Android high_importance_channel kanalı başarıyla kaydedildi.');
       }
 
-      // 3. Firebase Messaging İzinleri (iOS & Android 13+)
-      final notificationSettings = await _fcm.requestPermission(
-        alert: true,
-        announcement: false,
-        badge: true,
-        carPlay: false,
-        criticalAlert: false,
-        provisional: false,
-        sound: true,
-      );
-      debugPrint('[FCM] 📱 Bildirim İzin Durumu: ${notificationSettings.authorizationStatus}');
-
-      // 4. iOS Foreground Bildirim Seçenekleri
-      await _fcm.setForegroundNotificationPresentationOptions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-
-      // 5. Ön Plan Mesaj Dinleyicisi (onMessage)
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        debugPrint('[FCM onMessage] 📩 Ön planda push mesajı alındı: ${message.messageId}');
-        _handleIncomingRemoteMessage(message);
-      });
-
-      // 6. Arka Plan / Kilitli Ekrandan Tıklanma (onMessageOpenedApp)
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-        debugPrint('[FCM onMessageOpenedApp] 🚀 Bildirime tıklanarak uygulama açıldı: ${message.data}');
-        final chatId = message.data['chat_id']?.toString() ?? message.data['sender_id']?.toString();
-        if (chatId != null && chatId.isNotEmpty) {
-          onNotificationClick.add('chat_$chatId');
-        }
-      });
-
-      // 7. Uygulama Tamamen Kapalıyken (Terminated) Bildirime Tıklanarak Açılma
-      final initialMessage = await _fcm.getInitialMessage();
-      if (initialMessage != null) {
-        debugPrint('[FCM getInitialMessage] ⚡ Kapalı durumdan bildirimle başlatıldı: ${initialMessage.data}');
-        final chatId = initialMessage.data['chat_id']?.toString() ?? initialMessage.data['sender_id']?.toString();
-        if (chatId != null && chatId.isNotEmpty) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            onNotificationClick.add('chat_$chatId');
-          });
-        }
-      }
-
-      // 8. FCM Token Alma & Token Refresh Dinleme
-      _initFcmTokens();
-
       _isInitialized = true;
-      debugPrint('[NotificationService] 🔔 Bildirim Servisi ve FCM başarıyla başlatıldı.');
+      debugPrint('[NotificationService] 🔔 Saf Supabase Bildirim Servisi başarıyla başlatıldı.');
     } catch (e) {
-      debugPrint('[NotificationService] ❌ Başlatma hatası: $e');
+      debugPrint('[NotificationService] ❌ Bildirim servisi başlatma hatası: $e');
     }
   }
 
-  void _initFcmTokens() async {
-    try {
-      final token = await _fcm.getToken();
-      if (token != null) {
-        debugPrint('[FCM Token] 🔑 Alınan FCM Token: $token');
-        await _saveAndSyncToken(token);
-      }
-
-      _fcm.onTokenRefresh.listen((newToken) {
-        debugPrint('[FCM Token] 🔄 FCM Token yenilendi: $newToken');
-        _saveAndSyncToken(newToken);
-      });
-    } catch (e) {
-      debugPrint('[FCM Token] ⚠️ Token alma hatası: $e');
-    }
-  }
-
-  Future<void> _saveAndSyncToken(String token) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_push_token', token);
-
-      final supabase = Supabase.instance.client;
-      final currentUserId = supabase.auth.currentUser?.id;
-      if (currentUserId != null) {
-        await registerDeviceToken(currentUserId, token);
-      }
-    } catch (e) {
-      debugPrint('[NotificationService] Token kaydetme hatası: $e');
-    }
-  }
-
-  /// Cihaz FCM / Push Token'ını Supabase veritabanına kaydeder
+  /// Cihaz Push Token'ını Supabase veritabanına kaydeder
   Future<void> registerDeviceToken(String userId, String pushToken) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_push_token', pushToken);
+      await prefs.setString('device_push_token', pushToken);
 
       final supabase = Supabase.instance.client;
       if (supabase.auth.currentUser != null) {
         await supabase.from('users').update({
           'push_token': pushToken,
-          'fcm_token': pushToken,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', userId);
         debugPrint('[NotificationService] 📱 Push token veritabanında users/$userId güncellendi.');
       }
     } catch (e) {
-      debugPrint('[NotificationService] ❌ Push token register hatası: $e');
-    }
-  }
-
-  void _handleIncomingRemoteMessage(RemoteMessage message) {
-    final senderName = message.notification?.title ?? message.data['sender_name']?.toString() ?? '💬 Yeni Mesaj';
-    final content = message.notification?.body ?? message.data['content']?.toString() ?? message.data['message']?.toString() ?? '';
-    final chatId = message.data['chat_id']?.toString() ?? message.data['sender_id']?.toString() ?? 'unknown';
-
-    if (content.isNotEmpty) {
-      showMessageNotification(
-        chatId: chatId,
-        senderName: senderName.replaceFirst('💬 ', ''),
-        message: content,
-        messageId: message.messageId,
-      );
+      debugPrint('[NotificationService] ❌ Push token kaydetme hatası: $e');
     }
   }
 
@@ -265,6 +129,7 @@ class NotificationService with WidgetsBindingObserver {
     int unreadCount = 1,
     String? messageId,
   }) async {
+    // 1. Mükerrer bildirim engelleme (debouncing)
     final dedupeKey = messageId ?? '$chatId:${message.trim()}';
     final now = DateTime.now();
     if (_recentNotifications.containsKey(dedupeKey)) {
@@ -280,7 +145,8 @@ class NotificationService with WidgetsBindingObserver {
       _recentNotifications.removeWhere((_, time) => now.difference(time).inSeconds > 30);
     }
 
-    // Kullanıcı uygulama içinde ve o sohbette ise bildirimi bastır
+    // 2. Eğer kullanıcı uygulama İÇİNDEYSE ve O SOHBETTEYSE bildirimi bastır (ekranda yazışıyor zaten)
+    // ANCAK: Kullanıcı uygulamada değilse (arka planda / kilitli ekranda), bildirim HER ZAMAN ÇALMALIDIR!
     if (isAppInForeground && activeChatId != null &&
         (activeChatId == chatId || activeChatId!.toLowerCase() == chatId.toLowerCase())) {
       debugPrint('[NotificationService] 🔕 Kullanıcı ön planda ve aktif sohbette ($chatId), bildirim bastırıldı.');
@@ -345,7 +211,7 @@ class NotificationService with WidgetsBindingObserver {
         details,
         payload: 'chat_$chatId',
       );
-      debugPrint('[NotificationService] 📢 WhatsApp tarzı heads-up bildirim gösterildi: $title -> $message');
+      debugPrint('[NotificationService] 📢 WhatsApp tarzı heads-up bildirim gösterildi: $title -> $message (Ön planda mı: $isAppInForeground)');
     } catch (e) {
       debugPrint('[NotificationService] ❌ Bildirim gösterme hatası: $e');
     }
