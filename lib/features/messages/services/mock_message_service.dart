@@ -434,19 +434,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         content: content,
         timestamp: timestamp,
       );
-
-      // Bildirim sadece mesajı alan alıcıya (isReceiver) ve onaylı bir sohbet varsa gösterilir
-      if (isReceiver) {
-        final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId);
-        if (chatIndex >= 0) {
-          final chat = _chats[chatIndex];
-          NotificationService().showMessageNotification(
-            chatId: partnerId,
-            senderName: chat.participant.name,
-            message: content,
-          );
-        }
-      }
     } catch (e) {
       debugPrint('[MessageService] ⚠️ handleBroadcastMessage error: $e');
     }
@@ -520,12 +507,43 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+    final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
 
     if (chatIndex < 0) {
-      // Karşılıklı onaylanmamış bir eşleşme varsa doğrudan sohbet kutusu oluşturma
-      // Supabase'den eşleşme durumunu doğrula
-      reloadChats();
+      // Sohbet henüz yerel listede yoksa, sohbetleri yenile ve ardından mesajı ve bildirimi üret
+      reloadChats().then((_) {
+        final newIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
+        if (newIndex >= 0) {
+          _injectMessageIntoChat(
+            partnerId: partnerId,
+            msgId: msgId,
+            senderId: senderId,
+            receiverId: receiverId,
+            content: content,
+            timestamp: timestamp,
+          );
+        } else if (lowerSender != lowerCurrent) {
+          // Eşleşme sorgusu gecikse bile kullanıcıya bildirimi anında ulaştır
+          _supabase.from('users').select('name').eq('id', partnerId).maybeSingle().then((uData) {
+            final senderName = uData?['name']?.toString() ?? 'Yeni Eşleşme';
+            NotificationService().showMessageNotification(
+              chatId: partnerId,
+              senderName: senderName,
+              message: content,
+              unreadCount: 1,
+              messageId: msgId,
+            );
+          }).catchError((_) {
+            NotificationService().showMessageNotification(
+              chatId: partnerId,
+              senderName: 'Yeni Eşleşme',
+              message: content,
+              unreadCount: 1,
+              messageId: msgId,
+            );
+          });
+        }
+      });
       return;
     }
 
@@ -554,6 +572,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               senderName: chat.participant.name,
               message: content,
               unreadCount: chat.unreadCount,
+              messageId: msgId,
             );
           }
         }
