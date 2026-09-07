@@ -10,6 +10,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
 import '../models/event_model.dart';
+import '../models/user_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
@@ -32,8 +33,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   // Spotify & Audio Preview State
   final AudioPlayer _audioPlayer = AudioPlayer();
   final SpotifyService _spotifyService = SpotifyService();
-  SpotifyArtist? _spotifyArtist;
-  List<SpotifyTrack> _spotifyTracks = [];
+  List<SpotifyArtistData> _spotifyArtistDataList = [];
+  SpotifyArtist? get _spotifyArtist =>
+      _spotifyArtistDataList.isNotEmpty ? _spotifyArtistDataList.first.artist : null;
+  List<SpotifyTrack> get _spotifyTracks =>
+      _spotifyArtistDataList.isNotEmpty ? _spotifyArtistDataList.first.tracks : [];
   bool _isLoadingSpotify = true;
   String? _playingTrackId;
   bool _isPlaying = false;
@@ -125,18 +129,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
     try {
-      final artist = await _spotifyService.searchArtist(widget.event.title, category: widget.event.category);
-      if (artist != null && mounted) {
-        final tracks = await _spotifyService.getArtistTopTracks(artist.id, artistName: artist.name);
-        if (mounted) {
-          setState(() {
-            _spotifyArtist = artist;
-            _spotifyTracks = tracks;
-            _isLoadingSpotify = false;
-          });
-        }
-      } else if (mounted) {
+      final artistDataList = await _spotifyService.getArtistsForEvent(
+        widget.event.title,
+        category: widget.event.category,
+      );
+      if (mounted) {
         setState(() {
+          _spotifyArtistDataList = artistDataList;
           _isLoadingSpotify = false;
         });
       }
@@ -331,8 +330,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final event = widget.event;
     final hasCoordinates = event.latitude != null && event.longitude != null;
     final richDesc = _getRichDescription();
-    final screenWidth = MediaQuery.of(context).size.width;
-    final spotifyHeaderHeight = (screenWidth * 0.90).clamp(340.0, 385.0);
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Spotify mobile artist header: ~45% of screen height, clamped 360–420px
+    final spotifyHeaderHeight = (screenHeight * 0.45).clamp(360.0, 420.0);
+
+    // Prefer the Spotify/Deezer artist banner when it has been fetched;
+    // fall back to the event's own imageUrl for non-music events.
+    final spotifyBannerUrl = _spotifyArtistDataList.isNotEmpty
+        ? _spotifyArtistDataList.first.artist.imageUrl
+        : '';
+    final resolvedBannerUrl =
+        (spotifyBannerUrl.isNotEmpty) ? spotifyBannerUrl : event.imageUrl;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -357,10 +366,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Hero(
                     tag: 'event_image_${event.id}',
                     child: AppImageWidget(
-                      imageUrl: event.imageUrl,
+                      imageUrl: resolvedBannerUrl,
                       fit: BoxFit.cover,
-                      alignment: const Alignment(0, -0.2), // Spotify mobile artist framing
+                      // Artist-face framing: top-center (Spotify mobile artist header standard)
+                      alignment: const Alignment(0, -0.2),
+                      // 2× retina cache for full-bleed header on large screens
                       memCacheWidth: 1080,
+                      memCacheHeight: 960,
                     ),
                   ),
                   // Dark Gradient Overlay for text contrast (Spotify smooth fade)
@@ -368,14 +380,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.black.withOpacity(0.35),
+                          Colors.black.withOpacity(0.30),
                           Colors.transparent,
                           AppColors.background.withOpacity(0.75),
                           AppColors.background,
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        stops: const [0.0, 0.45, 0.85, 1.0],
+                        stops: const [0.0, 0.42, 0.82, 1.0],
                       ),
                     ),
                   ),
@@ -605,7 +617,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     ),
                                   );
                                 } else {
-                                  eventService.joinEvent(event.id);
+                                  eventService.joinEvent(event.id, event);
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
                                       content: const Row(
@@ -995,8 +1007,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Consumer2<MockEventService, MockMatchService>(
                     builder: (context, eventService, matchService, child) {
                       final currentEvent = eventService.getEventById(event.id) ?? event;
-                      final attendees = currentEvent.attendees.where((u) => u.id != eventService.currentUser.id).toList();
                       final isAttending = eventService.isUserAttending(event.id);
+                      final myUid = eventService.currentUserId.toLowerCase().trim();
+
+                      // Kullanıcı etkinliğe katıldıysa ama bellekte henüz yoksa hemen ekle
+                      if (isAttending && !currentEvent.attendees.any((u) => u.id.toLowerCase().trim() == myUid)) {
+                        currentEvent.attendees.insert(0, UserModel(
+                          id: eventService.currentUserId,
+                          name: eventService.currentUser.name,
+                          avatarUrl: eventService.currentUser.avatarUrl,
+                          city: eventService.currentUser.city,
+                          birthDate: eventService.currentUser.birthDate,
+                          tags: List.from(eventService.currentUser.tags),
+                        ));
+                      }
+
+                      final attendees = currentEvent.attendees;
 
                       if (!isAttending) {
                         return Container(
@@ -1115,7 +1141,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
-                                  "${currentEvent.attendees.length} Kişi",
+                                  "${attendees.length} Kişi",
                                   style: TextStyle(color: AppColors.primaryVariant, fontSize: 12, fontWeight: FontWeight.bold),
                                 ),
                               ),
@@ -1145,34 +1171,42 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               separatorBuilder: (context, index) => const SizedBox(height: 10),
                               itemBuilder: (context, index) {
                                 final user = attendees[index];
-                                final hasSentReq = matchService.hasSentRequest(event.id, user.id);
-                                final isAtVenue = (index % 2 == 0);
+                                final isMe = user.id.toLowerCase().trim() == myUid;
+                                final hasSentReq = !isMe && matchService.hasSentRequest(event.id, user.id);
+                                final isAtVenue = isMe ? eventService.isUserCheckedIn(event.id) : (index % 2 == 0);
 
                                 return Container(
                                   decoration: BoxDecoration(
-                                    color: AppColors.surface.withOpacity(0.5),
+                                    color: isMe ? AppColors.primary.withOpacity(0.12) : AppColors.surface.withOpacity(0.5),
                                     borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(color: Colors.white10),
+                                    border: Border.all(
+                                      color: isMe ? AppColors.primary.withOpacity(0.4) : Colors.white10,
+                                    ),
                                   ),
                                   child: ListTile(
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => UserProfileScreen(
-                                            user: user,
-                                            eventId: event.id,
-                                          ),
-                                        ),
-                                      );
-                                    },
+                                    onTap: isMe
+                                        ? null
+                                        : () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => UserProfileScreen(
+                                                  user: user,
+                                                  eventId: event.id,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                                     leading: Stack(
                                       children: [
                                         Container(
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1.5),
+                                            border: Border.all(
+                                              color: isMe ? AppColors.primary : AppColors.primary.withOpacity(0.5),
+                                              width: isMe ? 2 : 1.5,
+                                            ),
                                           ),
                                           child: CircleAvatar(
                                             backgroundColor: AppColors.surface,
@@ -1188,7 +1222,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                                           Icon(Icons.person, color: AppColors.primary),
                                                     )
                                                   : Image.asset(
-                                                      user.avatarUrl,
+                                                      user.avatarUrl.isNotEmpty ? user.avatarUrl : 'assets/images/user_avatar.jpg',
                                                       width: 48,
                                                       height: 48,
                                                       fit: BoxFit.cover,
@@ -1216,9 +1250,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     ),
                                     title: Row(
                                       children: [
-                                        Text(
-                                          user.name,
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                        Flexible(
+                                          child: Text(
+                                            isMe ? '${user.name} (Sen)' : user.name,
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
                                         if (isAtVenue) ...[
                                           const SizedBox(width: 8),
@@ -1235,16 +1272,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                         ],
                                       ],
                                     ),
-                                    trailing: hasSentReq
-                                        ? OutlinedButton(
-                                            onPressed: null,
-                                            style: OutlinedButton.styleFrom(
-                                              side: const BorderSide(color: Colors.white24),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    trailing: isMe
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primary.withOpacity(0.25),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: AppColors.primary.withOpacity(0.5)),
                                             ),
-                                            child: const Text("İstek Gönderildi", style: TextStyle(color: Colors.white38, fontSize: 12)),
+                                            child: Text(
+                                              "SEN",
+                                              style: TextStyle(
+                                                color: AppColors.primaryVariant,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
                                           )
-                                        : Icon(Icons.chevron_right_rounded, color: AppColors.primaryVariant, size: 22),
+                                        : hasSentReq
+                                            ? OutlinedButton(
+                                                onPressed: null,
+                                                style: OutlinedButton.styleFrom(
+                                                  side: const BorderSide(color: Colors.white24),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                ),
+                                                child: const Text("İstek Gönderildi", style: TextStyle(color: Colors.white38, fontSize: 12)),
+                                              )
+                                            : Icon(Icons.chevron_right_rounded, color: AppColors.primaryVariant, size: 22),
                                   ),
                                 );
                               },
@@ -1312,14 +1366,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       );
     }
 
-    if (_spotifyTracks.isEmpty && _spotifyArtist == null) {
+    if (_spotifyArtistDataList.isEmpty) {
       return const SizedBox.shrink();
     }
 
+    return Column(
+      children: _spotifyArtistDataList.map((artistData) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: _buildArtistSpotifyCard(artistData),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildArtistSpotifyCard(SpotifyArtistData data) {
     const spotifyGreen = Color(0xFF1DB954);
+    final artist = data.artist;
+    final tracks = data.tracks;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 32),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
@@ -1348,7 +1414,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Row: Spotify Logo, Badge & "Aç" Action
+              // Header Row: Spotify Logo & "Spotify'da Aç" Action (En Popüler 3 Şarkı rozeti kaldırıldı)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -1372,23 +1438,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           letterSpacing: 1.5,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          "En Popüler 3 Şarkı",
-                          style: TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-                        ),
-                      ),
                     ],
                   ),
-                  if (_spotifyArtist?.spotifyUrl != null && _spotifyArtist!.spotifyUrl.isNotEmpty)
+                  if (artist.spotifyUrl.isNotEmpty)
                     InkWell(
-                      onTap: () => UrlLauncherHelper.launchURL(_spotifyArtist!.spotifyUrl),
+                      onTap: () => UrlLauncherHelper.launchURL(artist.spotifyUrl),
                       borderRadius: BorderRadius.circular(12),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1414,81 +1468,61 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Artist Profile Card
-              if (_spotifyArtist != null)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                  ),
-                  child: Row(
-                    children: [
-                      // Artist Avatar
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: spotifyGreen.withOpacity(0.8), width: 2),
-                          boxShadow: [
-                            BoxShadow(color: spotifyGreen.withOpacity(0.3), blurRadius: 10),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: _spotifyArtist!.imageUrl.isNotEmpty
-                              ? Image.network(
-                                  _spotifyArtist!.imageUrl,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white),
-                                )
-                              : const Icon(Icons.person, color: Colors.white),
-                        ),
+              // Artist Profile Card - Sadece sanatçının adı ve onaylı rozet; tür / canlı sahne yazıları kaldırıldı
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withOpacity(0.06)),
+                ),
+                child: Row(
+                  children: [
+                    // Artist Avatar
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: spotifyGreen.withOpacity(0.8), width: 2),
+                        boxShadow: [
+                          BoxShadow(color: spotifyGreen.withOpacity(0.3), blurRadius: 10),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    _spotifyArtist!.name,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(width: 5),
-                                const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 16),
-                              ],
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              _spotifyArtist!.genres.isNotEmpty
-                                  ? _spotifyArtist!.genres.take(2).join(' • ').toUpperCase()
-                                  : 'SANATÇI',
-                              style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
+                      child: ClipOval(
+                        child: artist.imageUrl.isNotEmpty
+                            ? Image.network(
+                                artist.imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white),
+                              )
+                            : const Icon(Icons.person, color: Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              artist.name,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 17),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
+              ),
 
               const SizedBox(height: 14),
 
@@ -1497,10 +1531,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 padding: EdgeInsets.zero,
-                itemCount: _spotifyTracks.length,
+                itemCount: tracks.length,
                 separatorBuilder: (context, index) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
-                  final track = _spotifyTracks[index];
+                  final track = tracks[index];
                   final isCurrentTrack = _playingTrackId == track.id;
                   final isPlayingThis = isCurrentTrack && _isPlaying;
 

@@ -55,6 +55,8 @@ dependencies:
   cached_network_image: ^3.4.1
   flutter_slidable: ^4.0.3
   audioplayers: ^6.7.1
+  app_links: ^6.3.2
+  google_sign_in: ^6.2.2
 
 dev_dependencies:
   excel: ^4.0.6

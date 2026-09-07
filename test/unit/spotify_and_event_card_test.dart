@@ -368,11 +368,22 @@ void main() {
 
       // SPOTIFY başlığı ve önizleme alanı konserde OLMALIDIR
       expect(find.text('SPOTIFY', skipOffstage: false), findsOneWidget);
-      expect(find.text('En Popüler 3 Şarkı', skipOffstage: false), findsOneWidget);
+      // "En Popüler 3 Şarkı" rozeti ve "CANLI SAHNE" yazısı artık yer almamalıdır
+      expect(find.text('En Popüler 3 Şarkı', skipOffstage: false), findsNothing);
+      expect(find.text('CANLI SAHNE', skipOffstage: false), findsNothing);
       expect(find.text('İstersen', skipOffstage: false), findsOneWidget);
 
       // Bilet butonu "BİLETLER" olmalı
       expect(find.text('BİLETLER', skipOffstage: false), findsOneWidget);
+    });
+
+    test('SpotifyService.extractArtistNames ortak iş ve festivallerde sanatçıları ayırır', () {
+      expect(SpotifyService.extractArtistNames('Sibel Can - Eypio'), equals(['Sibel Can', 'Eypio']));
+      expect(SpotifyService.extractArtistNames('Sibel Can & Eypio'), equals(['Sibel Can', 'Eypio']));
+      expect(SpotifyService.extractArtistNames('Sibel Can, Eypio Konseri'), equals(['Sibel Can', 'Eypio']));
+      expect(SpotifyService.extractArtistNames('Mor ve Ötesi'), equals(['Mor ve Ötesi']));
+      expect(SpotifyService.extractArtistNames('Mor ve Ötesi & Manga'), equals(['Mor ve Ötesi', 'Manga']));
+      expect(SpotifyService.extractArtistNames('The Black Keys'), equals(['The Black Keys']));
     });
   });
 }

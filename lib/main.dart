@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_service.dart';
 import 'features/auth/services/auth_service.dart';
 import 'features/home/screens/splash_screen.dart';
+import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
 import 'features/events/services/location_radar_service.dart';
@@ -13,11 +15,16 @@ import 'core/services/notification_service.dart';
 import 'features/messages/services/mock_message_service.dart';
 import 'features/messages/screens/chat_detail_screen.dart';
 import 'features/events/models/user_model.dart';
+import 'features/events/services/spotify_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Sanatçı görsel cache'ini sıfırla: eski albüm kapağı URL'leri kalmasın,
+  // Wikipedia / Deezer'dan gerçek sanatçı fotoğrafı çekilsin.
+  SpotifyService().clearCache();
 
   try {
     await initializeDateFormatting('tr_TR', null);
@@ -105,10 +112,33 @@ class EventMatchApp extends StatefulWidget {
 }
 
 class _EventMatchAppState extends State<EventMatchApp> {
+  StreamSubscription<AuthState>? _authSub;
+
   @override
   void initState() {
     super.initState();
+    _setupAuthListener();
     _setupNotificationNavigation();
+  }
+
+  /// Supabase Auth Durum Değişikliği Dinleyicisi
+  /// Google/Apple OAuth veya e-posta ile giriş yapıldığında profili yükler ve yönlendirir.
+  void _setupAuthListener() {
+    _authSub = Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final event = data.event;
+      debugPrint('[Auth] onAuthStateChange event: $event');
+
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
+
+      if (event == AuthChangeEvent.signedIn) {
+        ctx.read<MockEventService>().loadUserProfile();
+      } else if (event == AuthChangeEvent.passwordRecovery) {
+        navigatorKey.currentState?.push(
+          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+        );
+      }
+    });
   }
 
   void _setupNotificationNavigation() {
@@ -117,7 +147,7 @@ class _EventMatchAppState extends State<EventMatchApp> {
         final partnerId = payload.replaceFirst('chat_', '');
         if (partnerId.isNotEmpty && navigatorKey.currentState != null) {
           final context = navigatorKey.currentContext;
-          if (context != null) {
+          if (context != null && context.mounted) {
             final msgService = context.read<MockMessageService>();
             final chat = msgService.individualChats.firstWhere(
               (c) => c.id == partnerId || c.participant.id.toLowerCase() == partnerId.toLowerCase(),
@@ -135,6 +165,12 @@ class _EventMatchAppState extends State<EventMatchApp> {
         }
       }
     });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
   }
 
   @override

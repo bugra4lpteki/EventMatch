@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -19,19 +20,41 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
+    const webClientId = '1089492303271-usnrteug9r9o2j8cge5t6b7ctk0acvik.apps.googleusercontent.com';
+    
     try {
-      final res = await _supabase.auth.signInWithOAuth(
-        OAuthProvider.google,
-        redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
-        authScreenLaunchMode: LaunchMode.platformDefault,
+      final googleSignIn = GoogleSignIn(
+        clientId: kIsWeb ? webClientId : null,
+        serverClientId: kIsWeb ? null : webClientId,
+        scopes: ['email', 'profile'],
+      );
+
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        // Kullanıcı seçimi iptal etti
+        return false;
+      }
+
+      final googleAuth = await googleUser.authentication;
+      final idToken = googleAuth.idToken;
+      final accessToken = googleAuth.accessToken;
+
+      if (idToken == null) {
+        throw Exception('Google idToken alınamadı.');
+      }
+
+      await _supabase.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken,
       );
       notifyListeners();
-      return res;
-    } on AuthException catch (e) {
-      debugPrint('Google OAuth AuthException: ${e.message}');
-      throw Exception(e.message);
+      return true;
     } catch (e) {
-      debugPrint('Google OAuth Error: $e');
+      debugPrint('[Auth] Google Sign-In error: $e');
+      if (e.toString().contains('sign_in_canceled') || e.toString().contains('canceled')) {
+        return false;
+      }
       throw Exception('Google ile giriş sırasında hata oluştu: $e');
     }
   }
@@ -131,6 +154,64 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<String?> sendPasswordResetEmail(String email) async {
+    try {
+      final cleanEmail = email.trim();
+      await _supabase.auth.resetPasswordForEmail(
+        cleanEmail,
+        redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+      );
+      return null;
+    } on AuthException catch (e) {
+      debugPrint('Reset password AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('rate limit') || msg.contains('too many requests')) {
+        return 'Çok fazla istek gönderildi. Lütfen birkaç dakika sonra tekrar deneyin.';
+      }
+      return e.message;
+    } catch (e) {
+      debugPrint('Reset password Error: $e');
+      return 'Şifre sıfırlama e-postası gönderilemedi: $e';
+    }
+  }
+
+  Future<String?> verifyOtpAndResetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    try {
+      final cleanEmail = email.trim();
+      final cleanToken = token.trim();
+      
+      final response = await _supabase.auth.verifyOTP(
+        email: cleanEmail,
+        token: cleanToken,
+        type: OtpType.recovery,
+      );
+
+      if (response.session == null && response.user == null) {
+        return 'Kurtarma kodu geçersiz veya süresi dolmuş.';
+      }
+
+      await _supabase.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+      notifyListeners();
+      return null;
+    } on AuthException catch (e) {
+      debugPrint('Verify OTP AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('invalid') || msg.contains('expired')) {
+        return 'Girdiğiniz kod geçersiz veya süresi dolmuş.';
+      }
+      return e.message;
+    } catch (e) {
+      debugPrint('Verify OTP Error: $e');
+      return 'Şifre güncellenirken hata oluştu: $e';
+    }
+  }
+
   Future<String?> updatePassword(String newPassword) async {
     try {
       if (_supabase.auth.currentSession == null) {
@@ -149,6 +230,9 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    try {
+      await GoogleSignIn().signOut();
+    } catch (_) {}
     await _supabase.auth.signOut();
     notifyListeners();
   }

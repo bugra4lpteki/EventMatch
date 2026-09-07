@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:excel/excel.dart';
@@ -10,16 +12,68 @@ import 'spotify_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
+  StreamSubscription<AuthState>? _authSub;
+  RealtimeChannel? _attendeesChannel;
+  RealtimeChannel? _attendeesSyncChannel;
+  RealtimeChannel? _venueBroadcastChannel;
+  String? _activeVenueEventId;
+
+  String get currentUserId {
+    final sbId = _supabase.auth.currentUser?.id;
+    if (sbId != null && sbId.isNotEmpty) return sbId;
+    final sessId = _supabase.auth.currentSession?.user.id;
+    if (sessId != null && sessId.isNotEmpty) return sessId;
+    return currentUser.id;
+  }
+
+  bool _isValidUuid(String str) {
+    return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
+  }
 
   MockEventService() {
-    loadUserProfile();
+    final sbUid = _supabase.auth.currentUser?.id;
+    if (sbUid != null && sbUid.isNotEmpty) {
+      currentUser.id = sbUid;
+    }
+    _initAuthListener();
     _loadCarouselSettings();
-    fetchEvents();
+    _initService();
+    _subscribeToAttendeesRealtime();
+    _subscribeToAttendeesBroadcast();
+  }
+
+  Future<void> _initService() async {
+    await loadUserProfile();
+    await fetchEvents();
+  }
+
+  void _initAuthListener() {
+    _authSub = _supabase.auth.onAuthStateChange.listen((data) async {
+      final newUserId = data.session?.user.id;
+      if (newUserId != null && newUserId.isNotEmpty) {
+        currentUser.id = newUserId;
+        await loadUserProfile();
+        await _loadSupabaseAttendees();
+        _syncPlannedEventsWithAttendees();
+        notifyListeners();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    _attendeesChannel?.unsubscribe();
+    _attendeesSyncChannel?.unsubscribe();
+    _venueBroadcastChannel?.unsubscribe();
+    super.dispose();
   }
 
   Future<void> fetchEvents() async {
     try {
+      final preservedEvents = _events.where((e) => e.attendees.isNotEmpty || currentUser.plannedEvents.contains(e.id)).toList();
       _events.clear();
+      _events.addAll(preservedEvents);
 
       // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden tüm turne ve kategorileri eş zamanlı çek
       try {
@@ -53,10 +107,16 @@ class MockEventService extends ChangeNotifier {
       // 3. Popüler garantili sanatçı etkinliklerini ekle (Sıla, Duman, Mabel Matiz vb.)
       _populateFallbackEvents();
 
-      // 4. Supabase'den gerçek kayıtlı katılımcıları çek
+      // 4. Yerel önbellekten katılımcıları yükle (offline ve yeniden başlatma desteği)
+      await _loadLocalAttendeesCache();
+
+      // 5. Supabase'den gerçek kayıtlı katılımcıları çek
       await _loadSupabaseAttendees();
 
-      // 5. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
+      // 6. Kullanıcının planladığı etkinlikleri katılımcı listelerine bağla
+      _syncPlannedEventsWithAttendees();
+
+      // 7. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
       await _enrichEventsWithSpotifyArtistImages();
 
       notifyListeners();
@@ -65,6 +125,8 @@ class MockEventService extends ChangeNotifier {
       if (_events.isEmpty) {
         _populateFallbackEvents();
       }
+      await _loadLocalAttendeesCache();
+      _syncPlannedEventsWithAttendees();
       notifyListeners();
     }
   }
@@ -139,27 +201,308 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> _loadSupabaseAttendees() async {
     try {
-      final rows = await _supabase.from('event_attendees').select('event_id, user_id, status');
+      final rows = await _supabase.from('event_attendees').select('event_id, user_id, status').eq('status', 'joined');
       if (rows.isEmpty) return;
+
+      final myUid = currentUserId.toLowerCase().trim();
+
+      final userIds = rows
+          .map((r) => r['user_id']?.toString())
+          .where((id) => id != null && id.isNotEmpty && _isValidUuid(id))
+          .cast<String>()
+          .toSet()
+          .toList();
+
+      final Map<String, UserModel> usersMap = {};
+      if (userIds.isNotEmpty) {
+        try {
+          final usersRes = await _supabase
+              .from('users')
+              .select('id, name, username, city, avatar_url')
+              .inFilter('id', userIds);
+          for (var u in usersRes) {
+            final id = u['id'].toString();
+            usersMap[id.toLowerCase()] = UserModel(
+              id: id,
+              name: u['name']?.toString() ?? 'Kullanıcı',
+              username: u['username']?.toString(),
+              city: u['city']?.toString(),
+              avatarUrl: u['avatar_url']?.toString() ?? '',
+            );
+          }
+        } catch (_) {}
+
+        try {
+          final photosRes = await _supabase
+              .from('user_photos')
+              .select('user_id, storage_url')
+              .inFilter('user_id', userIds)
+              .eq('is_active', true)
+              .order('sort_order', ascending: true);
+          for (var p in photosRes) {
+            final uid = p['user_id'].toString().toLowerCase();
+            final photo = p['storage_url'].toString();
+            if (usersMap.containsKey(uid) && photo.isNotEmpty && (usersMap[uid]!.avatarUrl.isEmpty || usersMap[uid]!.avatarUrl.contains('user_avatar'))) {
+              usersMap[uid]!.avatarUrl = photo;
+            }
+          }
+        } catch (_) {}
+      }
 
       for (var row in rows) {
         final eventId = row['event_id']?.toString();
-        final userId = row['user_id']?.toString();
-        if (eventId == null || userId == null) continue;
+        final rawUserId = row['user_id']?.toString();
+        if (eventId == null || rawUserId == null) continue;
 
+        final lowerUserId = rawUserId.toLowerCase().trim();
         final eventIndex = _events.indexWhere((e) => e.id == eventId);
         if (eventIndex >= 0) {
-          if (!_events[eventIndex].attendees.any((u) => u.id == userId)) {
-            _events[eventIndex].attendees.add(UserModel(
-              id: userId,
-              name: userId == currentUser.id ? currentUser.name : 'Katılımcı',
-              avatarUrl: userId == currentUser.id ? currentUser.avatarUrl : '',
-            ));
+          final isMe = lowerUserId == myUid;
+          final userModel = isMe
+              ? UserModel(
+                  id: currentUserId,
+                  name: currentUser.name,
+                  avatarUrl: currentUser.avatarUrl,
+                  city: currentUser.city,
+                )
+              : (usersMap[lowerUserId] ?? UserModel(id: rawUserId, name: 'Katılımcı', avatarUrl: ''));
+
+          final existingIdx = _events[eventIndex].attendees.indexWhere((u) => u.id.toLowerCase() == lowerUserId);
+          if (existingIdx >= 0) {
+            _events[eventIndex].attendees[existingIdx] = userModel;
+          } else {
+            _events[eventIndex].attendees.add(userModel);
+          }
+
+          if (isMe && !currentUser.plannedEvents.contains(eventId)) {
+            currentUser.plannedEvents.add(eventId);
           }
         }
       }
+      _savePlannedEvents();
+      notifyListeners();
     } catch (e) {
       debugPrint('[EventService] Supabase attendees çekme hatası: $e');
+    }
+  }
+
+  void _syncPlannedEventsWithAttendees() {
+    final uid = currentUserId.toLowerCase().trim();
+    if (uid.isEmpty) return;
+
+    final myUser = UserModel(
+      id: currentUserId,
+      name: currentUser.name,
+      avatarUrl: currentUser.avatarUrl,
+      city: currentUser.city,
+      birthDate: currentUser.birthDate,
+      tags: List.from(currentUser.tags),
+    );
+
+    for (var event in _events) {
+      final shouldAttend = currentUser.plannedEvents.contains(event.id);
+      final hasMe = event.attendees.any((u) => u.id.toLowerCase().trim() == uid);
+
+      if (shouldAttend && !hasMe) {
+        event.attendees.insert(0, myUser);
+      } else if (!shouldAttend && hasMe) {
+        event.attendees.removeWhere((u) => u.id.toLowerCase().trim() == uid);
+      }
+    }
+  }
+
+  Future<void> _saveEventAttendeesLocally(String eventId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final eventIndex = _events.indexWhere((e) => e.id == eventId);
+      if (eventIndex >= 0) {
+        final attendeesData = _events[eventIndex].attendees.map((u) => {
+          'id': u.id,
+          'name': u.name,
+          'avatarUrl': u.avatarUrl,
+          'city': u.city,
+        }).toList();
+        await prefs.setString('eventmatch_attendees_$eventId', jsonEncode(attendeesData));
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadLocalAttendeesCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (var event in _events) {
+        final cached = prefs.getString('eventmatch_attendees_${event.id}');
+        if (cached != null && cached.isNotEmpty) {
+          final decoded = jsonDecode(cached) as List;
+          for (var item in decoded) {
+            final uId = item['id']?.toString();
+            if (uId == null || uId.isEmpty) continue;
+            if (!event.attendees.any((u) => u.id.toLowerCase().trim() == uId.toLowerCase().trim())) {
+              event.attendees.add(UserModel(
+                id: uId,
+                name: item['name']?.toString() ?? 'Katılımcı',
+                avatarUrl: item['avatarUrl']?.toString() ?? '',
+                city: item['city']?.toString(),
+              ));
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _subscribeToAttendeesBroadcast() {
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      return;
+    }
+    try {
+      _attendeesSyncChannel?.unsubscribe();
+      _attendeesSyncChannel = _supabase.channel('event_attendees_sync');
+      _attendeesSyncChannel?.onBroadcast(
+        event: 'attendee_change',
+        callback: (payload) {
+          _handleBroadcastAttendeeChange(payload);
+        },
+      ).subscribe((status, [error]) {
+        debugPrint('📡 [BROADCAST] Event attendees broadcast sync durumu: $status');
+      });
+    } catch (e) {
+      debugPrint('[EventService] Broadcast attendees sync hatası: $e');
+    }
+  }
+
+  void _broadcastAttendeeChange({
+    required String eventId,
+    required String userId,
+    required String userName,
+    required String userAvatar,
+    required String? userCity,
+    required String status,
+  }) {
+    try {
+      _attendeesSyncChannel?.sendBroadcastMessage(
+        event: 'attendee_change',
+        payload: {
+          'event_id': eventId,
+          'user_id': userId,
+          'user_name': userName,
+          'user_avatar': userAvatar,
+          'user_city': userCity,
+          'status': status,
+        },
+      );
+    } catch (_) {}
+  }
+
+  void _handleBroadcastAttendeeChange(Map<String, dynamic> payload) {
+    try {
+      final eventId = payload['event_id']?.toString();
+      final rawUserId = payload['user_id']?.toString();
+      final status = payload['status']?.toString();
+      if (eventId == null || rawUserId == null) return;
+
+      final lowerUserId = rawUserId.toLowerCase().trim();
+      final myUid = currentUserId.toLowerCase().trim();
+      if (lowerUserId == myUid) {
+        return;
+      }
+
+      final eventIndex = _events.indexWhere((e) => e.id == eventId);
+      if (eventIndex < 0) return;
+
+      if (status == 'cancelled') {
+        _events[eventIndex].attendees.removeWhere((u) => u.id.toLowerCase().trim() == lowerUserId);
+        _saveEventAttendeesLocally(eventId);
+        notifyListeners();
+      } else if (status == 'joined') {
+        if (!_events[eventIndex].attendees.any((u) => u.id.toLowerCase().trim() == lowerUserId)) {
+          final attendee = UserModel(
+            id: rawUserId,
+            name: payload['user_name']?.toString() ?? 'Katılımcı',
+            avatarUrl: payload['user_avatar']?.toString() ?? '',
+            city: payload['user_city']?.toString(),
+          );
+          _events[eventIndex].attendees.add(attendee);
+          _saveEventAttendeesLocally(eventId);
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[EventService] Broadcast attendee error: $e');
+    }
+  }
+
+  void _subscribeToAttendeesRealtime() {
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      return;
+    }
+    try {
+      _attendeesChannel?.unsubscribe();
+      _attendeesChannel = _supabase
+          .channel('public_event_attendees_stream')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'event_attendees',
+            callback: (payload) {
+              _handleAttendeesChangeEvent(payload);
+            },
+          )
+          .subscribe((status, [error]) {
+            debugPrint('📡 [SUPABASE REALTIME] Event Attendees CDC akışı durumu: $status');
+          });
+    } catch (e) {
+      debugPrint('[EventService] Realtime attendees hatası: $e');
+    }
+  }
+
+  void _handleAttendeesChangeEvent(PostgresChangePayload payload) async {
+    try {
+      final record = payload.newRecord.isNotEmpty ? payload.newRecord : payload.oldRecord;
+      if (record.isEmpty) return;
+      final eventId = record['event_id']?.toString();
+      final rawUserId = record['user_id']?.toString();
+      final status = record['status']?.toString();
+
+      if (eventId == null || rawUserId == null) return;
+      final lowerUserId = rawUserId.toLowerCase().trim();
+      final myUid = currentUserId.toLowerCase().trim();
+
+      final eventIndex = _events.indexWhere((e) => e.id == eventId);
+      if (eventIndex < 0) return;
+
+      if (payload.eventType == PostgresChangeEvent.delete || status == 'cancelled') {
+        _events[eventIndex].attendees.removeWhere((u) => u.id.toLowerCase() == lowerUserId);
+        if (lowerUserId == myUid) {
+          currentUser.plannedEvents.remove(eventId);
+          _savePlannedEvents();
+        }
+        _saveEventAttendeesLocally(eventId);
+        notifyListeners();
+      } else if (status == 'joined') {
+        if (!_events[eventIndex].attendees.any((u) => u.id.toLowerCase() == lowerUserId)) {
+          UserModel attendee = UserModel(id: rawUserId, name: 'Katılımcı', avatarUrl: '');
+          if (lowerUserId == myUid) {
+            attendee = UserModel(id: currentUserId, name: currentUser.name, avatarUrl: currentUser.avatarUrl);
+            if (!currentUser.plannedEvents.contains(eventId)) {
+              currentUser.plannedEvents.add(eventId);
+              _savePlannedEvents();
+            }
+          } else {
+            try {
+              final uRes = await _supabase.from('users').select('name, avatar_url').eq('id', rawUserId).maybeSingle();
+              if (uRes != null) {
+                attendee = UserModel(id: rawUserId, name: uRes['name'] ?? 'Katılımcı', avatarUrl: uRes['avatar_url'] ?? '');
+              }
+            } catch (_) {}
+          }
+          _events[eventIndex].attendees.add(attendee);
+          _saveEventAttendeesLocally(eventId);
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[EventService] Attendees change handling error: $e');
     }
   }
 
@@ -299,7 +642,7 @@ class MockEventService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     
     final authUser = _supabase.auth.currentUser;
-    final userId = authUser?.id ?? 'user_1';
+    final userId = authUser?.id ?? currentUserId;
     currentUser.id = userId;
 
     // Reset to clean slate first
@@ -312,10 +655,18 @@ class MockEventService extends ChangeNotifier {
     currentUser.socialLinks = [];
     currentUser.avatarUrl = '';
     currentUser.avatarUrls = [];
-    currentUser.plannedEvents = [];
-    currentUser.pastEvents = [];
+    
+    // Önce yerel önbellekteki planlanan etkinlikleri ve check-in durumunu yükle
+    final savedPlanned = prefs.getStringList('${userId}_userPlannedEvents') ?? [];
+    for (var p in savedPlanned) {
+      if (!currentUser.plannedEvents.contains(p)) {
+        currentUser.plannedEvents.add(p);
+      }
+    }
+    currentUser.checkedInEventId = prefs.getString('${userId}_userCheckedInEventId');
+    currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? [];
 
-    if (userId != 'user_1') {
+    if (_isValidUuid(userId)) {
       try {
         final userData = await _supabase.from('users').select().eq('id', userId).maybeSingle();
         if (userData != null) {
@@ -331,7 +682,22 @@ class MockEventService extends ChangeNotifier {
           }
           currentUser.name = userData['name'] ?? authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
         } else {
-          currentUser.name = authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
+          final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
+          currentUser.name = userName;
+          final email = authUser?.email ?? '';
+          final derivedUsername = email.contains('@') ? email.split('@')[0] : 'user_${userId.substring(0, 6)}';
+          currentUser.username = derivedUsername;
+          try {
+            await _supabase.from('users').upsert({
+              'id': userId,
+              'name': userName,
+              'username': derivedUsername,
+              'email': email,
+              'city': 'İstanbul',
+            });
+          } catch (e) {
+            debugPrint('Auto upsert user profile error: $e');
+          }
         }
         
         try {
@@ -356,7 +722,13 @@ class MockEventService extends ChangeNotifier {
               .eq('status', 'joined');
           
           if (attendedRes.isNotEmpty) {
-            currentUser.plannedEvents = attendedRes.map((r) => r['event_id'].toString()).toList();
+            final fetchedEvents = attendedRes.map((r) => r['event_id'].toString()).toSet();
+            for (var ev in fetchedEvents) {
+              if (!currentUser.plannedEvents.contains(ev)) {
+                currentUser.plannedEvents.add(ev);
+              }
+            }
+            _savePlannedEvents();
           }
         } catch (_) {}
 
@@ -389,7 +761,14 @@ class MockEventService extends ChangeNotifier {
       currentUser.avatarUrls = prefs.getStringList('${userId}_userAvatarUrls') ?? [currentUser.avatarUrl];
       currentUser.tags = prefs.getStringList('${userId}_userTags') ?? ['Konser', 'Müzik', 'Tiyatro'];
       currentUser.socialLinks = prefs.getStringList('${userId}_userSocialLinks') ?? [];
-      currentUser.plannedEvents = prefs.getStringList('${userId}_userPlannedEvents') ?? ['1'];
+      final localPlanned = prefs.getStringList('${userId}_userPlannedEvents');
+      if (localPlanned != null) {
+        for (var p in localPlanned) {
+          if (!currentUser.plannedEvents.contains(p)) {
+            currentUser.plannedEvents.add(p);
+          }
+        }
+      }
       currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
     }
 
@@ -403,6 +782,7 @@ class MockEventService extends ChangeNotifier {
                                          prefs.getBool('${currentUser.name}_privacy_location_sharing') ??
                                          prefs.getBool('privacy_location_sharing') ?? true;
 
+    _syncPlannedEventsWithAttendees();
     notifyListeners();
   }
 
@@ -446,10 +826,10 @@ class MockEventService extends ChangeNotifier {
     prefs.setStringList('${userId}_userPastEvents', currentUser.pastEvents);
   }
 
-  void _savePlannedEvents() async {
+  Future<void> _savePlannedEvents() async {
     final prefs = await SharedPreferences.getInstance();
-    final userId = currentUser.id;
-    prefs.setStringList('${userId}_userPlannedEvents', currentUser.plannedEvents);
+    final userId = currentUserId;
+    await prefs.setStringList('${userId}_userPlannedEvents', currentUser.plannedEvents);
   }
 
   UserModel currentUser = UserModel(
@@ -1017,72 +1397,128 @@ class MockEventService extends ChangeNotifier {
     }
   }
 
-  Future<void> joinEvent(String eventId) async {
-    final eventIndex = _events.indexWhere((e) => e.id == eventId);
+  Future<void> joinEvent(String eventId, [EventModel? fallbackEvent]) async {
+    final uid = currentUserId;
+    int eventIndex = _events.indexWhere((e) => e.id == eventId);
+    if (eventIndex < 0) {
+      final newEv = fallbackEvent ?? EventModel(
+        id: eventId,
+        title: 'Etkinlik',
+        category: 'Genel',
+        location: 'İstanbul',
+        dateTime: DateTime.now().add(const Duration(days: 7)),
+        description: '',
+        imageUrl: 'assets/images/placeholder.png',
+        attendees: [],
+      );
+      _events.add(newEv);
+      eventIndex = _events.length - 1;
+    }
+
     if (eventIndex >= 0) {
       final event = _events[eventIndex];
-      bool changed = false;
-
-      if (!event.attendees.any((u) => u.id == currentUser.id)) {
-        event.attendees.add(UserModel(
-          id: currentUser.id,
+      if (!event.attendees.any((u) => u.id.toLowerCase().trim() == uid.toLowerCase().trim())) {
+        event.attendees.insert(0, UserModel(
+          id: uid,
           name: currentUser.name,
           avatarUrl: currentUser.avatarUrl,
           city: currentUser.city,
           birthDate: currentUser.birthDate,
           tags: List.from(currentUser.tags),
         ));
-        changed = true;
       }
+    }
 
-      if (!currentUser.plannedEvents.contains(eventId)) {
-        currentUser.plannedEvents.add(eventId);
-        _savePlannedEvents();
-        changed = true;
+    if (!currentUser.plannedEvents.contains(eventId)) {
+      currentUser.plannedEvents.add(eventId);
+    }
+    await _savePlannedEvents();
 
-        try {
+    await _saveEventAttendeesLocally(eventId);
+
+    // Canlı WebSocket yayını yap (tüm bağlı cihazlar/arkadaşlar anında görsün)
+    _broadcastAttendeeChange(
+      eventId: eventId,
+      userId: uid,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
+      userCity: currentUser.city,
+      status: 'joined',
+    );
+
+    if (_supabase.auth.currentUser != null && _isValidUuid(uid)) {
+      try {
+        final existing = await _supabase.from('event_attendees')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('event_id', eventId);
+
+        if (existing.isEmpty) {
           await _supabase.from('event_attendees').insert({
-            'user_id': currentUser.id,
+            'user_id': uid,
             'event_id': eventId,
             'status': 'joined'
           });
-        } catch (e) {
-          debugPrint('Supabase event_attendees kayıt hatası: $e');
+        } else {
+          await _supabase.from('event_attendees').update({
+            'status': 'joined'
+          }).eq('user_id', uid).eq('event_id', eventId);
         }
-      }
-
-      if (changed) {
-        notifyListeners();
+      } catch (e) {
+        debugPrint('Supabase event_attendees kayıt hatası: $e');
       }
     }
+
+    notifyListeners();
   }
 
   Future<void> leaveEvent(String eventId) async {
+    final uid = currentUserId;
     final eventIndex = _events.indexWhere((e) => e.id == eventId);
     if (eventIndex >= 0) {
       final event = _events[eventIndex];
-      event.attendees.removeWhere((u) => u.id == currentUser.id);
-      currentUser.plannedEvents.remove(eventId);
-      if (currentUser.checkedInEventId == eventId) {
-        currentUser.checkedInEventId = null;
-      }
-      _savePlannedEvents();
+      event.attendees.removeWhere((u) => u.id.toLowerCase().trim() == uid.toLowerCase().trim());
+      await _saveEventAttendeesLocally(eventId);
+    }
+    currentUser.plannedEvents.remove(eventId);
+    if (currentUser.checkedInEventId == eventId) {
+      currentUser.checkedInEventId = null;
+      _saveCheckedInEvent(null);
+    }
+    _savePlannedEvents();
 
+    // Canlı WebSocket iptal yayını
+    _broadcastAttendeeChange(
+      eventId: eventId,
+      userId: uid,
+      userName: currentUser.name,
+      userAvatar: currentUser.avatarUrl,
+      userCity: currentUser.city,
+      status: 'cancelled',
+    );
+
+    if (_supabase.auth.currentUser != null && _isValidUuid(uid)) {
       try {
         await _supabase.from('event_attendees')
             .delete()
-            .eq('user_id', currentUser.id)
+            .eq('user_id', uid)
             .eq('event_id', eventId);
       } catch (e) {
         debugPrint('Supabase event_attendees silme hatası: $e');
       }
-
-      notifyListeners();
     }
+
+    notifyListeners();
   }
 
   bool isUserAttending(String eventId) {
-     return currentUser.plannedEvents.contains(eventId);
+    if (currentUser.plannedEvents.contains(eventId)) return true;
+    final eventIndex = _events.indexWhere((e) => e.id == eventId);
+    if (eventIndex >= 0) {
+      final myUid = currentUserId.toLowerCase().trim();
+      return _events[eventIndex].attendees.any((u) => u.id.toLowerCase().trim() == myUid);
+    }
+    return false;
   }
 
   List<EventModel> get allEvents => _events.where((e) => e.dateTime.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList();
@@ -1091,14 +1527,26 @@ class MockEventService extends ChangeNotifier {
     return currentUser.checkedInEventId == eventId;
   }
 
+  void _saveCheckedInEvent(String? eventId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final uid = currentUserId;
+    if (eventId != null) {
+      prefs.setString('${uid}_userCheckedInEventId', eventId);
+    } else {
+      prefs.remove('${uid}_userCheckedInEventId');
+    }
+  }
+
   void checkIn(String eventId) {
     currentUser.checkedInEventId = eventId;
     currentUser.points += 50;
+    _saveCheckedInEvent(eventId);
     notifyListeners();
   }
 
   void checkOut() {
     currentUser.checkedInEventId = null;
+    _saveCheckedInEvent(null);
     notifyListeners();
   }
 
@@ -1108,17 +1556,168 @@ class MockEventService extends ChangeNotifier {
     return _venueChats[eventId] ?? [];
   }
 
-  void sendVenueMessage(String eventId, String message) {
-    if (!_venueChats.containsKey(eventId)) {
-      _venueChats[eventId] = [];
+  Future<void> _loadVenueMessagesFromStorage(String eventId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = prefs.getString('eventmatch_venue_chat_$eventId');
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final decoded = jsonDecode(jsonStr) as List;
+        final list = <Map<String, dynamic>>[];
+        for (var item in decoded) {
+          list.add({
+            'userId': item['userId'],
+            'userName': item['userName'],
+            'message': item['message'],
+            'time': item['time'] != null ? DateTime.tryParse(item['time'].toString()) ?? DateTime.now() : DateTime.now(),
+          });
+        }
+        _venueChats[eventId] = list;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveVenueMessagesToStorage(String eventId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _venueChats[eventId] ?? [];
+      final encoded = list.map((m) => {
+        'userId': m['userId'],
+        'userName': m['userName'],
+        'message': m['message'],
+        'time': m['time'] is DateTime ? (m['time'] as DateTime).toIso8601String() : DateTime.now().toIso8601String(),
+      }).toList();
+      await prefs.setString('eventmatch_venue_chat_$eventId', jsonEncode(encoded));
+    } catch (_) {}
+  }
+
+  Future<void> loadVenueMessages(String eventId) async {
+    _activeVenueEventId = eventId;
+    await _loadVenueMessagesFromStorage(eventId);
+
+    // Supabase messages tablosundan geçmiş mesajları çek
+    try {
+      final res = await _supabase
+          .from('messages')
+          .select('*')
+          .eq('receiver_id', 'venue_$eventId')
+          .order('created_at', ascending: true);
+
+      if (res.isNotEmpty) {
+        final list = <Map<String, dynamic>>[];
+        final senderIds = res
+            .map((m) => m['sender_id']?.toString())
+            .where((id) => id != null && _isValidUuid(id!))
+            .cast<String>()
+            .toSet()
+            .toList();
+
+        Map<String, String> senderNames = {};
+        if (senderIds.isNotEmpty) {
+          try {
+            final uRes = await _supabase.from('users').select('id, name').inFilter('id', senderIds);
+            for (var u in uRes) {
+              senderNames[u['id'].toString().toLowerCase()] = u['name']?.toString() ?? 'Kullanıcı';
+            }
+          } catch (_) {}
+        }
+
+        for (var row in res) {
+          final sId = row['sender_id']?.toString() ?? '';
+          final lowerSId = sId.toLowerCase();
+          final isMe = lowerSId == currentUserId.toLowerCase();
+          list.add({
+            'userId': sId,
+            'userName': isMe ? currentUser.name : (senderNames[lowerSId] ?? 'Kullanıcı'),
+            'message': row['content']?.toString() ?? row['message']?.toString() ?? '',
+            'time': row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now(),
+          });
+        }
+        _venueChats[eventId] = list;
+        await _saveVenueMessagesToStorage(eventId);
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[EventService] loadVenueMessages Supabase error: $e');
     }
+
+    _subscribeToVenueChat(eventId);
+  }
+
+  void _subscribeToVenueChat(String eventId) {
+    try {
+      _venueBroadcastChannel?.unsubscribe();
+      _venueBroadcastChannel = _supabase
+          .channel('venue_chat_$eventId')
+          .onBroadcast(
+            event: 'new_venue_message',
+            callback: (payload) {
+              final sId = payload['userId']?.toString() ?? '';
+              final sName = payload['userName']?.toString() ?? 'Kullanıcı';
+              final msg = payload['message']?.toString() ?? '';
+              if (msg.trim().isEmpty) return;
+
+              _venueChats.putIfAbsent(eventId, () => []);
+              if (!_venueChats[eventId]!.any((m) => m['message'] == msg && m['userId'] == sId)) {
+                _venueChats[eventId]!.add({
+                  'userId': sId,
+                  'userName': sId.toLowerCase() == currentUserId.toLowerCase() ? currentUser.name : sName,
+                  'message': msg,
+                  'time': DateTime.now(),
+                });
+                _saveVenueMessagesToStorage(eventId);
+                notifyListeners();
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('[EventService] subscribe venue chat error: $e');
+    }
+  }
+
+  Future<void> sendVenueMessage(String eventId, String message) async {
+    final text = message.trim();
+    if (text.isEmpty) return;
+
+    final uid = currentUserId;
+    final uName = currentUser.name;
+    final now = DateTime.now();
+
+    _venueChats.putIfAbsent(eventId, () => []);
     _venueChats[eventId]!.add({
-      'userId': currentUser.id,
-      'userName': currentUser.name,
-      'message': message,
-      'time': DateTime.now(),
+      'userId': uid,
+      'userName': uName,
+      'message': text,
+      'time': now,
     });
+    await _saveVenueMessagesToStorage(eventId);
     notifyListeners();
+
+    // 1. Canlı WebSocket yayını yap (tüm mekandakiler anında görür)
+    try {
+      _venueBroadcastChannel?.sendBroadcastMessage(
+        event: 'new_venue_message',
+        payload: {
+          'userId': uid,
+          'userName': uName,
+          'message': text,
+          'time': now.toIso8601String(),
+        },
+      );
+    } catch (_) {}
+
+    // 2. Supabase messages tablosuna kalıcı olarak yaz
+    try {
+      await _supabase.from('messages').insert({
+        'sender_id': uid,
+        'receiver_id': 'venue_$eventId',
+        'content': text,
+        'created_at': now.toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[EventService] sendVenueMessage persist error: $e');
+    }
   }
 
   Map<String, dynamic> calculateVibe(UserModel targetUser) {

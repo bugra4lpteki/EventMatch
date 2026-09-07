@@ -410,8 +410,8 @@ class MockMatchService extends ChangeNotifier {
 
             if (existingStatus == 'matched') {
               isMutualMatch = true;
-            } else if (u1.toLowerCase() == targetId && existingStatus == 'liked') {
-              // Karşı taraf daha önce beni beğenmiş -> İki yönlü eşleşme sağlandı
+            } else if (u1.toLowerCase() == targetId && (existingStatus == 'liked' || existingStatus == 'pending')) {
+              // Karşı taraf daha önce beni beğenmiş -> İki yönlü eşleşme sağlandı!
               await _supabase
                   .from('matches')
                   .update({'status': 'matched'})
@@ -458,7 +458,7 @@ class MockMatchService extends ChangeNotifier {
           debugPrint('[MatchService] Supabase swipe hatası: $e');
         }
       } else {
-        isMutualMatch = true;
+        isMutualMatch = false;
       }
 
       _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetId);
@@ -547,7 +547,7 @@ class MockMatchService extends ChangeNotifier {
       _incomingRequests.clear();
 
       if (_supabase.auth.currentUser != null) {
-        // 1. Zaten eşleştiğim veya mesajlaştığım kişileri tespit et (onlardan gelen yeni istek olamaz)
+        // 1. Zaten karşılıklı eşleştiğim kişileri tespit et (onlardan gelen yeni istek olamaz)
         final alreadyMatchedIds = <String>{};
 
         try {
@@ -568,25 +568,6 @@ class MockMatchService extends ChangeNotifier {
           }
         } catch (e) {
           debugPrint('[MatchService] existingMatches query error: $e');
-        }
-
-        try {
-          final myMessages = await _supabase
-              .from('messages')
-              .select('sender_id, receiver_id')
-              .or('sender_id.eq.$currentId,receiver_id.eq.$currentId');
-
-          for (var row in myMessages) {
-            final s = (row['sender_id'] ?? '').toString().toLowerCase();
-            final r = (row['receiver_id'] ?? '').toString().toLowerCase();
-            final other = s == currentId.toLowerCase() ? r : s;
-            if (other.isNotEmpty) {
-              alreadyMatchedIds.add(other);
-              _seenUserIds.add(other);
-            }
-          }
-        } catch (e) {
-          debugPrint('[MatchService] myMessages query error: $e');
         }
 
         // 2. Bana gelen 'liked' statüsündeki kayıtları çek
@@ -634,14 +615,8 @@ class MockMatchService extends ChangeNotifier {
 
           final lowerFromId = fromUserId.toLowerCase();
 
-          // Zaten eşleşilmiş biriyse isteği filtrele ve Supabase'deki kaydı da matched yap
+          // Zaten karşılıklı eşleşilmiş biriyse gelen isteklerde gösterme
           if (alreadyMatchedIds.contains(lowerFromId)) {
-            try {
-              final rowId = row['id'];
-              if (rowId != null) {
-                _supabase.from('matches').update({'status': 'matched'}).eq('id', rowId);
-              }
-            } catch (_) {}
             continue;
           }
 

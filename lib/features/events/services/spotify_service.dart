@@ -79,6 +79,16 @@ class SpotifyArtist {
   }
 }
 
+class SpotifyArtistData {
+  final SpotifyArtist artist;
+  final List<SpotifyTrack> tracks;
+
+  SpotifyArtistData({
+    required this.artist,
+    required this.tracks,
+  });
+}
+
 class SpotifyService {
   static final SpotifyService _instance = SpotifyService._internal();
   factory SpotifyService() => _instance;
@@ -92,6 +102,13 @@ class SpotifyService {
   final Map<String, List<SpotifyTrack>> _topTracksCache = {};
 
   bool _tokenFailedPermanently = false;
+
+  /// Cache'i temizle — uygulama başlangıcında veya görsel kaynak değişince çağır
+  void clearCache() {
+    _artistCache.clear();
+    _topTracksCache.clear();
+    // Token'ı sıfırlama, sadece görsel cache'i temizle
+  }
 
   /// Spotify Client Credentials Token alma
   Future<String?> _getAccessToken() async {
@@ -286,8 +303,50 @@ class SpotifyService {
     return null;
   }
 
+  /// Etkinlikteki tüm sanatçıları (tekli, ortak iş veya festival) ayrı ayrı Spotify verileriyle çekme
+  Future<List<SpotifyArtistData>> getArtistsForEvent(String eventTitle, {String category = ''}) async {
+    final catLower = category.toLowerCase().trim();
+    final titleLower = eventTitle.toLowerCase().trim();
+    if (catLower.contains('tiyatro') ||
+        catLower.contains('theatre') ||
+        catLower.contains('arts') ||
+        catLower.contains('stand-up') ||
+        catLower.contains('standup') ||
+        catLower.contains('komedi') ||
+        catLower.contains('comedy') ||
+        catLower.contains('sahne') ||
+        catLower.contains('spor') ||
+        catLower.contains('sport') ||
+        catLower.contains('sergi') ||
+        catLower.contains('atölye') ||
+        catLower.contains('sinema') ||
+        titleLower.contains('stand-up') ||
+        titleLower.contains('stand up') ||
+        titleLower.contains('tiyatro') ||
+        titleLower.contains('gösteri') ||
+        titleLower.contains('oyun') ||
+        titleLower.contains('tek kişilik')) {
+      return [];
+    }
 
-  /// Dünyadaki HERHANGİ BİR Sanatçı için Canlı Arama (Deezer Artist + Top Tracks Engine)
+    final artistNames = extractArtistNames(eventTitle);
+    if (artistNames.isEmpty) return [];
+
+    final List<SpotifyArtistData> results = [];
+    for (final name in artistNames) {
+      try {
+        final artist = await searchArtist(name, category: category);
+        if (artist != null) {
+          final tracks = await getArtistTopTracks(artist.id, artistName: artist.name);
+          results.add(SpotifyArtistData(artist: artist, tracks: tracks));
+        }
+      } catch (e) {
+        debugPrint('[SpotifyService] getArtistsForEvent error for $name: $e');
+      }
+    }
+    return results;
+  }
+
   Future<SpotifyArtist?> _fetchDynamicFromUniversalApi(String artistName) async {
     // 1. Deezer Artist Search: Doğrudan sanatçının gerçek HD profil fotoğrafını çeker (Albüm kapağı değil!)
     try {
@@ -333,41 +392,60 @@ class SpotifyService {
       debugPrint('[SpotifyService] Deezer dynamic artist search error: $e');
     }
 
-    // 2. Apple Music Engine (Yedek olarak)
+    // 2. Wikipedia REST API — Gerçek sanatçı profil fotoğrafı (albüm kapağı değil!)
+    // Wikipedia'nın page/summary endpoint'i sanatçı/kişi fotoğrafı döndürür.
     try {
-      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(artistName)}&entity=song&limit=5&country=TR');
-      final response = await http.get(url).timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final results = data['results'] as List?;
-        if (results != null && results.isNotEmpty) {
-          final first = results.first;
-          final realArtistName = first['artistName'] ?? artistName;
-          final rawArt = first['artworkUrl100'] as String? ?? '';
-          final highResArt = rawArt.replaceAll('100x100bb', '600x600bb');
-          final genre = first['primaryGenreName'] as String? ?? 'Müzik';
+      // Önce İngilizce Wikipedia'da ara
+      final wikiName = artistName.replaceAll(' ', '_');
+      final wikiUrl = Uri.parse('https://en.wikipedia.org/api/rest_v1/page/summary/${Uri.encodeComponent(wikiName)}');
+      final wikiResponse = await http.get(
+        wikiUrl,
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 4));
 
-          final tracks = _parseTracksFromResults(results, realArtistName);
-          final artistId = 'dyn_${realArtistName.hashCode}';
+      if (wikiResponse.statusCode == 200) {
+        final wikiData = jsonDecode(wikiResponse.body);
+        // originalimage veya thumbnail — sanatçının gerçek profil fotoğrafı
+        final originalImage = wikiData['originalimage']?['source'] as String?;
+        final thumbnail = wikiData['thumbnail']?['source'] as String?;
+        final wikiPhoto = originalImage ?? thumbnail ?? '';
+
+        if (wikiPhoto.isNotEmpty) {
+          // Şarkıları ayrı olarak çek (Wikipedia'dan değil, Deezer/iTunes'dan)
+          final tracks = await _fetchTracksFromUniversalApi(artistName);
+          final artistId = 'dyn_wiki_${artistName.hashCode}';
           if (tracks.isNotEmpty) {
             _topTracksCache[artistId] = tracks;
             _topTracksCache[artistName.toLowerCase()] = tracks;
-            _topTracksCache[realArtistName.toLowerCase()] = tracks;
           }
-
           return SpotifyArtist(
             id: artistId,
-            name: realArtistName,
-            imageUrl: highResArt,
-            genres: [genre, 'Canlı Sahne'],
+            name: artistName,
+            imageUrl: wikiPhoto,
+            genres: ['Pop', 'Rock', 'Canlı Sahne'],
             followers: 1250000,
-            spotifyUrl: 'https://open.spotify.com/search/${Uri.encodeComponent(realArtistName)}',
+            spotifyUrl: 'https://open.spotify.com/search/${Uri.encodeComponent(artistName)}',
           );
         }
       }
     } catch (e) {
-      debugPrint('[SpotifyService] Universal search error: $e');
+      debugPrint('[SpotifyService] Wikipedia artist photo error: $e');
     }
+
+    // 3. iTunes — SADECE şarkı verisi için kullan, artist fotoğrafı için KULLANMA
+    // (iTunes artworkUrl = albüm kapağı, sanatçı fotoğrafı değil)
+    try {
+      final tracks = await _fetchTracksFromUniversalApi(artistName);
+      if (tracks.isNotEmpty) {
+        final artistId = 'dyn_itunes_${artistName.hashCode}';
+        _topTracksCache[artistId] = tracks;
+        _topTracksCache[artistName.toLowerCase()] = tracks;
+        // Sanatçı görseli olarak boş bırak — fallback artist kartı gösterilecek
+      }
+    } catch (e) {
+      debugPrint('[SpotifyService] iTunes track fetch error: $e');
+    }
+
     return null;
   }
 
@@ -487,49 +565,119 @@ class SpotifyService {
   }
 
 
-  /// Etkinlik başlığından sanatçı adını ayıklama (Örn: "Maximum Sunar: Yann Tiersen" -> "Yann Tiersen")
-  String _cleanArtistName(String raw) {
-    String name = raw.trim();
+  /// Etkinlik başlığından sanatçı adlarını ayıklama
+  /// (Örn: "Sibel Can - Eypio" -> ["Sibel Can", "Eypio"])
+  /// (Örn: "Sibel Can & Eypio" -> ["Sibel Can", "Eypio"])
+  /// (Örn: "Mor ve Ötesi" -> ["Mor ve Ötesi"])
+  static List<String> extractArtistNames(String raw) {
+    String text = raw.trim();
+    if (text.isEmpty) return [];
 
     // 1. Öncü sponsor/organizatör ve festival başlıklarını kaldır
-    name = name.replaceAll(RegExp(r'^(?:.*?)\s*(?:sunar|presents)\s*:\s*', caseSensitive: false), '');
-    name = name.replaceAll(RegExp(r'^(?:Maximum|Biletix|Red Bull|Garanti BBVA|Vodafone|Turkcell)\s+', caseSensitive: false), '');
-    name = name.replaceAll(RegExp(r'^K-Pop\s+Festivali\s*\d*:\s*', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'^(?:.*?)\s*(?:sunar|presents)\s*:\s*', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'^(?:Maximum|Biletix|Red Bull|Garanti BBVA|Vodafone|Turkcell|\+1|Birlikte Güzel|Paribu)\s+', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'^(?:.*?Festivali\s*\d*|.*?Fest\s*\d*)\s*:\s*', caseSensitive: false), '');
 
-    // 2. Tire veya bölücüler
-    if (name.contains(' - ')) {
-      final parts = name.split(' - ').map((s) => s.trim()).toList();
-      if (parts[0].toLowerCase().contains('fest') && parts.length > 1) {
-        name = parts[1];
-      } else {
-        name = parts[0];
-      }
-    } else if (name.contains(' | ')) {
-      name = name.split(' | ').first.trim();
-    } else if (name.contains(' @ ')) {
-      name = name.split(' @ ').first.trim();
-    }
-
-    // 3. İki nokta veya ayraçtan sonrasını temizle
-    name = name.replaceAll(RegExp(r'[\:\@\|\/].*$'), '').trim();
-
-    // 4. Turne / Konser / Mekan ve Yıl eklerini kaldır
+    // 2. Turne / Konser / Mekan ve Yıl eklerini kaldır
     final suffixes = [
-      ' World Tour', ' Konseri', ' Konser', ' Live', ' Turnesi', ' Gösterisi',
-      ' Akustik', ' Teneffüs', ' Sahnesi', ' Festivali', ' & ', ' Harbiye',
+      ' World Tour', ' Konserleri', ' Konseri', ' Konser', ' Live', ' Turnesi', ' Gösterisi',
+      ' Akustik', ' Teneffüs', ' Sahnesi', ' Festivali', ' Harbiye',
       ' Açık Hava', ' Açıkhava', ' Jolly Joker', ' Bostancı Gösteri Merkezi',
       ' Dorock XL', ' IF Performance', ' Zorlu PSM', ' Biletleri',
       ' 2024', ' 2025', ' 2026', ' 2027'
     ];
 
-    for (var s in suffixes) {
-      final idx = name.indexOf(s);
+    for (final s in suffixes) {
+      final idx = text.toLowerCase().indexOf(s.toLowerCase());
       if (idx > 0) {
-        name = name.substring(0, idx).trim();
+        text = text.substring(0, idx).trim();
       }
     }
 
-    return name;
+    // 3. Boru veya @ sonrasını temizle
+    if (text.contains(' | ')) {
+      text = text.split(' | ').first.trim();
+    }
+    if (text.contains(' @ ')) {
+      text = text.split(' @ ').first.trim();
+    }
+
+    // 4. İçinde "ve", "&", "," geçen bilinen grup adlarını koru
+    final Map<String, String> protectedBands = {
+      'mor ve ötesi': '__BAND_MOR_VE_OTESI__',
+      'kool & the gang': '__BAND_KOOL_THE_GANG__',
+      'earth, wind & fire': '__BAND_EARTH_WIND_FIRE__',
+      'simon & garfunkel': '__BAND_SIMON_GARFUNKEL__',
+      'crosby, stills, nash & young': '__BAND_CSNY__',
+      'florence + the machine': '__BAND_FLORENCE__',
+      'of monsters and men': '__BAND_OF_MONSTERS__',
+      'bob marley & the wailers': '__BAND_BOB_MARLEY__',
+      'dolu kadehi ters tut': '__BAND_DKTT__',
+      'yüzyüzeyken konuşuruz': '__BAND_YYK__',
+    };
+
+    final Map<String, String> reversePlaceholders = {};
+    for (final entry in protectedBands.entries) {
+      final pattern = RegExp(RegExp.escape(entry.key), caseSensitive: false);
+      final match = pattern.firstMatch(text);
+      if (match != null) {
+        final original = match.group(0)!;
+        text = text.replaceRange(match.start, match.end, entry.value);
+        reversePlaceholders[entry.value] = original;
+      }
+    }
+
+    // 5. Çoklu sanatçı ayraçlarına göre böl
+    // " & ", ",", "/", " feat. ", " feat ", " ft. ", " ft ", " x ", " X ", " ile ", " ve ", " - "
+    final splitRegex = RegExp(
+      r'(\s+&\s+|\s*,\s*|\s*\/\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+[xX]\s+|\s+ile\s+|\s+ve\s+|\s+-\s+)',
+      caseSensitive: false,
+    );
+
+    final rawParts = text.split(splitRegex);
+
+    final invalidTokens = {
+      'istanbul', 'ankara', 'izmir', 'bursa', 'antalya', 'harbiye',
+      'açıkhava', 'acikhava', 'açık hava', 'konser', 'konseri', 'live',
+      'turkey', 'türkiye', 'sahne', 'sahnesi', 'bilet', 'biletleri',
+      'festival', 'festivali', 'fest', 'biletix', 'passo', 'bubilet',
+      'etkinlik', 'turne', 'turnesi', 'akustik', 'gösterisi', 'özel',
+      'senfoni', 'orkestrası', 'senfoni orkestrası', 'bostancı', 'zorlu',
+      'jolly joker', 'if performance', 'dorock', 'dorock xl', 'maximum uniq',
+      'küçükçiftlik', 'kucukciftlik', 'park', 'arena', 'hall', 'center',
+    };
+
+    final List<String> result = [];
+    for (var part in rawParts) {
+      part = part.trim();
+      for (final ph in reversePlaceholders.entries) {
+        part = part.replaceAll(ph.key, ph.value);
+      }
+      part = part.replaceAll(RegExp(r'[\:\@\|\/].*$'), '').trim();
+      part = part.replaceAll(RegExp(r'^[,\-\s]+|[,\-\s]+$'), '').trim();
+
+      if (part.length < 2) continue;
+      if (invalidTokens.contains(part.toLowerCase())) continue;
+
+      if (!result.contains(part)) {
+        result.add(part);
+      }
+    }
+
+    if (result.isEmpty && text.isNotEmpty) {
+      String fallback = text;
+      for (final ph in reversePlaceholders.entries) {
+        fallback = fallback.replaceAll(ph.key, ph.value);
+      }
+      return [fallback.trim()];
+    }
+
+    return result;
+  }
+
+  String _cleanArtistName(String raw) {
+    final names = extractArtistNames(raw);
+    return names.isNotEmpty ? names.first : raw.trim();
   }
 
   SpotifyArtist _getFallbackArtist(String name) {
@@ -622,6 +770,52 @@ class SpotifyService {
 
   // --- Popüler Sanatçılar ve Gerçek Hit Şarkıları Kataloğu ---
   static final Map<String, _ArtistCatalogEntry> _curatedArtists = {
+    'sibel can': _ArtistCatalogEntry(
+      name: 'Sibel Can',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/90e0ec187a55225c5cbcfb006c9a7217/1000x1000-000000-80-0-0.jpg',
+      genres: ['Türk Sanat Müziği', 'Türkçe Pop'],
+      followers: 1850000,
+      tracks: [
+        _TrackData(
+          title: 'Padişah',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/90e0ec187a55225c5cbcfb006c9a7217/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        ),
+        _TrackData(
+          title: 'Kuyu',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/90e0ec187a55225c5cbcfb006c9a7217/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+        ),
+        _TrackData(
+          title: 'Hançer',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/90e0ec187a55225c5cbcfb006c9a7217/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+        ),
+      ],
+    ),
+    'eypio': _ArtistCatalogEntry(
+      name: 'Eypio',
+      imageUrl: 'https://cdn-images.dzcdn.net/images/artist/e593539bc746c0a0c6aeb8515c1bcf35/1000x1000-000000-80-0-0.jpg',
+      genres: ['Türkçe Rap', 'Hip Hop'],
+      followers: 2100000,
+      tracks: [
+        _TrackData(
+          title: 'Günah Benim',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/e593539bc746c0a0c6aeb8515c1bcf35/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+        ),
+        _TrackData(
+          title: 'Naim',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/e593539bc746c0a0c6aeb8515c1bcf35/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
+        ),
+        _TrackData(
+          title: 'Vur Vur',
+          coverUrl: 'https://cdn-images.dzcdn.net/images/artist/e593539bc746c0a0c6aeb8515c1bcf35/500x500-000000-80-0-0.jpg',
+          previewUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
+        ),
+      ],
+    ),
     'sıla': _ArtistCatalogEntry(
       name: 'Sıla',
       imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',

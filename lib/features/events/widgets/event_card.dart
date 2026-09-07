@@ -1,12 +1,17 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
 import '../models/event_model.dart';
 import '../screens/event_detail_screen.dart';
+import '../services/mock_event_service.dart';
+import '../services/spotify_service.dart';
 
-/// Performance-optimized Event Card with RepaintBoundary and Cached/Memory-bounded Image decoding.
-class EventCard extends StatelessWidget {
+/// Performance-optimized Event Card with Spotify Artist Banner support.
+/// Music/concert events show the artist's Spotify/Deezer banner image.
+/// Non-music events fall back to event.imageUrl.
+class EventCard extends StatefulWidget {
   final EventModel event;
   final VoidCallback? onTap;
 
@@ -15,6 +20,59 @@ class EventCard extends StatelessWidget {
     required this.event,
     this.onTap,
   });
+
+  @override
+  State<EventCard> createState() => _EventCardState();
+}
+
+class _EventCardState extends State<EventCard> {
+  final SpotifyService _spotifyService = SpotifyService();
+  late Future<String?> _bannerFuture;
+
+  bool get _isMusicEvent {
+    final cat = widget.event.category.toLowerCase().trim();
+    final title = widget.event.title.toLowerCase().trim();
+    if (cat.contains('tiyatro') ||
+        cat.contains('theatre') ||
+        cat.contains('arts') ||
+        cat.contains('stand-up') ||
+        cat.contains('standup') ||
+        cat.contains('komedi') ||
+        cat.contains('comedy') ||
+        cat.contains('sahne') ||
+        cat.contains('spor') ||
+        cat.contains('sport') ||
+        cat.contains('sergi') ||
+        cat.contains('atölye') ||
+        cat.contains('workshop') ||
+        cat.contains('sinema') ||
+        cat.contains('cinema') ||
+        title.contains('stand-up') ||
+        title.contains('stand up') ||
+        title.contains('tiyatro') ||
+        title.contains('gösteri') ||
+        title.contains('oyun') ||
+        title.contains('tek kişilik')) {
+      return false;
+    }
+    return cat.contains('konser') ||
+        cat.contains('concert') ||
+        cat.contains('müzik') ||
+        cat.contains('music') ||
+        cat.contains('akustik') ||
+        cat.contains('festival');
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _bannerFuture = _isMusicEvent
+        ? _spotifyService.getArtistImageUrl(
+            widget.event.title,
+            category: widget.event.category,
+          )
+        : Future.value(null);
+  }
 
   IconData _getCategoryIcon(String category) {
     final lower = category.toLowerCase();
@@ -36,20 +94,24 @@ class EventCard extends StatelessWidget {
       'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
       'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
     ];
-    final formattedDate = '${event.dateTime.day} ${months[event.dateTime.month - 1]} ${event.dateTime.year}';
-    final ticketUrlStr = event.effectiveTicketUrl;
+    final formattedDate =
+        '${widget.event.dateTime.day} ${months[widget.event.dateTime.month - 1]} ${widget.event.dateTime.year}';
+    final ticketUrlStr = widget.event.effectiveTicketUrl;
 
-    // RepaintBoundary isolates card rasterization during ListView/CustomScrollView fling
+    // Spotify mobile artist banner: ~16:9 landscape crop, 230px height
+    const double bannerHeight = 230;
+
     return RepaintBoundary(
       child: GestureDetector(
-        onTap: onTap ?? () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EventDetailScreen(event: event),
-            ),
-          );
-        },
+        onTap: widget.onTap ??
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EventDetailScreen(event: widget.event),
+                ),
+              );
+            },
         child: Container(
           margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
@@ -70,24 +132,42 @@ class EventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Banner Image with memory-constrained caching
+              // ── Banner Image ── Spotify artist photo for music events ──
               Stack(
                 children: [
                   ClipRRect(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     child: SizedBox(
-                      height: 235,
+                      height: bannerHeight,
                       width: double.infinity,
-                      child: Hero(
-                        tag: 'event_image_${event.id}',
-                        child: AppImageWidget(
-                          imageUrl: event.imageUrl,
-                          fit: BoxFit.cover,
-                          height: 235,
-                          width: double.infinity,
-                          memCacheWidth: 640,
-                          memCacheHeight: 360,
-                        ),
+                      child: FutureBuilder<String?>(
+                        future: _bannerFuture,
+                        builder: (context, snapshot) {
+                          // Use Spotify/Deezer artist image when available;
+                          // otherwise fall back to the event's own imageUrl.
+                          final resolvedUrl =
+                              (snapshot.connectionState == ConnectionState.done &&
+                                      snapshot.data != null &&
+                                      snapshot.data!.isNotEmpty)
+                                  ? snapshot.data!
+                                  : widget.event.imageUrl;
+
+                          return Hero(
+                            tag: 'event_image_${widget.event.id}',
+                            child: AppImageWidget(
+                              imageUrl: resolvedUrl,
+                              fit: BoxFit.cover,
+                              // Top-center alignment: frames artist face (Spotify mobile banner style)
+                              alignment: const Alignment(0, -0.2),
+                              height: bannerHeight,
+                              width: double.infinity,
+                              // ~2× retina cache width for a 390pt iPhone 16 screen
+                              memCacheWidth: 780,
+                              // 16:9 cache height
+                              memCacheHeight: 440,
+                            ),
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -98,13 +178,13 @@ class EventCard extends StatelessWidget {
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                         gradient: LinearGradient(
                           colors: [
-                            Colors.black.withValues(alpha: 0.3),
+                            Colors.black.withValues(alpha: 0.28),
                             Colors.transparent,
-                            Colors.black.withValues(alpha: 0.85),
+                            Colors.black.withValues(alpha: 0.82),
                           ],
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          stops: const [0.0, 0.4, 1.0],
+                          stops: const [0.0, 0.38, 1.0],
                         ),
                       ),
                     ),
@@ -113,62 +193,11 @@ class EventCard extends StatelessWidget {
                   Positioned(
                     top: 14,
                     right: 14,
-                    child: Builder(
-                      builder: (context) {
-                        final isPop = event.attendees.length >= 5 || (event.isPopular && event.attendees.length >= 3);
-                        final isHighMatch = !isPop && event.attendees.length >= 2;
-                        final daysUntil = event.dateTime.difference(DateTime.now()).inDays;
-                        final isUpcoming = !isPop && !isHighMatch && daysUntil >= 0 && daysUntil <= 4;
-
-                        final String badgeText;
-                        final LinearGradient badgeGradient;
-                        final Color shadowColor;
-
-                        if (isPop) {
-                          badgeText = '🔥 POPÜLER';
-                          badgeGradient = AppColors.goldGradient;
-                          shadowColor = const Color(0xFFF59E0B);
-                        } else if (isHighMatch) {
-                          badgeText = '💖 YÜKSEK EŞLEŞME';
-                          badgeGradient = AppColors.primaryGradient;
-                          shadowColor = AppColors.primary;
-                        } else if (isUpcoming) {
-                          badgeText = '⚡ YAKINDA';
-                          badgeGradient = AppColors.accentGradient;
-                          shadowColor = const Color(0xFF06B6D4);
-                        } else {
-                          return const SizedBox.shrink();
-                        }
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                          decoration: BoxDecoration(
-                            gradient: badgeGradient,
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [
-                              BoxShadow(
-                                color: shadowColor.withValues(alpha: 0.35),
-                                blurRadius: 8,
-                                offset: const Offset(0, 3),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            badgeText,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        );
-                      },
-                    ),
+                    child: _LiveEventBadge(event: widget.event),
                   ),
                 ],
               ),
-              // Content Info Panel
+              // ── Content Info Panel ──
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
                 child: Column(
@@ -188,10 +217,11 @@ class EventCard extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_getCategoryIcon(event.category), size: 12, color: AppColors.primaryVariant),
+                          Icon(_getCategoryIcon(widget.event.category),
+                              size: 12, color: AppColors.primaryVariant),
                           const SizedBox(width: 5),
                           Text(
-                            event.category,
+                            widget.event.category,
                             style: TextStyle(
                               color: AppColors.primaryVariant,
                               fontSize: 11.5,
@@ -202,9 +232,9 @@ class EventCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    // Title Header
+                    // Title
                     Text(
-                      event.title,
+                      widget.event.title,
                       style: TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
@@ -217,7 +247,7 @@ class EventCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     // Date & Location
                     Text(
-                      '$formattedDate • ${event.location}',
+                      '$formattedDate • ${widget.event.location}',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -231,18 +261,7 @@ class EventCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(Icons.people_outline, color: AppColors.accent, size: 15),
-                            const SizedBox(width: 5),
-                            Text(
-                              event.attendees.isNotEmpty
-                                  ? '${event.attendees.length} kişi katılıyor'
-                                  : 'İlk katılan sen ol',
-                              style: TextStyle(color: AppColors.accent, fontSize: 11.5, fontWeight: FontWeight.w600),
-                            ),
-                          ],
-                        ),
+                        _LiveAttendeesRow(event: widget.event),
                         GestureDetector(
                           onTap: () async {
                             if (ticketUrlStr.isNotEmpty) {
@@ -250,7 +269,8 @@ class EventCard extends StatelessWidget {
                             }
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            padding:
+                                const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                             decoration: BoxDecoration(
                               gradient: AppColors.primaryGradient,
                               borderRadius: BorderRadius.circular(16),
@@ -262,10 +282,10 @@ class EventCard extends StatelessWidget {
                                 ),
                               ],
                             ),
-                            child: Row(
+                            child: const Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Text(
+                                Text(
                                   'Biletler',
                                   style: TextStyle(
                                     fontSize: 12,
@@ -273,8 +293,9 @@ class EventCard extends StatelessWidget {
                                     color: Colors.white,
                                   ),
                                 ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.chevron_right_rounded, size: 15, color: Colors.white),
+                                SizedBox(width: 4),
+                                Icon(Icons.chevron_right_rounded,
+                                    size: 15, color: Colors.white),
                               ],
                             ),
                           ),
@@ -286,6 +307,127 @@ class EventCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Live attendees row (reactive via Provider)
+// ─────────────────────────────────────────────────────────────
+class _LiveAttendeesRow extends StatelessWidget {
+  final EventModel event;
+  const _LiveAttendeesRow({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    MockEventService? eventService;
+    try {
+      eventService = Provider.of<MockEventService>(context, listen: true);
+    } catch (_) {
+      eventService = null;
+    }
+
+    final liveEvent = eventService?.getEventById(event.id) ?? event;
+    final isAttending = eventService?.isUserAttending(liveEvent.id) ?? false;
+    final count = liveEvent.attendees.length;
+
+    final String attendeesText;
+    final IconData iconData;
+    final Color textColor;
+
+    if (isAttending) {
+      iconData = Icons.check_circle_rounded;
+      textColor = AppColors.success;
+      attendeesText = count <= 1 ? 'Sen katılıyorsun' : 'Sen + ${count - 1} kişi katılıyor';
+    } else {
+      textColor = AppColors.accent;
+      iconData = Icons.people_outline;
+      attendeesText = count > 0 ? '$count kişi katılıyor' : 'İlk katılan sen ol';
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(iconData, color: textColor, size: 15),
+        const SizedBox(width: 5),
+        Text(
+          attendeesText,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// Live badge (reactive via Provider)
+// ─────────────────────────────────────────────────────────────
+class _LiveEventBadge extends StatelessWidget {
+  final EventModel event;
+  const _LiveEventBadge({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    MockEventService? eventService;
+    try {
+      eventService = Provider.of<MockEventService>(context, listen: true);
+    } catch (_) {
+      eventService = null;
+    }
+
+    final liveEvent = eventService?.getEventById(event.id) ?? event;
+    final isPop = liveEvent.attendees.length >= 5 ||
+        (liveEvent.isPopular && liveEvent.attendees.length >= 3);
+    final isHighMatch = !isPop && liveEvent.attendees.length >= 2;
+    final daysUntil = liveEvent.dateTime.difference(DateTime.now()).inDays;
+    final isUpcoming = !isPop && !isHighMatch && daysUntil >= 0 && daysUntil <= 4;
+
+    final String badgeText;
+    final LinearGradient badgeGradient;
+    final Color shadowColor;
+
+    if (isPop) {
+      badgeText = '🔥 POPÜLER';
+      badgeGradient = AppColors.goldGradient;
+      shadowColor = const Color(0xFFF59E0B);
+    } else if (isHighMatch) {
+      badgeText = '💖 YÜKSEK EŞLEŞME';
+      badgeGradient = AppColors.primaryGradient;
+      shadowColor = AppColors.primary;
+    } else if (isUpcoming) {
+      badgeText = '⚡ YAKINDA';
+      badgeGradient = AppColors.accentGradient;
+      shadowColor = const Color(0xFF06B6D4);
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: BoxDecoration(
+        gradient: badgeGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: shadowColor.withValues(alpha: 0.35),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Text(
+        badgeText,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
         ),
       ),
     );

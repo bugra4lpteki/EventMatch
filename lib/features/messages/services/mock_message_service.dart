@@ -267,9 +267,50 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             }
           });
 
+      // 4. Matches CDC Stream (Gerçek zamanlı karşılıklı eşleşme takibi)
+      _matchesChannel = _supabase
+          .channel('public_matches_stream')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'matches',
+            callback: (payload) {
+              _handlePostgresMatchEvent(payload);
+            },
+          )
+          .subscribe((status, [error]) {
+            debugPrint('📡 [SUPABASE REALTIME] Matches CDC akışı durumu: $status');
+          });
+
       debugPrint('[MessageService] 🚀 Multi-layer realtime kanalları aktif.');
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Realtime subscription error: $e');
+    }
+  }
+
+  void _handlePostgresMatchEvent(PostgresChangePayload payload) {
+    try {
+      final currentId = currentUserId.toLowerCase().trim();
+      if (currentId.isEmpty) return;
+
+      final record = payload.newRecord.isNotEmpty ? payload.newRecord : payload.oldRecord;
+      if (record.isEmpty) return;
+
+      final u1 = (record['user_id_1']?.toString() ?? '').toLowerCase().trim();
+      final u2 = (record['user_id_2']?.toString() ?? '').toLowerCase().trim();
+
+      // Bu eşleşme etkinliği mevcut kullanıcıyı ilgilendiriyor mu?
+      if (u1 != currentId && u2 != currentId) return;
+
+      final status = payload.newRecord['status']?.toString().toLowerCase().trim();
+
+      // Sadece iki taraf da eşleştiğinde ('matched') veya eşleşme bittiğinde/silindiğinde yenile
+      if (status == 'matched' || payload.eventType == PostgresChangeEvent.delete || status == 'rejected') {
+        debugPrint('[MessageService] 🔄 Karşılıklı eşleşme güncellendi ($status), sohbetler yenileniyor...');
+        reloadChats();
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handlePostgresMatchEvent error: $e');
     }
   }
 
@@ -394,15 +435,17 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         timestamp: timestamp,
       );
 
-      // Bildirim sadece mesajı alan alıcıya (isReceiver) gösterilir
+      // Bildirim sadece mesajı alan alıcıya (isReceiver) ve onaylı bir sohbet varsa gösterilir
       if (isReceiver) {
-        final chat = _chats.firstWhere((c) => c.participant.id.toLowerCase() == partnerId,
-            orElse: () => createOrGetChatForUser(UserModel(id: partnerId, name: 'Yeni Mesaj', avatarUrl: '')));
-        NotificationService().showMessageNotification(
-          chatId: partnerId,
-          senderName: chat.participant.name,
-          message: content,
-        );
+        final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId);
+        if (chatIndex >= 0) {
+          final chat = _chats[chatIndex];
+          NotificationService().showMessageNotification(
+            chatId: partnerId,
+            senderName: chat.participant.name,
+            message: content,
+          );
+        }
       }
     } catch (e) {
       debugPrint('[MessageService] ⚠️ handleBroadcastMessage error: $e');
@@ -480,8 +523,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     int chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
 
     if (chatIndex < 0) {
-      final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı $partnerId', avatarUrl: ''));
-      chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == lowerPartnerId);
+      // Karşılıklı onaylanmamış bir eşleşme varsa doğrudan sohbet kutusu oluşturma
+      // Supabase'den eşleşme durumunu doğrula
+      reloadChats();
+      return;
     }
 
     if (chatIndex >= 0) {
@@ -750,19 +795,31 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       _isLoading = true;
 
+      bool querySucceeded = false;
       List<dynamic> matchesRes = [];
       try {
         matchesRes = await _supabase
             .from('matches')
             .select('*, messages(*)')
-            .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
+            .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId')
+            .eq('status', 'matched');
+        querySucceeded = true;
       } catch (e) {
         try {
           matchesRes = await _supabase
               .from('matches')
               .select('*')
-              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
+              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId')
+              .eq('status', 'matched');
+          querySucceeded = true;
         } catch (_) {}
+      }
+
+      if (!querySucceeded) {
+        // Ağ bağlantı sorunu varsa yerel önbelleği koru
+        _isLoading = false;
+        notifyListeners();
+        return;
       }
 
       List<dynamic> directMessagesRes = [];
@@ -782,8 +839,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final Map<String, DateTime?> expiresByPartner = {};
 
       for (var match in matchesRes) {
-        final status = match['status']?.toString().toLowerCase();
-        if (status == 'rejected') continue;
+        final status = match['status']?.toString().toLowerCase().trim();
+        // KESİN KURAL: SADECE iki taraf da karşılıklı eşleştiyse (status == 'matched') sohbet oluşturulur!
+        // 'liked' (tek taraflı beğeni / eşleşme isteği), 'pending' veya 'rejected' olanlar sohbet kutusuna DÜŞEMEZ!
+        if (status != 'matched') continue;
 
         final u1 = match['user_id_1']?.toString() ?? '';
         final u2 = match['user_id_2']?.toString() ?? '';
@@ -795,21 +854,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           if (match['expires_at'] != null) {
             expiresByPartner[otherId] = DateTime.tryParse(match['expires_at'].toString());
           }
-        }
-      }
-
-      for (var msg in directMessagesRes) {
-        final sender = msg['sender_id']?.toString() ?? '';
-        final receiver = msg['receiver_id']?.toString() ?? '';
-        final otherId = sender.toLowerCase() == currentId.toLowerCase() ? receiver : sender;
-        if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase()) {
-          partnerUserIds.add(otherId);
-        }
-      }
-
-      for (var existingChat in _chats) {
-        if (existingChat.participant.id.isNotEmpty) {
-          partnerUserIds.add(existingChat.participant.id);
         }
       }
 
@@ -914,6 +958,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         } else if (lowerReceiver == lowerCurrent && lowerSender.isNotEmpty && lowerSender != lowerCurrent) {
           partnerId = sender;
         } else {
+          continue;
+        }
+
+        // SADECE ve SADECE karşılıklı onaylanmış eşleşmesi (status == 'matched') bulunan partnerlerin mesajları eklenir
+        final lowerPartner = partnerId.toLowerCase();
+        if (!partnerUserIds.any((id) => id.toLowerCase() == lowerPartner)) {
           continue;
         }
 

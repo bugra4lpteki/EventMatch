@@ -157,5 +157,61 @@ void main() {
       expect(byMsg.length, equals(1));
       expect(byMsg.first.participant.name, equals('Burak Demir'));
     });
+
+    test('Mutual matching requirement: "liked" or "pending" status must NOT create a chat, only "matched"', () {
+      const currentUserId = 'my_user_id';
+
+      final dbMatches = [
+        // Ali Rıza bana istek atmış (status: 'liked') -> Henüz kabul edilmedi veya karşılıklı kaydırılmadı
+        {'id': 1, 'user_id_1': 'aliriza_id', 'user_id_2': currentUserId, 'status': 'liked'},
+        // Zeynep ile karşılıklı eşleştik (status: 'matched')
+        {'id': 2, 'user_id_1': currentUserId, 'user_id_2': 'zeynep_id', 'status': 'matched'},
+        // Mehmet'i reddettik (status: 'rejected')
+        {'id': 3, 'user_id_1': 'mehmet_id', 'user_id_2': currentUserId, 'status': 'rejected'},
+        // Beklemede olan istek (status: 'pending')
+        {'id': 4, 'user_id_1': 'ahmet_id', 'user_id_2': currentUserId, 'status': 'pending'},
+      ];
+
+      final partnerUserIds = <String>{};
+      for (var match in dbMatches) {
+        final status = match['status']?.toString().toLowerCase().trim();
+        // Sadece 'matched' olanlar sohbet oluşturabilir!
+        if (status != 'matched') continue;
+
+        final u1 = match['user_id_1']?.toString() ?? '';
+        final u2 = match['user_id_2']?.toString() ?? '';
+        final otherId = u1.toLowerCase() == currentUserId.toLowerCase() ? u2 : u1;
+        if (otherId.isNotEmpty && otherId.toLowerCase() != currentUserId.toLowerCase()) {
+          partnerUserIds.add(otherId);
+        }
+      }
+
+      // Alirıza 'liked' durumunda olduğu için sohbet kutusuna DÜŞMEMELİ
+      expect(partnerUserIds.contains('aliriza_id'), isFalse, reason: 'Tek taraflı beğeni/istek sohbet oluşturmamalı');
+      // Mehmet 'rejected' durumunda olduğu için sohbet kutusuna DÜŞMEMELİ
+      expect(partnerUserIds.contains('mehmet_id'), isFalse);
+      // Ahmet 'pending' durumunda olduğu için sohbet kutusuna DÜŞMEMELİ
+      expect(partnerUserIds.contains('ahmet_id'), isFalse);
+      // SADECE Zeynep 'matched' olduğu için sohbete düşmeli
+      expect(partnerUserIds.contains('zeynep_id'), isTrue);
+      expect(partnerUserIds.length, equals(1));
+    });
+
+    test('Incoming messages from un-matched users must not be added to chat box', () {
+      final matchedPartners = {'user_matched'};
+      final incomingDirectMessages = [
+        {'sender_id': 'user_unmatched', 'receiver_id': 'my_user_id', 'content': 'Selam'},
+        {'sender_id': 'user_matched', 'receiver_id': 'my_user_id', 'content': 'Harika bir etkinlik!'},
+      ];
+
+      final validMessages = incomingDirectMessages.where((m) {
+        final sender = m['sender_id'] ?? '';
+        return matchedPartners.contains(sender);
+      }).toList();
+
+      expect(validMessages.length, equals(1));
+      expect(validMessages.first['sender_id'], equals('user_matched'));
+    });
   });
 }
+

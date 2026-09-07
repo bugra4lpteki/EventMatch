@@ -138,8 +138,11 @@ class RequestsScreen extends StatelessWidget {
                       children: [
                         IconButton(
                           icon: Icon(Icons.close, color: AppColors.textSecondary),
-                          onPressed: () {
-                            matchService.rejectRequest(req);
+                          onPressed: () async {
+                            await matchService.rejectRequest(req);
+                            if (context.mounted) {
+                              context.read<MockMessageService>().reloadChats();
+                            }
                           },
                         ),
                         ElevatedButton(
@@ -148,6 +151,7 @@ class RequestsScreen extends StatelessWidget {
                             if (success && context.mounted) {
                               final msgService = context.read<MockMessageService>();
                               final chat = msgService.createOrGetChatForUser(req.fromUser);
+                              await msgService.reloadChats();
 
                               MatchDialog.show(
                                 context,

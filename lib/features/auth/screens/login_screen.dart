@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 import '../../home/screens/home_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
@@ -319,7 +320,36 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
 
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 8),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => ForgotPasswordScreen(
+                                          initialEmail: _emailController.text.trim(),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: Text(
+                                    'Şifremi Unuttum?',
+                                    style: GoogleFonts.outfit(
+                                      color: AppColors.primaryVariant,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 20),
 
                               // Gradient Login Button
                               Container(
