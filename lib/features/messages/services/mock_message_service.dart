@@ -8,6 +8,7 @@ import '../../../core/services/notification_service.dart';
 import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
+import '../../events/services/moderation_service.dart';
 
 class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   final MockEventService _eventService;
@@ -112,13 +113,40 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _syncBlockedUsers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('blocked_user_ids') ?? [];
+      for (var id in list) {
+        if (id.trim().isNotEmpty) {
+          _blockedUserIds.add(id.trim());
+        }
+      }
+      for (var id in ModerationService().blockedUserIds) {
+        if (id.trim().isNotEmpty) {
+          _blockedUserIds.add(id.trim());
+        }
+      }
+    } catch (_) {}
+  }
+
   Future<void> _initService() async {
+    await _syncBlockedUsers();
+    ModerationService().addListener(() {
+      _syncBlockedUsers();
+      // Remove any chats belonging to newly blocked users
+      final blocked = ModerationService().blockedUserIds;
+      _chats.removeWhere((c) => blocked.any((bId) => bId.toLowerCase().trim() == c.participant.id.toLowerCase().trim()));
+      notifyListeners();
+    });
+
     await _loadChatsFromLocalStorage();
     await reloadChats();
     _subscribeToRealtime();
 
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) async {
       if (data.session != null) {
+        await _syncBlockedUsers();
         await _loadChatsFromLocalStorage();
         await reloadChats();
         _subscribeToRealtime();
@@ -801,14 +829,27 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
-  bool isBlocked(String userId) => _blockedUserIds.contains(userId);
+  bool isBlocked(String userId) {
+    if (userId.trim().isEmpty) return false;
+    final lower = userId.toLowerCase().trim();
+    return _blockedUserIds.any((id) => id.toLowerCase().trim() == lower) ||
+        ModerationService().isBlocked(userId) ||
+        ModerationService().blockedUserIds.any((id) => id.toLowerCase().trim() == lower);
+  }
+
   bool isFollowing(String userId) => _followingUserIds.contains(userId);
 
   void toggleBlockUser(String userId) {
-    if (_blockedUserIds.contains(userId)) {
-      _blockedUserIds.remove(userId);
+    final cleanId = userId.trim();
+    if (cleanId.isEmpty) return;
+    if (isBlocked(cleanId)) {
+      _blockedUserIds.removeWhere((id) => id.toLowerCase().trim() == cleanId.toLowerCase());
+      ModerationService().unblockUser(cleanId);
     } else {
-      _blockedUserIds.add(userId);
+      _blockedUserIds.add(cleanId);
+      ModerationService().blockUser(cleanId);
+      // Clean up chat and active match
+      endMatchAndRemoveChat('', cleanId);
     }
     notifyListeners();
   }
@@ -889,6 +930,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
+    if (isBlocked(user.id)) {
+      // Engellenen kullanıcı için sohbet oluşturulamaz
+      return ChatModel(
+        id: 'blocked_${user.id}',
+        participant: user,
+        messages: [],
+      );
+    }
     final lowerUserId = user.id.toLowerCase();
     final existingIndex = _chats.indexWhere(
       (c) => c.participant.id.toLowerCase() == lowerUserId || c.participant.name.toLowerCase() == user.name.toLowerCase(),
@@ -943,7 +992,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> syncChatMessagesForPartner(String partnerId) async {
     final currentId = currentUserId.trim();
     final partner = partnerId.trim();
-    if (partner.isEmpty || currentId.isEmpty) return;
+    if (partner.isEmpty || currentId.isEmpty || isBlocked(partner)) return;
 
     try {
       final lowerCurrent = currentId.toLowerCase();
@@ -1382,7 +1431,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
 
-      final newChatsList = consolidatedChats.values.toList();
+      final newChatsList = consolidatedChats.values
+          .where((c) => !isBlocked(c.participant.id))
+          .toList();
       newChatsList.sort((a, b) {
         final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);
         final bTime = b.messages.isNotEmpty ? b.messages.last.timestamp : DateTime(2000);
@@ -1707,7 +1758,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         ? senderUserId
         : (currentUserId.isNotEmpty ? currentUserId : 'user_mobile');
 
-    if (partnerId.isEmpty) return;
+    if (partnerId.isEmpty || isBlocked(partnerId)) return;
 
     try {
       int? numericMatchId = int.tryParse(chatId);

@@ -32,6 +32,22 @@ serve(async (req) => {
     // Supabase Admin Client
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // ENGELLENME KONTROLÜ: Taraflardan biri engellediyse push gönderme
+    const { data: blockRecord } = await supabase
+      .from("user_blocks")
+      .select("id")
+      .or(`and(blocker_id.eq.${receiverId},blocked_id.eq.${senderId}),and(blocker_id.eq.${senderId},blocked_id.eq.${receiverId})`)
+      .limit(1)
+      .maybeSingle();
+
+    if (blockRecord) {
+      console.log(`[Push Blocked] Sender ${senderId} is blocked by or has blocked ${receiverId}.`);
+      return new Response(JSON.stringify({ success: true, blocked: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // Fetch Sender Name and Receiver Push Tokens
     const { data: sender } = await supabase
       .from("users")

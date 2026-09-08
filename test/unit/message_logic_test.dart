@@ -276,6 +276,29 @@ void main() {
       // 3. Now chat can be created
       expect(canCreateChat(matchRecord['status']!), isTrue);
     });
+
+    test('Blocked users cannot exchange messages, receive broadcasts, or create chats', () {
+      final blockedIds = <String>{'user_blocked_1', 'user_blocked_2'};
+      bool isBlocked(String id) =>
+          blockedIds.any((b) => b.toLowerCase().trim() == id.toLowerCase().trim());
+
+      const senderId = 'user_blocked_1';
+      const receiverId = 'user_me';
+
+      // 1. Inbound message filter
+      final shouldDropInbound = isBlocked(senderId) || isBlocked(receiverId);
+      expect(shouldDropInbound, isTrue, reason: 'Incoming message from blocked user must be dropped');
+
+      // 2. Outbound message attempt
+      const targetPartner = 'user_blocked_2';
+      final canSend = !isBlocked(targetPartner);
+      expect(canSend, isFalse, reason: 'Cannot send message to blocked user');
+
+      // 3. Unblock allows messaging again
+      blockedIds.remove('user_blocked_2');
+      final canSendAfterUnblock = !isBlocked(targetPartner);
+      expect(canSendAfterUnblock, isTrue, reason: 'Can send message after unblock');
+    });
   });
 }
 

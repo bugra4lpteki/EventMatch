@@ -14,20 +14,63 @@ class ModerationService extends ChangeNotifier {
 
   Set<String> get blockedUserIds => Set.unmodifiable(_blockedUserIds);
 
-  bool isBlocked(String userId) => _blockedUserIds.contains(userId);
+  bool isBlocked(String userId) {
+    if (userId.trim().isEmpty) return false;
+    final lower = userId.toLowerCase().trim();
+    return _blockedUserIds.any((id) => id.toLowerCase().trim() == lower);
+  }
 
   Future<void> _loadBlockedUsers() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final list = prefs.getStringList('blocked_user_ids') ?? [];
-      _blockedUserIds.addAll(list);
+      for (var id in list) {
+        if (id.trim().isNotEmpty) {
+          _blockedUserIds.add(id.trim());
+        }
+      }
       notifyListeners();
     } catch (_) {}
+
+    // Also fetch from Supabase user_blocks table (both blocker and blocked directions)
+    await syncFromSupabase();
+  }
+
+  Future<void> syncFromSupabase() async {
+    try {
+      final currentUserId = _supabase.auth.currentUser?.id;
+      if (currentUserId == null || currentUserId.isEmpty) return;
+
+      final res = await _supabase
+          .from('user_blocks')
+          .select('blocker_id, blocked_id')
+          .or('blocker_id.eq.$currentUserId,blocked_id.eq.$currentUserId');
+
+      bool updated = false;
+      for (var row in res) {
+        final blocker = (row['blocker_id']?.toString() ?? '').trim();
+        final blocked = (row['blocked_id']?.toString() ?? '').trim();
+        final target = blocker.toLowerCase() == currentUserId.toLowerCase() ? blocked : blocker;
+        if (target.isNotEmpty && !_blockedUserIds.any((id) => id.toLowerCase() == target.toLowerCase())) {
+          _blockedUserIds.add(target);
+          updated = true;
+        }
+      }
+
+      if (updated) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setStringList('blocked_user_ids', _blockedUserIds.toList());
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[ModerationService] ⚠️ syncFromSupabase error: $e');
+    }
   }
 
   Future<void> blockUser(String userId, {String? userName}) async {
-    if (userId.isEmpty) return;
-    _blockedUserIds.add(userId);
+    final cleanId = userId.trim();
+    if (cleanId.isEmpty) return;
+    _blockedUserIds.add(cleanId);
     notifyListeners();
 
     try {
@@ -41,7 +84,7 @@ class ModerationService extends ChangeNotifier {
       if (currentUserId != null) {
         await _supabase.from('user_blocks').upsert({
           'blocker_id': currentUserId,
-          'blocked_id': userId,
+          'blocked_id': cleanId,
           'created_at': DateTime.now().toIso8601String(),
         });
       }
@@ -49,8 +92,9 @@ class ModerationService extends ChangeNotifier {
   }
 
   Future<void> unblockUser(String userId) async {
-    if (!_blockedUserIds.contains(userId)) return;
-    _blockedUserIds.remove(userId);
+    final cleanId = userId.trim();
+    final lower = cleanId.toLowerCase();
+    _blockedUserIds.removeWhere((id) => id.toLowerCase().trim() == lower);
     notifyListeners();
 
     try {
@@ -64,7 +108,7 @@ class ModerationService extends ChangeNotifier {
         await _supabase
             .from('user_blocks')
             .delete()
-            .match({'blocker_id': currentUserId, 'blocked_id': userId});
+            .or('and(blocker_id.eq.$currentUserId,blocked_id.eq.$cleanId),and(blocker_id.eq.$cleanId,blocked_id.eq.$currentUserId)');
       }
     } catch (_) {}
   }

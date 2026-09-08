@@ -34,6 +34,16 @@ DECLARE
 BEGIN
   -- Sadece geçerli bir alıcı (receiver_id) varsa bildirim gönder
   IF NEW.receiver_id IS NOT NULL AND NEW.receiver_id::text <> '' THEN
+    -- ENGELLENME KONTROLÜ: Eğer taraflardan biri diğerini engellemişse BİLDİRİM GÖNDERME!
+    IF EXISTS (
+      SELECT 1 FROM public.user_blocks 
+      WHERE (blocker_id::text = NEW.receiver_id::text AND blocked_id::text = NEW.sender_id::text)
+         OR (blocker_id::text = NEW.sender_id::text AND blocked_id::text = NEW.receiver_id::text)
+    ) THEN
+      -- Engellenen kullanıcıdan gelen mesaj için push atma, işlemi sonlandır
+      RETURN NEW;
+    END IF;
+
     -- Gönderenin adını users tablosundan al
     SELECT COALESCE(name, 'Biri') INTO v_sender_name
     FROM public.users
