@@ -14,7 +14,7 @@ workflows:
       cocoapods: default
     scripts:
       - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+        script: xcode-project use-profiles --project ios/Runner.xcodeproj
       - name: Get Flutter dependencies
         script: flutter pub get
       - name: Install CocoaPods
