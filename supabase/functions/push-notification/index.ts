@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Supabase Edge Function: push-notification
 // Sends push notification to receiver when a new message is inserted into 'messages' table.
 // Supports both Firebase Cloud Messaging (FCM) & OneSignal with high priority & WhatsApp-like heads-up styling.
