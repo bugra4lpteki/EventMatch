@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,11 +36,13 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   RealtimeChannel? _broadcastChannel;
   RealtimeChannel? _presenceChannel;
   final Set<String> _onlineUserIds = {};
+  final Map<String, bool> _typingPartners = {};
   StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool get isLoading => _isLoading;
 
   bool isUserOnline(String userId) => _onlineUserIds.contains(userId.toLowerCase().trim());
+  bool isPartnerTyping(String partnerId) => _typingPartners[partnerId.toLowerCase().trim()] == true;
 
   List<ChatModel> _chats = [];
 
@@ -235,6 +238,18 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               _handleMessagesReadEvent(payload);
             },
           )
+          .onBroadcast(
+            event: 'typing',
+            callback: (payload) {
+              _handleTypingEvent(payload);
+            },
+          )
+          .onBroadcast(
+            event: 'message_reaction',
+            callback: (payload) {
+              _handleReactionEvent(payload);
+            },
+          )
           .subscribe((status, [error]) {
             debugPrint('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status');
           });
@@ -382,7 +397,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         bool changed = false;
         for (var m in chat.messages) {
           if (m.senderId.toLowerCase() == currentId && m.status != MessageStatus.read) {
-            m.status = MessageStatus.read;
+            m.status = MessageStatus.read; // Okundu: Çift mavi tık!
             changed = true;
           }
         }
@@ -394,6 +409,120 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       }
     } catch (e) {
       debugPrint('[MessageService] ⚠️ handleMessagesReadEvent error: $e');
+    }
+  }
+
+  void sendTypingStatus(String partnerId, bool isTyping) {
+    try {
+      final currentId = currentUserId;
+      if (currentId.isEmpty || partnerId.isEmpty) return;
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'typing',
+        payload: {
+          'sender_id': currentId,
+          'receiver_id': partnerId,
+          'is_typing': isTyping,
+        },
+      );
+    } catch (_) {}
+  }
+
+  void _handleTypingEvent(Map<String, dynamic> payload) {
+    try {
+      final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
+      final currentId = currentUserId.toLowerCase().trim();
+      final isTyping = payload['is_typing'] == true;
+
+      if (currentId.isEmpty || receiverId != currentId || senderId.isEmpty) return;
+
+      if (_typingPartners[senderId] != isTyping) {
+        _typingPartners[senderId] = isTyping;
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handleTypingEvent error: $e');
+    }
+  }
+
+  void _handleReactionEvent(Map<String, dynamic> payload) {
+    try {
+      final msgId = payload['message_id']?.toString();
+      final reactorId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
+      final currentId = currentUserId.toLowerCase().trim();
+      final emoji = payload['emoji']?.toString() ?? '';
+
+      if (msgId == null || msgId.isEmpty || currentId.isEmpty) return;
+      if (receiverId != currentId && reactorId != currentId) return;
+
+      final partnerId = reactorId == currentId ? receiverId : reactorId;
+      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId);
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        final mIndex = chat.messages.indexWhere((m) => m.id == msgId);
+        if (mIndex >= 0) {
+          final m = chat.messages[mIndex];
+          final updatedReactions = Map<String, String>.from(m.reactions);
+          if (emoji.isEmpty) {
+            updatedReactions.remove(reactorId);
+          } else {
+            updatedReactions[reactorId] = emoji;
+          }
+          chat.messages[mIndex] = m.copyWith(reactions: updatedReactions);
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ handleReactionEvent error: $e');
+    }
+  }
+
+  Future<void> toggleReaction(String chatId, String messageId, String partnerId, String emoji) async {
+    try {
+      final currentId = currentUserId;
+      final lowerCurrent = currentId.toLowerCase().trim();
+      final lowerPartner = partnerId.toLowerCase().trim();
+      if (currentId.isEmpty || partnerId.isEmpty) return;
+
+      final chatIndex = _chats.indexWhere((c) =>
+          c.id == chatId || c.participant.id.toLowerCase() == lowerPartner);
+
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        final mIndex = chat.messages.indexWhere((m) => m.id == messageId);
+        if (mIndex >= 0) {
+          final m = chat.messages[mIndex];
+          final updatedReactions = Map<String, String>.from(m.reactions);
+          final currentReaction = updatedReactions[lowerCurrent];
+          String targetEmoji = emoji;
+          if (currentReaction == emoji) {
+            updatedReactions.remove(lowerCurrent);
+            targetEmoji = '';
+          } else {
+            updatedReactions[lowerCurrent] = emoji;
+          }
+
+          chat.messages[mIndex] = m.copyWith(reactions: updatedReactions);
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+
+          _broadcastChannel?.sendBroadcastMessage(
+            event: 'message_reaction',
+            payload: {
+              'message_id': messageId,
+              'sender_id': currentId,
+              'receiver_id': partnerId,
+              'emoji': targetEmoji,
+            },
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ toggleReaction error: $e');
     }
   }
 
@@ -561,18 +690,17 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final optIndex = chat.messages.indexWhere((m) =>
           m.id.startsWith('msg_') &&
           m.senderId.toLowerCase().trim() == lowerSender &&
-          m.text.trim() == content.trim() &&
+          (m.text.trim() == content.trim() ||
+           content.contains(m.text.trim()) ||
+           (m.isAudio && content.startsWith('[audio:'))) &&
           m.timestamp.difference(timestamp).abs().inSeconds < 120);
 
       if (optIndex >= 0) {
         final old = chat.messages[optIndex];
-        chat.messages[optIndex] = MessageModel(
+        chat.messages[optIndex] = old.copyWith(
           id: msgId,
-          senderId: old.senderId,
-          receiverId: old.receiverId,
-          text: old.text,
           timestamp: timestamp,
-          status: MessageStatus.delivered,
+          status: MessageStatus.sent, // DB onayladı: Tek gri tık
         );
         _deduplicateMessagesList(chat.messages);
         _saveChatsToLocalStorage();
@@ -582,10 +710,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // 3. YAKIN ZAMANLI MÜKERRER KONTROLÜ:
-      // Realtime CDC ile WebSocket yayını peş peşe geldiğinde aynı mesajın iki kez eklenmesini önle
       final duplicateIndex = chat.messages.indexWhere((m) =>
           m.senderId.toLowerCase().trim() == lowerSender &&
-          m.text.trim() == content.trim() &&
+          (m.text.trim() == content.trim() || (m.isAudio && content.startsWith('[audio:'))) &&
           m.timestamp.difference(timestamp).abs().inSeconds < 15);
 
       if (duplicateIndex >= 0) {
@@ -593,13 +720,19 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
+      final parsed = MessageModel.parseEncodedContent(content);
       final newMsg = MessageModel(
         id: msgId,
         senderId: senderId,
         receiverId: receiverId,
-        text: content,
+        text: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
         timestamp: timestamp,
         status: MessageStatus.delivered,
+        replyToSenderName: parsed.replySender,
+        replyToText: parsed.replyText,
+        mediaUrl: parsed.mediaUrl,
+        audioDurationSeconds: parsed.audioDuration,
+        messageType: parsed.messageType,
       );
       chat.messages.add(newMsg);
       _deduplicateMessagesList(chat.messages);
@@ -610,7 +743,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           NotificationService().showMessageNotification(
             chatId: partnerId,
             senderName: chat.participant.name,
-            message: content,
+            message: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
             unreadCount: chat.unreadCount,
             messageId: msgId,
           );
@@ -853,27 +986,38 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
             if (text.trim().isEmpty) continue;
 
-            // 1. Zaten aynı kesin veritabanı ID'si varsa yok say
+            final isRead = row['is_read'] == true || row['status'] == 'read';
+            final isFromMe = sender.toLowerCase().trim() == lowerCurrent;
+            final calculatedStatus = isRead
+                ? MessageStatus.read
+                : (isFromMe ? MessageStatus.sent : MessageStatus.delivered);
+
+            final parsed = MessageModel.parseEncodedContent(text);
+            final cleanMsgText = parsed.cleanText.isNotEmpty ? parsed.cleanText : text;
+
+            // 1. Zaten aynı kesin veritabanı ID'si varsa, durumunu (okundu/iletildi) güncelle
             final exactIdIndex = chat.messages.indexWhere((m) => m.id == mId);
             if (exactIdIndex >= 0) {
+              if (chat.messages[exactIdIndex].status != calculatedStatus) {
+                chat.messages[exactIdIndex].status = calculatedStatus;
+                hasNew = true;
+              }
               continue;
             }
 
-            // 2. Geçici optimistic ID'li ('msg_...') bir mesaj varsa onu bu gerçek ID'ye güncelle (YENİDEN EKLEME!)
+            // 2. Geçici optimistic ID'li ('msg_...') bir mesaj varsa onu bu gerçek ID'ye güncelle
             final optIndex = chat.messages.indexWhere((m) =>
                 m.id.startsWith('msg_') &&
                 m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
-                m.text.trim() == text.trim() &&
+                (m.text.trim() == cleanMsgText.trim() || text.contains(m.text.trim()) || (m.isAudio && text.startsWith('[audio:'))) &&
                 m.timestamp.difference(ts).abs().inSeconds < 120);
 
             if (optIndex >= 0) {
-              chat.messages[optIndex] = MessageModel(
+              final old = chat.messages[optIndex];
+              chat.messages[optIndex] = old.copyWith(
                 id: mId,
-                senderId: sender,
-                receiverId: receiver,
-                text: text,
                 timestamp: ts,
-                status: MessageStatus.delivered,
+                status: calculatedStatus,
               );
               hasNew = true;
               continue;
@@ -882,7 +1026,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             // 3. 15 saniye içinde aynı kullanıcıdan aynı metin varsa mükerrerdir, yok say
             final recentDupIndex = chat.messages.indexWhere((m) =>
                 m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
-                m.text.trim() == text.trim() &&
+                (m.text.trim() == cleanMsgText.trim() || (m.isAudio && text.startsWith('[audio:'))) &&
                 m.timestamp.difference(ts).abs().inSeconds < 15);
 
             if (recentDupIndex >= 0) {
@@ -894,9 +1038,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               id: mId,
               senderId: sender,
               receiverId: receiver,
-              text: text,
+              text: cleanMsgText,
               timestamp: ts,
-              status: MessageStatus.delivered,
+              status: calculatedStatus,
+              replyToSenderName: parsed.replySender,
+              replyToText: parsed.replyText,
+              mediaUrl: parsed.mediaUrl,
+              audioDurationSeconds: parsed.audioDuration,
+              messageType: parsed.messageType,
             ));
             hasNew = true;
           } catch (e) {
@@ -1062,15 +1211,29 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                               (r.isEmpty && (s == lowerCurrent || s == lowerPartnerId));
               if (!isValid) continue;
 
+              final isRead = msg['is_read'] == true || msg['status'] == 'read';
+              final isFromMe = s == lowerCurrent;
+              final calculatedStatus = isRead
+                  ? MessageStatus.read
+                  : (isFromMe ? MessageStatus.sent : MessageStatus.delivered);
+
+              final rawText = msg['content']?.toString() ?? msg['message']?.toString() ?? msg['text']?.toString() ?? '';
+              final parsed = MessageModel.parseEncodedContent(rawText);
+
               final msgModel = MessageModel(
                 id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
                 senderId: msg['sender_id']?.toString() ?? '',
                 receiverId: msg['receiver_id']?.toString(),
-                text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+                text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
                 timestamp: msg['created_at'] != null
                     ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
                     : DateTime.now(),
-                status: MessageStatus.delivered,
+                status: calculatedStatus,
+                replyToSenderName: parsed.replySender,
+                replyToText: parsed.replyText,
+                mediaUrl: parsed.mediaUrl,
+                audioDurationSeconds: parsed.audioDuration,
+                messageType: parsed.messageType,
               );
               messagesByPartner.putIfAbsent(lowerPartnerId, () => []).add(msgModel);
             } catch (e) {
@@ -1103,15 +1266,29 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         try {
+          final isRead = msg['is_read'] == true || msg['status'] == 'read';
+          final isFromMe = lowerSender == lowerCurrent;
+          final calculatedStatus = isRead
+              ? MessageStatus.read
+              : (isFromMe ? MessageStatus.sent : MessageStatus.delivered);
+
+          final rawText = msg['content']?.toString() ?? msg['message']?.toString() ?? msg['text']?.toString() ?? '';
+          final parsed = MessageModel.parseEncodedContent(rawText);
+
           final msgModel = MessageModel(
             id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
             senderId: sender,
             receiverId: receiver,
-            text: msg['content']?.toString() ?? msg['message']?.toString() ?? '',
+            text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
             timestamp: msg['created_at'] != null
                 ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
                 : DateTime.now(),
-            status: MessageStatus.delivered,
+            status: calculatedStatus,
+            replyToSenderName: parsed.replySender,
+            replyToText: parsed.replyText,
+            mediaUrl: parsed.mediaUrl,
+            audioDurationSeconds: parsed.audioDuration,
+            messageType: parsed.messageType,
           );
 
           messagesByPartner.putIfAbsent(partnerId.toLowerCase(), () => []).add(msgModel);
@@ -1234,24 +1411,24 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  /// 1. sendMessage İyileştirmesi: Web <-> Mobil Kesintisiz İletişim
-  Future<void> sendMessage(String chatId, String text, {String? receiverUserId}) async {
+  /// 1. sendMessage: Metin ve Alıntılı Yanıt (Swipe-to-Reply) Gönderme
+  Future<void> sendMessage(
+    String chatId,
+    String text, {
+    String? receiverUserId,
+    MessageModel? replyToMessage,
+  }) async {
     final trimmedText = text.trim();
     if (trimmedText.isEmpty) return;
 
     try {
       final currentId = currentUserId.isNotEmpty ? currentUserId : 'user_mobile';
 
-      // 1. Önce chatId üzerinden ara
       int chatIndex = _chats.indexWhere((c) => c.id == chatId);
-
-      // 2. Bulunamazsa receiverUserId üzerinden ara
       if (chatIndex < 0 && receiverUserId != null && receiverUserId.isNotEmpty) {
         final lowerReceiver = receiverUserId.toLowerCase();
         chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerReceiver);
       }
-
-      // 3. Hala yoksa otomatik oluştur
       if (chatIndex < 0 && receiverUserId != null && receiverUserId.isNotEmpty) {
         final newChat = createOrGetChatForUser(UserModel(id: receiverUserId, name: 'Kullanıcı', avatarUrl: ''));
         chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == receiverUserId.toLowerCase());
@@ -1261,15 +1438,23 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final chat = _chats[chatIndex];
         final partnerId = receiverUserId?.isNotEmpty == true ? receiverUserId! : chat.participant.id;
 
-        if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) {
-          debugPrint('[MessageService] ⚠️ sendMessage iptal: Geçersiz partnerId ($partnerId)');
-          return;
-        }
-
+        if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) return;
         if (isBlocked(partnerId)) return;
 
         final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
         final now = DateTime.now();
+
+        String? replySender;
+        String? replyText;
+        String encodedContent = trimmedText;
+
+        if (replyToMessage != null) {
+          replySender = replyToMessage.senderId.toLowerCase().trim() == currentId.toLowerCase().trim()
+              ? 'Sen'
+              : chat.participant.name;
+          replyText = replyToMessage.isAudio ? '🎤 Sesli Mesaj' : replyToMessage.text;
+          encodedContent = '[reply:$replySender:$replyText]\n$trimmedText';
+        }
 
         final newMsg = MessageModel(
           id: newMsgId,
@@ -1277,7 +1462,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           receiverId: partnerId,
           text: trimmedText,
           timestamp: now,
-          status: MessageStatus.sent,
+          status: MessageStatus.sending, // Başlangıçta saati göster: Gönderiliyor
+          replyToMessageId: replyToMessage?.id,
+          replyToText: replyText,
+          replyToSenderName: replySender,
         );
 
         chat.messages.add(newMsg);
@@ -1286,25 +1474,128 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         _emitRoomUpdate(partnerId);
         notifyListeners();
 
-        debugPrint('--> [TELEFON GÖNDERİYOR] Sender: $currentId | Receiver: $partnerId | Metin: $trimmedText');
-
-        // WebSocket Broadcast yayını
+        // WebSocket Broadcast yayını (Canlı iletim)
         _broadcastChannel?.sendBroadcastMessage(
           event: 'new_message',
           payload: {
             'id': newMsgId,
             'sender_id': currentId,
             'receiver_id': partnerId,
-            'content': trimmedText,
+            'content': encodedContent,
             'created_at': now.toUtc().toIso8601String(),
+            'reply_to_id': replyToMessage?.id,
+            'reply_to_text': replyText,
+            'reply_to_sender_name': replySender,
           },
         );
 
+        sendTypingStatus(partnerId, false);
+
         // Veritabanına kalıcı yazma
-        await _persistMessage(chat.id, partnerId, trimmedText, newMsgId, senderUserId: currentId);
+        await _persistMessage(chat.id, partnerId, encodedContent, newMsgId, senderUserId: currentId);
       }
     } catch (e) {
       debugPrint('[MessageService] ❌ Send Message Error: $e');
+    }
+  }
+
+  /// 2. Sesli Mesaj Gönderme (Voice Note)
+  Future<void> sendVoiceNote(
+    String chatId,
+    String partnerId,
+    String localAudioPath,
+    int durationSeconds, {
+    MessageModel? replyToMessage,
+  }) async {
+    try {
+      final currentId = currentUserId.isNotEmpty ? currentUserId : 'user_mobile';
+      if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) return;
+      if (isBlocked(partnerId)) return;
+
+      int chatIndex = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      if (chatIndex < 0) {
+        final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''));
+        chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      }
+      if (chatIndex < 0) return;
+
+      final chat = _chats[chatIndex];
+      final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now();
+
+      final file = File(localAudioPath);
+      String audioUrl = localAudioPath;
+
+      if (await file.exists()) {
+        try {
+          final bytes = await file.readAsBytes();
+          final storagePath = 'chat_audio/${DateTime.now().millisecondsSinceEpoch}_${currentId.hashCode.abs()}.m4a';
+          await _supabase.storage.from('avatars').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: const FileOptions(contentType: 'audio/m4a', upsert: true),
+          );
+          audioUrl = _supabase.storage.from('avatars').getPublicUrl(storagePath);
+        } catch (e) {
+          debugPrint('[MessageService] ⚠️ Audio upload fallback: $e');
+        }
+      }
+
+      String? replySender;
+      String? replyText;
+      String encodedContent = '[audio:$audioUrl:$durationSeconds]';
+
+      if (replyToMessage != null) {
+        replySender = replyToMessage.senderId.toLowerCase().trim() == currentId.toLowerCase().trim()
+            ? 'Sen'
+            : chat.participant.name;
+        replyText = replyToMessage.isAudio ? '🎤 Sesli Mesaj' : replyToMessage.text;
+        encodedContent = '[reply:$replySender:$replyText]\n$encodedContent';
+      }
+
+      final newMsg = MessageModel(
+        id: newMsgId,
+        senderId: currentId,
+        receiverId: partnerId,
+        text: '🎤 Sesli Mesaj',
+        timestamp: now,
+        status: MessageStatus.sending,
+        mediaUrl: audioUrl,
+        audioDurationSeconds: durationSeconds,
+        messageType: 'audio',
+        replyToMessageId: replyToMessage?.id,
+        replyToText: replyText,
+        replyToSenderName: replySender,
+      );
+
+      chat.messages.add(newMsg);
+      _sortChats();
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(partnerId);
+      notifyListeners();
+
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'new_message',
+        payload: {
+          'id': newMsgId,
+          'sender_id': currentId,
+          'receiver_id': partnerId,
+          'content': encodedContent,
+          'created_at': now.toUtc().toIso8601String(),
+          'media_url': audioUrl,
+          'audio_duration': durationSeconds,
+          'message_type': 'audio',
+          'reply_to_id': replyToMessage?.id,
+          'reply_to_text': replyText,
+          'reply_to_sender_name': replySender,
+        },
+      );
+
+      sendTypingStatus(partnerId, false);
+
+      await _persistMessage(chat.id, partnerId, encodedContent, newMsgId, senderUserId: currentId);
+    } catch (e) {
+      debugPrint('[MessageService] ❌ Send Voice Note Error: $e');
     }
   }
 
@@ -1362,17 +1653,15 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             final optIdx = chat.messages.indexWhere((m) => m.id == clientMsgId);
             if (optIdx >= 0) {
               final old = chat.messages[optIdx];
-              chat.messages[optIdx] = MessageModel(
+              chat.messages[optIdx] = old.copyWith(
                 id: realId,
-                senderId: old.senderId,
-                receiverId: old.receiverId,
-                text: old.text,
                 timestamp: realTs,
-                status: MessageStatus.delivered,
+                status: MessageStatus.sent, // Sunucuya yazıldı: Tek gri tık
               );
               _deduplicateMessagesList(chat.messages);
               _saveChatsToLocalStorage();
               _emitRoomUpdate(partnerId);
+              notifyListeners();
             }
           }
         }
@@ -1383,10 +1672,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           ? _eventService.currentUser.name
           : (_supabase.auth.currentUser?.userMetadata?['name'] as String? ?? 'Biri');
 
+      final pushContent = text.contains('[audio:') ? '🎤 Sesli Mesaj' : MessageModel.parseEncodedContent(text).cleanText;
+
       NotificationService().sendRemotePushNotification(
         receiverId: partnerId,
         senderName: senderName,
-        content: text,
+        content: pushContent,
         matchId: numericMatchId?.toString(),
         senderId: effectiveSenderId,
       );

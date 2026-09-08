@@ -12,6 +12,8 @@
 	<string>EventMatch, profilinizi özelleştirmek ve diğer katılımcılara göstermek amacıyla profil fotoğrafı seçebilmeniz için fotoğraf galerinize erişim izni gerektirir.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>EventMatch, profil fotoğrafınızı doğrudan kameranızla çekip yükleyebilmeniz için kamera erişim izni gerektirir.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>EventMatch, eşleştiğiniz kişilere sesli mesaj gönderebilmeniz için mikrofon erişim izni gerektirir.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

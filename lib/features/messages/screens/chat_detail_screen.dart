@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/report_block_sheet.dart';
@@ -22,12 +26,22 @@ class ChatDetailScreen extends StatefulWidget {
 }
 
 class _ChatDetailScreenState extends State<ChatDetailScreen> {
-  // 1. STREAM ASLA BUILD METODUNDA ÇAĞRILMAZ, initState'TE BAĞLANIR!
   late final Stream<List<MessageModel>> _messageStream;
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   Timer? _liveSyncTimer;
+  Timer? _typingDebounceTimer;
   int _lastMessageCount = 0;
+
+  // Alıntı (Swipe-to-Reply) durumu
+  MessageModel? _replyingToMessage;
+
+  // Sesli Mesaj (Voice Note) durumu
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  int _recordSeconds = 0;
+  Timer? _recordTimer;
+  String? _currentRecordingPath;
 
   @override
   void initState() {
@@ -37,7 +51,6 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     // Aktif sohbet ID'sini bildir (Bu sohbet açıkken bildirim sesi/penceresi bastırılır)
     NotificationService().activeChatId = widget.chat.participant.id;
 
-    // 2. Stream'i kalıcı olarak tek seferlik bağla
     final msgService = context.read<MockMessageService>();
     _messageStream = msgService.getMessagesStream(widget.chat.participant.id);
 
@@ -47,18 +60,41 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // 4 saniyelik canlı senkronizasyon emniyet sübabı (WebSocket anlık çalıştığı için ağ kotası korunur)
+    // 4 saniyelik canlı senkronizasyon emniyet sübabı
     _liveSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
       }
     });
+
+    // Canlı "Yazıyor..." dinleyicisi ve gecikmeli durdurucu
+    _messageController.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final msgService = context.read<MockMessageService>();
+    final text = _messageController.text;
+    if (text.isNotEmpty) {
+      msgService.sendTypingStatus(widget.chat.participant.id, true);
+      _typingDebounceTimer?.cancel();
+      _typingDebounceTimer = Timer(const Duration(milliseconds: 2500), () {
+        if (mounted) {
+          msgService.sendTypingStatus(widget.chat.participant.id, false);
+        }
+      });
+    } else {
+      msgService.sendTypingStatus(widget.chat.participant.id, false);
+    }
   }
 
   @override
   void dispose() {
+    _messageController.removeListener(_onTextChanged);
     NotificationService().activeChatId = null;
     _liveSyncTimer?.cancel();
+    _typingDebounceTimer?.cancel();
+    _recordTimer?.cancel();
+    _audioRecorder.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -86,13 +122,178 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     final text = _messageController.text.trim();
     if (text.isNotEmpty) {
       HapticFeedback.lightImpact();
+      final replyCopy = _replyingToMessage;
       _messageController.clear();
-      msgService.sendMessage(currentChatId, text, receiverUserId: widget.chat.participant.id);
-      
+      setState(() => _replyingToMessage = null);
+
+      msgService.sendMessage(
+        currentChatId,
+        text,
+        receiverUserId: widget.chat.participant.id,
+        replyToMessage: replyCopy,
+      );
+
       Future.delayed(const Duration(milliseconds: 50), () {
         _scrollToBottom(animated: true);
       });
     }
+  }
+
+  // --- SES KAYDI (VOICE NOTE) MOTORU ---
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final dir = await getTemporaryDirectory();
+        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        _currentRecordingPath = path;
+
+        await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+        HapticFeedback.mediumImpact();
+
+        setState(() {
+          _isRecording = true;
+          _recordSeconds = 0;
+        });
+
+        _recordTimer?.cancel();
+        _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (mounted) {
+            setState(() => _recordSeconds++);
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sesli mesaj için mikrofon izni gereklidir.')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Start recording error: $e');
+    }
+  }
+
+  Future<void> _stopAndSendRecording(MockMessageService msgService, String currentChatId) async {
+    try {
+      _recordTimer?.cancel();
+      final path = await _audioRecorder.stop();
+      final duration = _recordSeconds;
+
+      setState(() {
+        _isRecording = false;
+        _recordSeconds = 0;
+      });
+
+      if (path != null && duration >= 1) {
+        HapticFeedback.lightImpact();
+        final replyCopy = _replyingToMessage;
+        setState(() => _replyingToMessage = null);
+
+        await msgService.sendVoiceNote(
+          currentChatId,
+          widget.chat.participant.id,
+          path,
+          duration,
+          replyToMessage: replyCopy,
+        );
+
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _scrollToBottom(animated: true);
+        });
+      }
+    } catch (e) {
+      debugPrint('Stop recording error: $e');
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    try {
+      _recordTimer?.cancel();
+      await _audioRecorder.stop();
+      if (_currentRecordingPath != null) {
+        final f = File(_currentRecordingPath!);
+        if (await f.exists()) {
+          await f.delete();
+        }
+      }
+      HapticFeedback.lightImpact();
+      setState(() {
+        _isRecording = false;
+        _recordSeconds = 0;
+      });
+    } catch (e) {
+      debugPrint('Cancel recording error: $e');
+    }
+  }
+
+  // --- EMOJİ REAKSİYON VE HIZLI YANIT MENÜSÜ ---
+  void _showReactionSheet(BuildContext context, MessageModel message, MockMessageService service, String chatId) {
+    HapticFeedback.mediumImpact();
+    const emojis = ['❤️', '😂', '👏', '😮', '🔥', '👍'];
+    final myId = service.currentUserId;
+    final currentReaction = message.myReaction(myId);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2235),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: emojis.map((emoji) {
+                final isSelected = currentReaction == emoji;
+                return GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    Navigator.pop(ctx);
+                    service.toggleReaction(chatId, message.id, widget.chat.participant.id, emoji);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? AppColors.primary.withValues(alpha: 0.3) : Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: isSelected ? Border.all(color: AppColors.primary, width: 2) : null,
+                    ),
+                    child: Text(emoji, style: const TextStyle(fontSize: 26)),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 10),
+            const Divider(color: Colors.white10),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.reply_rounded, color: Colors.white70),
+              title: const Text('Bu Mesajı Yanıtla', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _replyingToMessage = message;
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showEndMatchConfirmDialog(BuildContext context, MockMessageService service, String currentChatId, String partnerId) {
@@ -208,6 +409,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                     Builder(
                       builder: (context) {
+                        final isTyping = msgService.isPartnerTyping(currentChat.participant.id);
+                        if (isTyping && !isBlocked) {
+                          return Row(
+                            children: [
+                              Text(
+                                'Yazıyor',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              const _PulsingDots(),
+                            ],
+                          );
+                        }
+
                         final isOnline = msgService.isUserOnline(currentChat.participant.id) || currentChat.isOnline;
                         if (isOnline && !isBlocked) {
                           return Row(
@@ -391,7 +610,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               ),
             ),
           
-          // 3. DOĞRUDAN STREAMBUILDER İLE CANLI MESAJ LİSTESİ
+          // DOĞRUDAN STREAMBUILDER İLE CANLI MESAJ LİSTESİ
           Expanded(
             child: StreamBuilder<List<MessageModel>>(
               stream: _messageStream,
@@ -453,7 +672,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         (currentId.isEmpty && senderId != currentChat.participant.id.toLowerCase().trim());
 
                     final showDateHeader = index == 0 || !_isSameDay(messages[index].timestamp, messages[index - 1].timestamp);
-                    final bubble = _buildWhatsAppMessageBubble(message, isMe);
+                    final bubble = _buildSwipeableMessage(message, isMe, msgService, currentChat.id);
 
                     if (showDateHeader) {
                       return Column(
@@ -470,6 +689,59 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               },
             ),
           ),
+
+          // Alıntı Yapılan Mesaj Önizleme Barı (Swipe-to-Reply)
+          if (_replyingToMessage != null)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: const BoxDecoration(
+                color: Color(0xFF1E2235),
+                border: Border(top: BorderSide(color: Colors.white10)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 3.5,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _replyingToMessage!.senderId.toLowerCase().trim() == msgService.currentUserId.toLowerCase().trim()
+                              ? 'Kendine yanıt veriyorsun'
+                              : '${widget.chat.participant.name} yanıtlanıyor',
+                          style: TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _replyingToMessage!.isAudio ? '🎤 Sesli Mesaj' : _replyingToMessage!.text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 18),
+                    onPressed: () => setState(() => _replyingToMessage = null),
+                  ),
+                ],
+              ),
+            ),
+
           _buildMessageComposer(msgService, currentChat.id, isBlocked),
         ],
       ),
@@ -515,71 +787,208 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
-  /// WhatsApp Tarzı Mesaj Balonu ve İletim Tıkları
-  Widget _buildWhatsAppMessageBubble(MessageModel message, bool isMe) {
-    final timeStr = DateFormat('HH:mm').format(message.timestamp);
-
-    return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.78,
-        ),
-        decoration: BoxDecoration(
-          color: isMe ? const Color(0xFF6D28D9) : const Color(0xFF1F2232),
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 2),
-            bottomRight: Radius.circular(isMe ? 2 : 16),
+  /// Sağa Kaydırarak Yanıtlama (Swipe-to-Reply) ve Uzun Basarak Reaksiyon Menüsü
+  Widget _buildSwipeableMessage(
+    MessageModel message,
+    bool isMe,
+    MockMessageService msgService,
+    String currentChatId,
+  ) {
+    return Dismissible(
+      key: ValueKey('msg_${message.id}_${message.timestamp.millisecondsSinceEpoch}'),
+      direction: DismissDirection.startToEnd,
+      confirmDismiss: (direction) async {
+        HapticFeedback.mediumImpact();
+        setState(() {
+          _replyingToMessage = message;
+        });
+        return false; // Mesajı silme, sadece yanıtlamayı aktifleştir
+      },
+      background: Container(
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.only(left: 16),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: AppColors.primary.withValues(alpha: 0.3),
+            shape: BoxShape.circle,
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          child: const Icon(Icons.reply_rounded, color: Colors.white, size: 20),
         ),
-        child: Wrap(
-          alignment: WrapAlignment.end,
-          crossAxisAlignment: WrapCrossAlignment.end,
-          spacing: 8,
-          runSpacing: 2,
-          children: [
-            Text(
-              message.text,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                height: 1.3,
-              ),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  timeStr,
-                  style: TextStyle(
-                    color: isMe ? Colors.white70 : Colors.white60,
-                    fontSize: 10.5,
-                  ),
-                ),
-                if (isMe) ...[
-                  const SizedBox(width: 4),
-                  _buildStatusTick(message.status),
-                ],
-              ],
-            ),
-          ],
-        ),
+      ),
+      child: GestureDetector(
+        onLongPress: () => _showReactionSheet(context, message, msgService, currentChatId),
+        child: _buildWhatsAppMessageBubble(message, isMe, msgService, currentChatId),
       ),
     );
   }
 
-  /// WhatsApp Tık İkonları (Gönderiliyor -> Gönderildi -> İletildi -> Okundu Çift Mavi Tık)
+  /// WhatsApp & Bumble Tarzı Zengin Mesaj Balonu (Metin, Ses, Alıntı, Reaksiyonlar ve Tıklar)
+  Widget _buildWhatsAppMessageBubble(
+    MessageModel message,
+    bool isMe,
+    MockMessageService msgService,
+    String currentChatId,
+  ) {
+    final timeStr = DateFormat('HH:mm').format(message.timestamp);
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.78,
+            ),
+            decoration: BoxDecoration(
+              color: isMe ? const Color(0xFF6D28D9) : const Color(0xFF1F2232),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(isMe ? 16 : 2),
+                bottomRight: Radius.circular(isMe ? 2 : 16),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Alıntılanan Mesaj Kutucuğu
+                if (message.replyToText != null && message.replyToText!.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border(
+                        left: BorderSide(
+                          color: isMe ? Colors.white70 : AppColors.primary,
+                          width: 3.5,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          message.replyToSenderName ?? 'Yanıt',
+                          style: TextStyle(
+                            color: isMe ? Colors.white : AppColors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          message.replyToText!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white70, fontSize: 11.5),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // 2. Mesaj İçeriği: Sesli Mesaj veya Metin
+                if (message.isAudio)
+                  VoiceMessageBubble(message: message, isMe: isMe)
+                else
+                  Text(
+                    message.text,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      height: 1.3,
+                    ),
+                  ),
+
+                const SizedBox(height: 3),
+
+                // 3. Saat ve İletim Tıkları
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        timeStr,
+                        style: TextStyle(
+                          color: isMe ? Colors.white70 : Colors.white60,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        _buildStatusTick(message.status),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // 4. Emoji Reaksiyon Rozetleri
+          if (message.reactionCounts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6, left: 4, right: 4),
+              child: Wrap(
+                spacing: 4,
+                children: message.reactionCounts.entries.map((entry) {
+                  final emoji = entry.key;
+                  final count = entry.value;
+                  final hasMine = message.myReaction(msgService.currentUserId) == emoji;
+                  return GestureDetector(
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      msgService.toggleReaction(
+                        currentChatId,
+                        message.id,
+                        widget.chat.participant.id,
+                        emoji,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: hasMine
+                            ? AppColors.primary.withValues(alpha: 0.35)
+                            : const Color(0xFF1E2235),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: hasMine ? AppColors.primary : Colors.white12,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        count > 1 ? '$emoji $count' : emoji,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// WhatsApp & Telegram Tık İkonları:
+  /// Saat ikonu (Gönderiliyor) -> Tek gri tık (Gönderildi) -> Çift gri tık (İletildi) -> Çift mavi tık (Okundu)
   Widget _buildStatusTick(MessageStatus status) {
     switch (status) {
       case MessageStatus.sending:
@@ -594,6 +1003,67 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   Widget _buildMessageComposer(MockMessageService msgService, String currentChatId, bool isBlocked) {
+    // Ses Kaydediliyor Ekranı
+    if (_isRecording) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10).copyWith(
+          bottom: MediaQuery.of(context).padding.bottom + 8,
+        ),
+        decoration: const BoxDecoration(
+          color: Color(0xFF171923),
+          border: Border(top: BorderSide(color: Colors.white10)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: const BoxDecoration(
+                color: Colors.redAccent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${(_recordSeconds ~/ 60)}:${(_recordSeconds % 60).toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                color: Colors.redAccent,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Text(
+                'Ses kaydediliyor...',
+                style: TextStyle(color: Colors.white60, fontSize: 13.5),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.white60, size: 24),
+              onPressed: _cancelRecording,
+            ),
+            const SizedBox(width: 6),
+            GestureDetector(
+              onTap: () => _stopAndSendRecording(msgService, currentChatId),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(color: AppColors.primary.withValues(alpha: 0.4), blurRadius: 8),
+                  ],
+                ),
+                child: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Normal Metin & Mikrofon Giriş Alanı
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8).copyWith(
         bottom: MediaQuery.of(context).padding.bottom + 8,
@@ -611,7 +1081,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               minLines: 1,
               maxLines: 4,
               textCapitalization: TextCapitalization.sentences,
-              style: TextStyle(color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary, fontSize: 15),
+              style: TextStyle(
+                color: isBlocked ? AppColors.textSecondary : AppColors.textPrimary,
+                fontSize: 15,
+              ),
               decoration: InputDecoration(
                 hintText: isBlocked ? '🚫 Kullanıcı engellendi' : 'Mesaj yaz...',
                 hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14.5),
@@ -627,29 +1100,253 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             ),
           ),
           const SizedBox(width: 8),
+
+          // Metin varsa Gönder Butonu, yoksa Ses Kaydetme Mikrofonu
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _messageController,
+            builder: (context, value, _) {
+              final hasText = value.text.trim().isNotEmpty;
+              if (hasText) {
+                return GestureDetector(
+                  onTap: isBlocked ? null : () => _sendMessage(msgService, currentChatId, isBlocked),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: isBlocked ? null : AppColors.primaryGradient,
+                      color: isBlocked ? Colors.grey : null,
+                      shape: BoxShape.circle,
+                      boxShadow: isBlocked
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                spreadRadius: 1,
+                              ),
+                            ],
+                    ),
+                    child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  ),
+                );
+              }
+
+              // Mikrofon butonu (Sesli Mesaj)
+              return GestureDetector(
+                onTap: isBlocked ? null : _startRecording,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isBlocked ? Colors.grey : const Color(0xFF1E2235),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white12),
+                  ),
+                  child: const Icon(Icons.mic_rounded, color: Colors.white, size: 20),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Sesli Mesaj Oynatıcı Bileşeni (Voice Note Bubble)
+class VoiceMessageBubble extends StatefulWidget {
+  final MessageModel message;
+  final bool isMe;
+
+  const VoiceMessageBubble({super.key, required this.message, required this.isMe});
+
+  @override
+  State<VoiceMessageBubble> createState() => _VoiceMessageBubbleState();
+}
+
+class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
+  late final AudioPlayer _player;
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  StreamSubscription? _posSub;
+  StreamSubscription? _stateSub;
+  StreamSubscription? _durSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _duration = Duration(seconds: widget.message.audioDurationSeconds ?? 0);
+
+    _posSub = _player.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _position = p);
+    });
+
+    _stateSub = _player.onPlayerStateChanged.listen((s) {
+      if (mounted) setState(() => _isPlaying = s == PlayerState.playing);
+    });
+
+    _durSub = _player.onDurationChanged.listen((d) {
+      if (mounted && d.inSeconds > 0) setState(() => _duration = d);
+    });
+
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _stateSub?.cancel();
+    _durSub?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    final url = widget.message.mediaUrl;
+    if (url == null || url.isEmpty) return;
+
+    HapticFeedback.selectionClick();
+    if (_isPlaying) {
+      await _player.pause();
+    } else {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        await _player.play(UrlSource(url));
+      } else {
+        await _player.play(DeviceFileSource(url));
+      }
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes;
+    final seconds = d.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = _duration.inMilliseconds > 0
+        ? (_position.inMilliseconds / _duration.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
+
+    const barHeights = [10, 16, 22, 12, 18, 26, 16, 12, 24, 20, 14, 12, 18, 24, 14, 8];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           GestureDetector(
-            onTap: isBlocked ? null : () => _sendMessage(msgService, currentChatId, isBlocked),
+            onTap: _togglePlay,
             child: Container(
-              padding: const EdgeInsets.all(12),
+              width: 38,
+              height: 38,
               decoration: BoxDecoration(
-                gradient: isBlocked ? null : AppColors.primaryGradient,
-                color: isBlocked ? Colors.grey : null,
+                color: widget.isMe ? Colors.white.withValues(alpha: 0.25) : AppColors.primary,
                 shape: BoxShape.circle,
-                boxShadow: isBlocked
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
-                          blurRadius: 8,
-                          spreadRadius: 1,
-                        ),
-                      ],
               ),
-              child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              child: Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(barHeights.length, (i) {
+                    final barProgress = i / barHeights.length;
+                    final isFilled = barProgress <= progress;
+                    return Container(
+                      width: 3,
+                      height: barHeights[i].toDouble(),
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      decoration: BoxDecoration(
+                        color: isFilled
+                            ? (widget.isMe ? Colors.white : AppColors.primary)
+                            : Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _isPlaying ? _formatDuration(_position) : _formatDuration(_duration),
+                  style: TextStyle(
+                    color: widget.isMe ? Colors.white70 : Colors.white60,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Canlı "Yazıyor..." 3 Nokta Animasyonu
+class _PulsingDots extends StatefulWidget {
+  const _PulsingDots();
+
+  @override
+  State<_PulsingDots> createState() => _PulsingDotsState();
+}
+
+class _PulsingDotsState extends State<_PulsingDots> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final val = ((_controller.value - delay) % 1.0);
+            final scale = 0.4 + (0.6 * (val < 0.5 ? val * 2 : (1.0 - val) * 2));
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              width: 4.5,
+              height: 4.5,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: scale.clamp(0.3, 1.0)),
+                shape: BoxShape.circle,
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
