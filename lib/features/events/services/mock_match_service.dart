@@ -19,6 +19,7 @@ class MockMatchService extends ChangeNotifier {
   final Set<String> _sentRequestKeys = {};
   bool _isDoubleDateMode = false;
   bool get isDoubleDateMode => _isDoubleDateMode;
+  bool _isLoadingMatches = false;
 
   MockMatchService(this.eventService) {
     _initMatchService();
@@ -50,7 +51,7 @@ class MockMatchService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       final list = prefs.getStringList('cached_seen_user_ids_$currentUserId');
       if (list != null) {
-        _seenUserIds.addAll(list.map((e) => e.toLowerCase()));
+        _seenUserIds.addAll(list.map((e) => e.toLowerCase().trim()));
       }
     } catch (_) {}
   }
@@ -164,13 +165,18 @@ class MockMatchService extends ChangeNotifier {
   // --- 1. POTENTIAL MATCHES & DECK DEDUPLICATION ---
 
   Future<void> loadPotentialMatches() async {
-    try {
-      _potentialMatches.clear();
-      final excludedUserIds = <String>{};
+    if (_isLoadingMatches) return;
+    _isLoadingMatches = true;
 
-      final currentId = currentUserId;
-      excludedUserIds.add(currentId.toLowerCase());
-      excludedUserIds.addAll(_seenUserIds.map((id) => id.toLowerCase()));
+    try {
+      final excludedUserIds = <String>{};
+      final currentId = currentUserId.toLowerCase().trim();
+      if (currentId.isNotEmpty) {
+        excludedUserIds.add(currentId);
+      }
+      excludedUserIds.addAll(_seenUserIds.map((id) => id.toLowerCase().trim()));
+
+      final List<UserModel> loadedMatches = [];
 
       if (_supabase.auth.currentUser != null) {
         await _ensureUserInDatabase();
@@ -183,9 +189,9 @@ class MockMatchService extends ChangeNotifier {
               .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId');
 
           for (var row in allMyMatches) {
-            final u1 = row['user_id_1']?.toString() ?? '';
-            final u2 = row['user_id_2']?.toString() ?? '';
-            final other = u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1;
+            final u1 = row['user_id_1']?.toString().trim() ?? '';
+            final u2 = row['user_id_2']?.toString().trim() ?? '';
+            final other = u1.toLowerCase() == currentId ? u2 : u1;
             if (other.isNotEmpty) {
               final lowerOther = other.toLowerCase();
               excludedUserIds.add(lowerOther);
@@ -201,9 +207,9 @@ class MockMatchService extends ChangeNotifier {
                 .or('sender_id.eq.$currentId,receiver_id.eq.$currentId');
 
             for (var row in myMessages) {
-              final s = row['sender_id']?.toString() ?? '';
-              final r = row['receiver_id']?.toString() ?? '';
-              final other = s.toLowerCase() == currentId.toLowerCase() ? r : s;
+              final s = row['sender_id']?.toString().trim() ?? '';
+              final r = row['receiver_id']?.toString().trim() ?? '';
+              final other = s.toLowerCase() == currentId ? r : s;
               if (other.isNotEmpty) {
                 final lowerOther = other.toLowerCase();
                 excludedUserIds.add(lowerOther);
@@ -234,10 +240,10 @@ class MockMatchService extends ChangeNotifier {
         final seenProfilesInDeck = <String>{};
 
         for (var p in rawProfiles) {
-          final pId = (p['id'] ?? p['user_id'] ?? p['m_id'] ?? p['match_id'] ?? p['M_ID'])?.toString();
+          final pId = (p['id'] ?? p['user_id'] ?? p['m_id'] ?? p['match_id'] ?? p['M_ID'])?.toString().trim();
           if (pId != null && pId.isNotEmpty) {
             final lowerPId = pId.toLowerCase();
-            if (!excludedUserIds.contains(lowerPId) && !seenProfilesInDeck.contains(lowerPId)) {
+            if (!excludedUserIds.contains(lowerPId) && !_seenUserIds.contains(lowerPId) && !seenProfilesInDeck.contains(lowerPId)) {
               seenProfilesInDeck.add(lowerPId);
               filteredProfiles.add(p);
               filteredUserIds.add(pId);
@@ -259,7 +265,7 @@ class MockMatchService extends ChangeNotifier {
                 .order('sort_order', ascending: true);
 
             for (var photo in photosRes) {
-              final uId = photo['user_id']?.toString() ?? '';
+              final uId = photo['user_id']?.toString().trim() ?? '';
               final url = photo['storage_url']?.toString() ?? '';
               if (uId.isNotEmpty && url.isNotEmpty) {
                 userPhotosMap.putIfAbsent(uId.toLowerCase(), () => []).add(url);
@@ -276,7 +282,7 @@ class MockMatchService extends ChangeNotifier {
                 .inFilter('user_id', filteredUserIds);
 
             for (var link in socialRes) {
-              final uId = link['user_id']?.toString() ?? '';
+              final uId = link['user_id']?.toString().trim() ?? '';
               final url = link['url']?.toString() ?? '';
               if (uId.isNotEmpty && url.isNotEmpty) {
                 userSocialLinksMap.putIfAbsent(uId.toLowerCase(), () => []).add(url);
@@ -288,9 +294,14 @@ class MockMatchService extends ChangeNotifier {
         }
 
         // 5. Kullanıcı modellerini oluştur (Gerçek fotoğraf yoksa boş bırak, AI/Unsplash basma!)
+        final addedIds = <String>{};
         for (var row in filteredProfiles) {
-          final id = (row['id'] ?? row['user_id'] ?? row['m_id'] ?? row['match_id'] ?? row['M_ID'] ?? '').toString();
-          if (id.isEmpty) continue;
+          final id = (row['id'] ?? row['user_id'] ?? row['m_id'] ?? row['match_id'] ?? row['M_ID'] ?? '').toString().trim();
+          final lowerId = id.toLowerCase();
+          if (lowerId.isEmpty || addedIds.contains(lowerId) || excludedUserIds.contains(lowerId) || _seenUserIds.contains(lowerId)) {
+            continue;
+          }
+          addedIds.add(lowerId);
 
           final name = row['name']?.toString() ?? 'Kullanıcı $id';
           final username = row['username']?.toString();
@@ -336,7 +347,7 @@ class MockMatchService extends ChangeNotifier {
             }
           }
 
-          _potentialMatches.add(UserModel(
+          loadedMatches.add(UserModel(
             id: id,
             name: name,
             username: username,
@@ -352,12 +363,15 @@ class MockMatchService extends ChangeNotifier {
         }
       }
 
-      _potentialMatches.shuffle();
+      loadedMatches.shuffle();
+      _potentialMatches = loadedMatches;
       notifyListeners();
     } catch (e) {
       debugPrint('Load Potential Matches Error: $e');
       _potentialMatches.clear();
       notifyListeners();
+    } finally {
+      _isLoadingMatches = false;
     }
   }
 
@@ -369,16 +383,19 @@ class MockMatchService extends ChangeNotifier {
 
   Future<bool> swipeRight(UserModel targetUser, {String? initialMessage}) async {
     bool isMutualMatch = false;
+    final targetId = targetUser.id.toLowerCase().trim();
+    final currentId = currentUserId;
+
+    // 1. Kartı hafızadan derhal sil ve görüldü olarak kaydet (UI anında güncellenir)
+    _seenUserIds.add(targetId);
+    _sentRequestKeys.add(targetUser.id);
+    _potentialMatches.removeWhere((u) => u.id.toLowerCase().trim() == targetId);
+    _saveCachedSeenUsers();
+    notifyListeners();
+
+    debugPrint('[MatchService] ➡️ swipeRight: $currentId -> ${targetUser.id}');
 
     try {
-      final currentId = currentUserId;
-      final targetId = targetUser.id.toLowerCase();
-      _seenUserIds.add(targetId);
-      _sentRequestKeys.add(targetUser.id);
-      _saveCachedSeenUsers();
-
-      debugPrint('[MatchService] ➡️ swipeRight: $currentId -> ${targetUser.id}');
-
       String? eventId;
       try {
         if (_isValidUuid(targetUser.id)) {
@@ -460,9 +477,6 @@ class MockMatchService extends ChangeNotifier {
       } else {
         isMutualMatch = false;
       }
-
-      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetId);
-      notifyListeners();
     } catch (e) {
       debugPrint('Swipe Right Error: $e');
     }
@@ -471,12 +485,16 @@ class MockMatchService extends ChangeNotifier {
   }
 
   Future<void> swipeLeft(UserModel targetUser) async {
-    try {
-      final currentId = currentUserId;
-      final targetId = targetUser.id.toLowerCase();
-      _seenUserIds.add(targetId);
-      _saveCachedSeenUsers();
+    final targetId = targetUser.id.toLowerCase().trim();
+    final currentId = currentUserId;
 
+    // 1. Kartı hafızadan derhal sil ve görüldü olarak kaydet (UI anında güncellenir)
+    _seenUserIds.add(targetId);
+    _potentialMatches.removeWhere((u) => u.id.toLowerCase().trim() == targetId);
+    _saveCachedSeenUsers();
+    notifyListeners();
+
+    try {
       if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
         try {
           String? eventId;
@@ -516,9 +534,6 @@ class MockMatchService extends ChangeNotifier {
           debugPrint('[MatchService] Swipe left Supabase hatası: $e');
         }
       }
-
-      _potentialMatches.removeWhere((u) => u.id.toLowerCase() == targetId);
-      notifyListeners();
     } catch (e) {
       debugPrint('Swipe Left Error: $e');
     }
@@ -720,7 +735,19 @@ class MockMatchService extends ChangeNotifier {
     }
   }
 
-  List<UserModel> getPotentialMatches() => _potentialMatches;
+  List<UserModel> getPotentialMatches() {
+    final seen = <String>{};
+    final result = <UserModel>[];
+    for (final u in _potentialMatches) {
+      final cleanId = u.id.toLowerCase().trim();
+      if (cleanId.isEmpty) continue;
+      if (_seenUserIds.contains(cleanId)) continue;
+      if (seen.contains(cleanId)) continue;
+      seen.add(cleanId);
+      result.add(u);
+    }
+    return result;
+  }
 
   void toggleDoubleDateMode() {
     _isDoubleDateMode = !_isDoubleDateMode;

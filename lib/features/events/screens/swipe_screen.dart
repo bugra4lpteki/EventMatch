@@ -5,7 +5,6 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_image_widget.dart';
 import '../services/mock_match_service.dart';
 import '../models/user_model.dart';
-import '../models/group_model.dart';
 import '../widgets/match_dialog.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../messages/services/mock_message_service.dart';
@@ -25,6 +24,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
   final TextEditingController _messageController = TextEditingController();
   int _refreshCount = 0;
   int _currentIndex = 0;
+  final Set<String> _locallySwipedIds = {};
 
   @override
   void initState() {
@@ -53,8 +53,10 @@ class _SwipeScreenState extends State<SwipeScreen> {
       builder: (context, matchService, child) {
         final allItems = matchService.getPotentialMatches();
         final blockedIds = ModerationService().blockedUserIds;
-        final items = allItems.where((item) {
-          if (item is UserModel) return !blockedIds.contains(item.id);
+        final items = allItems.where((user) {
+          final cleanId = user.id.toLowerCase().trim();
+          if (blockedIds.contains(user.id) || blockedIds.contains(cleanId)) return false;
+          if (_locallySwipedIds.contains(cleanId)) return false;
           return true;
         }).toList();
 
@@ -97,10 +99,12 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       icon: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
                       tooltip: 'Profilleri Yenile',
                       onPressed: () async {
+                        _locallySwipedIds.clear();
                         await matchService.loadPotentialMatches();
                         if (mounted) {
                           setState(() {
                             _refreshCount++;
+                            _currentIndex = 0;
                           });
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -131,10 +135,12 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       const SizedBox(height: 20),
                       ElevatedButton.icon(
                         onPressed: () async {
+                          _locallySwipedIds.clear();
                           await matchService.loadPotentialMatches();
                           if (mounted) {
                             setState(() {
                               _refreshCount++;
+                              _currentIndex = 0;
                             });
                           }
                         },
@@ -160,15 +166,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 child: Padding(
                   padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 4.0, bottom: 8.0),
                   child: AppinioSwiper(
-                    key: ValueKey('single_${_refreshCount}_${items.length}'),
+                    key: ValueKey('swipe_deck_$_refreshCount'),
                     controller: _swiperController,
                     cardCount: items.length,
-                    backgroundCardCount: 1,
+                    backgroundCardCount: items.length > 1 ? 1 : 0,
                     backgroundCardOffset: Offset.zero,
                     backgroundCardScale: 1.0,
                     onSwipeEnd: (prev, target, activity) => _onSwipeEnd(prev, target, activity, items),
                     cardBuilder: (BuildContext context, int index) {
-                      return _buildUserCard(items[index] as UserModel);
+                      return _buildUserCard(items[index]);
                     },
                   ),
                 ),
@@ -433,14 +439,12 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
 
 
-  Widget _buildMessageInputBar(List<dynamic> items) {
+  Widget _buildMessageInputBar(List<UserModel> items) {
     if (items.isEmpty) return const SizedBox.shrink();
 
     final safeIndex = _currentIndex.clamp(0, items.length - 1);
     final currentItem = items[safeIndex];
-    final String name = currentItem is UserModel
-        ? currentItem.name
-        : (currentItem is GroupModel ? currentItem.name : 'Kullanıcı');
+    final String name = currentItem.name;
 
     return Container(
       padding: const EdgeInsets.only(bottom: 20.0, top: 4.0, left: 16.0, right: 16.0),
@@ -572,7 +576,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
     _swiperController.swipeRight();
   }
 
-  void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<dynamic> items) async {
+  void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<UserModel> items) async {
+    if (previousIndex >= 0 && previousIndex < items.length) {
+      final swipedItem = items[previousIndex];
+      _locallySwipedIds.add(swipedItem.id.toLowerCase().trim());
+    }
     setState(() {
       _currentIndex = targetIndex;
     });
@@ -582,33 +590,30 @@ class _SwipeScreenState extends State<SwipeScreen> {
     
     if (activity is Swipe) {
       if (activity.direction == AxisDirection.right) {
-        if (item is UserModel) {
-          final messageToSend = _pendingMessage;
-          _pendingMessage = null;
-          final isMutualMatch = await matchService.swipeRight(item, initialMessage: messageToSend);
-          if (isMutualMatch && mounted) {
-            final msgService = context.read<MockMessageService>();
-            final chat = msgService.createOrGetChatForUser(item, initialMessage: messageToSend);
-            await msgService.reloadChats();
-            
-            MatchDialog.show(
-              context,
-              matchedUser: item,
-              onSendMessage: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => ChatDetailScreen(chat: chat),
-                  ),
-                );
-              },
-            );
-          }
+        final messageToSend = _pendingMessage;
+        _pendingMessage = null;
+        final isMutualMatch = await matchService.swipeRight(item, initialMessage: messageToSend);
+        if (isMutualMatch && mounted) {
+          final msgService = context.read<MockMessageService>();
+          final chat = msgService.createOrGetChatForUser(item, initialMessage: messageToSend);
+          await msgService.reloadChats();
+          
+          if (!mounted) return;
+          MatchDialog.show(
+            context,
+            matchedUser: item,
+            onSendMessage: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => ChatDetailScreen(chat: chat),
+                ),
+              );
+            },
+          );
         }
       } else if (activity.direction == AxisDirection.left) {
         _pendingMessage = null;
-        if (item is UserModel) {
-          matchService.swipeLeft(item);
-        }
+        matchService.swipeLeft(item);
       }
     }
   }
