@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -200,6 +202,63 @@ class NotificationService with WidgetsBindingObserver {
       }
     } catch (e) {
       debugPrint('[NotificationService] ❌ Push token kaydetme hatası: $e');
+    }
+  }
+
+  /// OneSignal REST API üzerinden alıcıya doğrudan anlık push bildirimi gönderir
+  Future<void> sendRemotePushNotification({
+    required String receiverId,
+    required String senderName,
+    required String content,
+    String? matchId,
+    String? senderId,
+  }) async {
+    try {
+      if (receiverId.isEmpty) return;
+
+      final url = Uri.parse('https://onesignal.com/api/v1/notifications');
+      final body = jsonEncode({
+        'app_id': OneSignalConfig.appId,
+        'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
+        'channel_for_external_user_ids': 'push',
+        'priority': 10,
+        'android_priority': 5,
+        'headings': {
+          'tr': '💬 $senderName',
+          'en': '💬 $senderName',
+        },
+        'contents': {
+          'tr': content,
+          'en': content,
+        },
+        'data': {
+          'chat_id': senderId ?? '',
+          'sender_id': senderId ?? '',
+          'sender_name': senderName,
+          'match_id': matchId ?? '',
+          'type': 'new_message',
+        },
+        'ios_badgeType': 'Increase',
+        'ios_badgeCount': 1,
+        'ios_sound': 'default',
+        'android_sound': 'default',
+        'android_channel_id': 'high_importance_channel',
+        'apns_priority': 10,
+        'content_available': true,
+      });
+
+      final response = await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key ${OneSignalConfig.restApiKey}',
+        },
+        body: body,
+      );
+
+      debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode}');
+    } catch (e) {
+      debugPrint('[NotificationService] ❌ OneSignal Push gönderme hatası: $e');
     }
   }
 

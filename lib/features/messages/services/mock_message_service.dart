@@ -1235,6 +1235,19 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       await _supabase.from('messages').insert(messagePayload);
       debugPrint('--> [TELEFON BAŞARILI] Supabase messages tablosuna yazıldı: $messagePayload');
+
+      // Alıcıya anında Apple APNs & OneSignal kapalı durum/arka plan push bildirimi gönder
+      final senderName = _eventService.currentUser.name.isNotEmpty
+          ? _eventService.currentUser.name
+          : (_supabase.auth.currentUser?.userMetadata?['name'] as String? ?? 'Biri');
+
+      NotificationService().sendRemotePushNotification(
+        receiverId: partnerId,
+        senderName: senderName,
+        content: text,
+        matchId: numericMatchId?.toString(),
+        senderId: effectiveSenderId,
+      );
     } catch (e) {
       debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
     }
