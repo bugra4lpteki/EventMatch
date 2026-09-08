@@ -335,13 +335,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Spotify mobile artist header: ~45% of screen height, clamped 360–420px
     final spotifyHeaderHeight = (screenHeight * 0.45).clamp(360.0, 420.0);
 
-    // Prefer the Spotify/Deezer artist banner when it has been fetched;
-    // fall back to the event's own imageUrl for non-music events.
+    // Biletix ve orijinal biletleme afişini 1. öncelik yap
+    final url = event.imageUrl.trim();
+    final bool hasDirectPoster = url.isNotEmpty &&
+        (url.contains('ticketm.net') ||
+         url.contains('biletix.com') ||
+         url.contains('biletinial.com') ||
+         url.contains('bubilet.com') ||
+         url.contains('bursadabugun.com') ||
+         url.contains('merlincdn.net') ||
+         url.contains('supabase.co') ||
+         (url.startsWith('http') &&
+          !url.contains('placeholder') &&
+          !url.contains('photo-1470225620780') &&
+          !url.contains('photo-1514525253161')));
+
     final spotifyBannerUrl = _spotifyArtistDataList.isNotEmpty
         ? _spotifyArtistDataList.first.artist.imageUrl
         : '';
-    final resolvedBannerUrl =
-        (spotifyBannerUrl.isNotEmpty) ? spotifyBannerUrl : event.imageUrl;
+    final resolvedBannerUrl = hasDirectPoster
+        ? event.imageUrl
+        : (spotifyBannerUrl.isNotEmpty ? spotifyBannerUrl : event.imageUrl);
 
     return Scaffold(
       backgroundColor: AppColors.background,

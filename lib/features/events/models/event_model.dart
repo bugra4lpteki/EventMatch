@@ -37,6 +37,21 @@ class EventModel {
         attendees = attendees ?? [];
 
   static String _sanitizeImageUrl(String url, String title, String category) {
+    final trimmedUrl = url.trim();
+
+    // 1. BİLETİX / TICKETMASTER, BİLETİNİAL, BUBİLET VEYA GERÇEK ETKİNLİK AFİŞLERİ EN YÜKSEK ÖNCELİĞE SAHİPTİR!
+    // Biletix sitesindeki orijinal etkinlik afişi kesinlikle korunur, yapay zeka veya stok görselle ezilmez.
+    if (trimmedUrl.isNotEmpty &&
+        (trimmedUrl.contains('ticketm.net') ||
+         trimmedUrl.contains('biletix.com') ||
+         trimmedUrl.contains('biletinial.com') ||
+         trimmedUrl.contains('bubilet.com') ||
+         trimmedUrl.contains('bursadabugun.com') ||
+         trimmedUrl.contains('merlincdn.net') ||
+         trimmedUrl.contains('supabase.co'))) {
+      return trimmedUrl;
+    }
+
     final titleLower = title.toLowerCase();
     final catLower = category.toLowerCase();
 
@@ -330,7 +345,6 @@ class EventModel {
     }
 
     // Generic, boş veya bozuk stok fotoğrafları kategorisine göre eşle (Asla yeşil-mavi konser stok görseline düşmez)
-    final trimmedUrl = url.trim();
     if (trimmedUrl.isEmpty ||
         trimmedUrl.contains('weserv.nl') ||
         trimmedUrl.contains('placeholder') ||

@@ -201,6 +201,19 @@ class MockEventService extends ChangeNotifier {
         continue;
       }
 
+      // Biletix veya harici resmi afişi olan etkinliklerin orijinal afişlerini KORU!
+      final url = event.imageUrl.trim();
+      final hasOfficialPoster = url.contains('ticketm.net') ||
+          url.contains('biletix.com') ||
+          url.contains('biletinial.com') ||
+          url.contains('bubilet.com') ||
+          url.contains('bursadabugun.com') ||
+          url.contains('merlincdn.net') ||
+          url.contains('supabase.co');
+      if (hasOfficialPoster) {
+        continue;
+      }
+
       final isMusicEvent = catLower.contains('konser') ||
                            catLower.contains('müzik') ||
                            catLower.contains('music') ||
@@ -217,7 +230,7 @@ class MockEventService extends ChangeNotifier {
 
     if (musicIndices.isEmpty) return;
 
-    // Paralel olarak tüm müzik etkinliklerinin sanatçı fotoğraflarını çek
+    // Yalnızca afişi bulunmayan etkinlikler için Spotify sanatçı görseli çek
     await Future.wait(musicIndices.map((idx) async {
       final event = _events[idx];
       try {

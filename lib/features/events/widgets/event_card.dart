@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
@@ -63,10 +63,30 @@ class _EventCardState extends State<EventCard> {
         cat.contains('festival');
   }
 
+  bool get _hasDirectEventPoster {
+    final url = widget.event.imageUrl.trim();
+    if (url.isEmpty) return false;
+    // Biletix / Ticketmaster veya biletleme afişi
+    if (url.contains('ticketm.net') ||
+        url.contains('biletix.com') ||
+        url.contains('biletinial.com') ||
+        url.contains('bubilet.com') ||
+        url.contains('bursadabugun.com') ||
+        url.contains('merlincdn.net') ||
+        url.contains('supabase.co')) {
+      return true;
+    }
+    return url.startsWith('http') &&
+        !url.contains('placeholder') &&
+        !url.contains('photo-1470225620780') &&
+        !url.contains('photo-1514525253161');
+  }
+
   @override
   void initState() {
     super.initState();
-    _bannerFuture = _isMusicEvent
+    // Biletix'in veya etkinliğin kendi orijinal afişi varsa doğrudan onu kullan
+    _bannerFuture = (!_hasDirectEventPoster && _isMusicEvent)
         ? _spotifyService.getArtistImageUrl(
             widget.event.title,
             category: widget.event.category,
@@ -132,7 +152,7 @@ class _EventCardState extends State<EventCard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Banner Image ── Spotify artist photo for music events ──
+              // ── Banner Image ── Biletix / Orijinal afiş öncelikli ──
               Stack(
                 children: [
                   ClipRRect(
@@ -143,27 +163,25 @@ class _EventCardState extends State<EventCard> {
                       child: FutureBuilder<String?>(
                         future: _bannerFuture,
                         builder: (context, snapshot) {
-                          // Use Spotify/Deezer artist image when available;
-                          // otherwise fall back to the event's own imageUrl.
-                          final resolvedUrl =
-                              (snapshot.connectionState == ConnectionState.done &&
+                          // Biletix ve orijinal etkinlik afişi her zaman 1. önceliktir.
+                          // Yalnızca afiş yoksa Spotify sanatçı fotoğrafı kullanılır.
+                          final resolvedUrl = _hasDirectEventPoster
+                              ? widget.event.imageUrl
+                              : ((snapshot.connectionState == ConnectionState.done &&
                                       snapshot.data != null &&
                                       snapshot.data!.isNotEmpty)
                                   ? snapshot.data!
-                                  : widget.event.imageUrl;
+                                  : widget.event.imageUrl);
 
                           return Hero(
                             tag: 'event_image_${widget.event.id}',
                             child: AppImageWidget(
                               imageUrl: resolvedUrl,
                               fit: BoxFit.cover,
-                              // Top-center alignment: frames artist face (Spotify mobile banner style)
                               alignment: const Alignment(0, -0.2),
                               height: bannerHeight,
                               width: double.infinity,
-                              // ~2× retina cache width for a 390pt iPhone 16 screen
                               memCacheWidth: 780,
-                              // 16:9 cache height
                               memCacheHeight: 440,
                             ),
                           );
