@@ -729,15 +729,26 @@ class MockMatchService extends ChangeNotifier {
 
   List<GroupModel> getPotentialGroups() => [];
 
-  void sendRequest(String eventId, UserModel toUser) {
+  Future<bool> sendRadarRequest(UserModel toUser) async {
+    _sentRequestKeys.add('radar_${toUser.id}');
+    _sentRequestKeys.add(toUser.id);
+    final isMutual = await swipeRight(toUser);
+    notifyListeners();
+    return isMutual;
+  }
+
+  Future<bool> sendRequest(String eventId, UserModel toUser) async {
     _sentRequestKeys.add('${eventId}_${toUser.id}');
     _sentRequestKeys.add(toUser.id);
-    swipeRight(toUser);
+    final isMutual = await swipeRight(toUser);
     notifyListeners();
+    return isMutual;
   }
 
   bool hasSentRequest(String eventId, String toUserId) {
-    return _sentRequestKeys.contains('${eventId}_$toUserId') || _sentRequestKeys.contains(toUserId);
+    return _sentRequestKeys.contains('${eventId}_$toUserId') ||
+           _sentRequestKeys.contains(toUserId) ||
+           _sentRequestKeys.contains('radar_$toUserId');
   }
 
   void clearMatchData() {

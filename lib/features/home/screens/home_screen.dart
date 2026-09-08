@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_match_service.dart';
+import '../../events/services/mock_event_service.dart';
 import '../../events/screens/explore_screen.dart';
 import '../../events/screens/requests_screen.dart';
 import '../../events/screens/swipe_screen.dart';
@@ -16,6 +17,9 @@ import '../../../core/theme/theme_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/screens/event_map_screen.dart';
 import '../../../core/widgets/custom_app_background.dart';
+import '../../events/widgets/match_dialog.dart';
+import '../../messages/screens/chat_detail_screen.dart';
+import '../../../services/notification_service.dart';
 
 class RadarIconWidget extends StatefulWidget {
   const RadarIconWidget({super.key});
@@ -190,41 +194,103 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                                   ],
                                                 ),
                                               ),
-                                              Container(
-                                                decoration: BoxDecoration(
-                                                  gradient: AppColors.primaryGradient,
-                                                  borderRadius: BorderRadius.circular(14),
-                                                ),
-                                                child: ElevatedButton.icon(
-                                                  onPressed: () {
-                                                    HapticFeedback.mediumImpact();
-                                                    final msgService = context.read<MockMessageService>();
-                                                    final chat = msgService.createOrGetChatForUser(u);
-                                                    msgService.sendMessage(
-                                                      chat.id,
-                                                      'Selam! Radar üzerinden eşleştik 👋',
-                                                      receiverUserId: u.id,
-                                                    );
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(
-                                                        content: Text('${u.name} kişisine selam gönderildi! ⚡ Mesajlar sekmesinden devam edebilirsiniz.'),
-                                                        backgroundColor: AppColors.primary,
-                                                        behavior: SnackBarBehavior.floating,
-                                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                      ),
-                                                    );
-                                                    Navigator.pop(context);
-                                                  },
-                                                  style: ElevatedButton.styleFrom(
-                                                    backgroundColor: Colors.transparent,
-                                                    shadowColor: Colors.transparent,
-                                                    elevation: 0,
-                                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                                  ),
-                                                  icon: const Icon(Icons.waving_hand, color: Colors.white, size: 14),
-                                                  label: const Text('Selam', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                                ),
-                                              ),
+                                              Consumer<MockMatchService>(
+                                                 builder: (context, matchService, _) {
+                                                   final hasSent = matchService.hasSentRequest('radar', u.id);
+                                                   final msgService = context.read<MockMessageService>();
+                                                   final isAlreadyMatched = msgService.individualChats.any((c) => c.participant.id.toLowerCase() == u.id.toLowerCase());
+
+                                                   if (isAlreadyMatched) {
+                                                     return Container(
+                                                       decoration: BoxDecoration(
+                                                         color: AppColors.surface,
+                                                         borderRadius: BorderRadius.circular(14),
+                                                         border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+                                                       ),
+                                                       child: ElevatedButton.icon(
+                                                         onPressed: () {
+                                                           Navigator.pop(context);
+                                                           final chat = msgService.individualChats.firstWhere((c) => c.participant.id.toLowerCase() == u.id.toLowerCase());
+                                                           Navigator.push(context, MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)));
+                                                         },
+                                                         style: ElevatedButton.styleFrom(
+                                                           backgroundColor: Colors.transparent,
+                                                           shadowColor: Colors.transparent,
+                                                           elevation: 0,
+                                                           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                         ),
+                                                         icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 14),
+                                                         label: const Text('Sohbet', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                       ),
+                                                     );
+                                                   }
+
+                                                   return Container(
+                                                     decoration: BoxDecoration(
+                                                       gradient: hasSent ? null : AppColors.primaryGradient,
+                                                       color: hasSent ? Colors.white.withOpacity(0.1) : null,
+                                                       borderRadius: BorderRadius.circular(14),
+                                                     ),
+                                                     child: ElevatedButton.icon(
+                                                       onPressed: hasSent
+                                                           ? null
+                                                           : () async {
+                                                               HapticFeedback.mediumImpact();
+                                                               final isMutual = await matchService.sendRadarRequest(u);
+                                                               if (isMutual && context.mounted) {
+                                                                 final chat = msgService.createOrGetChatForUser(u);
+                                                                 await msgService.reloadChats();
+                                                                 Navigator.pop(context);
+                                                                 MatchDialog.show(
+                                                                   context,
+                                                                   matchedUser: u,
+                                                                   onSendMessage: () {
+                                                                     Navigator.push(
+                                                                       context,
+                                                                       MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+                                                                     );
+                                                                   },
+                                                                 );
+                                                               } else if (context.mounted) {
+                                                                 final myName = context.read<MockEventService>().currentUser.name;
+                                                                 NotificationService().sendMatchRequestPushNotification(
+                                                                   receiverId: u.id,
+                                                                   senderName: myName.isNotEmpty ? myName : 'Biri',
+                                                                   source: 'radar',
+                                                                 );
+                                                                 ScaffoldMessenger.of(context).showSnackBar(
+                                                                   SnackBar(
+                                                                     content: Text('⚡ ${u.name} kişisine eşleşme isteği gönderildi! Kabul ettiğinde sohbetiniz başlayacak.'),
+                                                                     backgroundColor: AppColors.primary,
+                                                                     behavior: SnackBarBehavior.floating,
+                                                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                                   ),
+                                                                 );
+                                                               }
+                                                             },
+                                                       style: ElevatedButton.styleFrom(
+                                                         backgroundColor: Colors.transparent,
+                                                         shadowColor: Colors.transparent,
+                                                         elevation: 0,
+                                                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                                       ),
+                                                       icon: Icon(
+                                                         hasSent ? Icons.check_circle_outline_rounded : Icons.person_add_rounded,
+                                                         color: hasSent ? Colors.white54 : Colors.white,
+                                                         size: 14,
+                                                       ),
+                                                       label: Text(
+                                                         hasSent ? 'İstek Gönderildi' : 'İstek Gönder',
+                                                         style: TextStyle(
+                                                           color: hasSent ? Colors.white54 : Colors.white,
+                                                           fontSize: 12,
+                                                           fontWeight: FontWeight.bold,
+                                                         ),
+                                                       ),
+                                                     ),
+                                                   );
+                                                 },
+                                               ),
                                             ],
                                           ),
                                           if (u.tags.isNotEmpty) ...[

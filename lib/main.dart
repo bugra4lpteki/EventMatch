@@ -22,8 +22,20 @@ import 'core/constants/supabase_config.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Yüksek Öncelikli WhatsApp Tarzı Bildirim Servisini Başlat
+  // 1. Supabase Başlat (Tüm servislerden önce hazır olmalı)
+  await Supabase.initialize(
+    url: SupabaseConfig.url,
+    anonKey: SupabaseConfig.anonKey,
+  );
+
+  // 2. Yüksek Öncelikli WhatsApp Tarzı Bildirim & OneSignal Servisini Başlat
   await NotificationService().initialize();
+
+  // Halihazırda oturum açmış kullanıcı varsa OneSignal ile anında eşle
+  final existingUser = Supabase.instance.client.auth.currentUser;
+  if (existingUser != null) {
+    NotificationService().syncUserWithOneSignal(existingUser.id);
+  }
 
   // Sanatçı görsel cache'ini sıfırla: eski albüm kapağı URL'leri kalmasın,
   // Wikipedia / Deezer'dan gerçek sanatçı fotoğrafı çekilsin.
@@ -73,11 +85,6 @@ void main() async {
       ),
     );
   };
-
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
 
   runApp(
     MultiProvider(
@@ -132,12 +139,13 @@ class _EventMatchAppState extends State<EventMatchApp> {
       final ctx = navigatorKey.currentContext;
       if (ctx == null || !ctx.mounted) return;
 
+      final userId = data.session?.user.id;
+      if (userId != null) {
+        NotificationService().syncUserWithOneSignal(userId);
+      }
+
       if (event == AuthChangeEvent.signedIn) {
         ctx.read<MockEventService>().loadUserProfile();
-        final userId = data.session?.user.id;
-        if (userId != null) {
-          NotificationService().syncUserWithOneSignal(userId);
-        }
       } else if (event == AuthChangeEvent.passwordRecovery) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),

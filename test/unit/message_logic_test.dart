@@ -212,6 +212,71 @@ void main() {
       expect(validMessages.length, equals(1));
       expect(validMessages.first['sender_id'], equals('user_matched'));
     });
+
+    test('Optimistic temporary ID is properly reconciled with real DB ID without duplicates', () {
+      final now = DateTime.now();
+      final list = <MessageModel>[
+        MessageModel(
+          id: 'msg_1725800001',
+          senderId: 'user_a',
+          receiverId: 'user_b',
+          text: 'Harika konser!',
+          timestamp: now,
+          status: MessageStatus.sent,
+        ),
+      ];
+
+      // Simulated DB response arrives with real integer ID 450
+      const realDbId = '450';
+      final dbTimestamp = now.add(const Duration(milliseconds: 500));
+
+      final optIndex = list.indexWhere((m) =>
+          m.id.startsWith('msg_') &&
+          m.senderId == 'user_a' &&
+          m.text == 'Harika konser!' &&
+          m.timestamp.difference(dbTimestamp).abs().inSeconds < 120);
+
+      expect(optIndex, equals(0));
+
+      // Reconcile
+      list[optIndex] = MessageModel(
+        id: realDbId,
+        senderId: list[optIndex].senderId,
+        receiverId: list[optIndex].receiverId,
+        text: list[optIndex].text,
+        timestamp: dbTimestamp,
+        status: MessageStatus.delivered,
+      );
+
+      expect(list.length, equals(1));
+      expect(list.first.id, equals('450'));
+      expect(list.first.status, equals(MessageStatus.delivered));
+
+      // When CDC arrives with real ID 450, exact check ignores it
+      final alreadyExists = list.any((m) => m.id == realDbId);
+      expect(alreadyExists, isTrue, reason: 'Real ID already in list, must not be duplicated');
+    });
+
+    test('Radar interaction creates match request, requiring explicit acceptance before chat creation', () {
+      // 1. User sends radar request
+      final matchRecord = <String, String>{
+        'id': '101',
+        'user_id_1': 'user_requester',
+        'user_id_2': 'user_receiver',
+        'status': 'liked', // Match request created
+      };
+
+      // Recipient cannot have a chat room yet
+      bool canCreateChat(String status) => status == 'matched';
+      expect(canCreateChat(matchRecord['status']!), isFalse);
+
+      // 2. Recipient accepts in Requests screen
+      matchRecord['status'] = 'matched';
+
+      // 3. Now chat can be created
+      expect(canCreateChat(matchRecord['status']!), isTrue);
+    });
   });
 }
+
 

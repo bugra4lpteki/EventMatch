@@ -7,6 +7,8 @@ import '../services/mock_match_service.dart';
 import '../widgets/match_dialog.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../messages/screens/chat_detail_screen.dart';
+import '../../../services/notification_service.dart';
+import '../services/mock_event_service.dart';
 
 class RequestsScreen extends StatelessWidget {
   const RequestsScreen({super.key});
@@ -149,6 +151,13 @@ class RequestsScreen extends StatelessWidget {
                           onPressed: () async {
                             final success = await matchService.acceptRequest(req);
                             if (success && context.mounted) {
+                              final myName = context.read<MockEventService>().currentUser.name;
+                              NotificationService().sendRemotePushNotification(
+                                receiverId: req.fromUser.id,
+                                senderName: myName.isNotEmpty ? myName : 'Biri',
+                                content: 'Eşleşme isteğini kabul etti! 🎉 Hemen sohbete başlayabilirsin.',
+                              );
+
                               final msgService = context.read<MockMessageService>();
                               final chat = msgService.createOrGetChatForUser(req.fromUser);
                               await msgService.reloadChats();

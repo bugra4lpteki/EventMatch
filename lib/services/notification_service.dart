@@ -164,14 +164,21 @@ class NotificationService with WidgetsBindingObserver {
       await OneSignal.login(userId);
       debugPrint('[OneSignal] 👤 OneSignal login yapıldı: $userId');
 
-      // 2. Cihaz Player/Subscription ID'sini al ve Supabase'e kaydet
-      final pushSubscriptionId = OneSignal.User.pushSubscription.id;
-      final pushToken = OneSignal.User.pushSubscription.token;
-
-      final tokenToSave = pushSubscriptionId ?? pushToken;
-      if (tokenToSave != null && tokenToSave.isNotEmpty) {
-        await registerDeviceToken(userId, tokenToSave);
+      // 2. Cihaz Player/Subscription ID'sini anında al ve Supabase'e kaydet
+      void checkAndSaveToken() {
+        final pushSubId = OneSignal.User.pushSubscription.id;
+        final pushTok = OneSignal.User.pushSubscription.token;
+        final token = pushSubId ?? pushTok;
+        if (token != null && token.isNotEmpty) {
+          registerDeviceToken(userId, token);
+        }
       }
+
+      checkAndSaveToken();
+
+      // Kısa bir gecikmeyle tekrar dene (APNs token gecikmeli atanabilir)
+      Future.delayed(const Duration(milliseconds: 1500), checkAndSaveToken);
+      Future.delayed(const Duration(seconds: 4), checkAndSaveToken);
 
       // Subscription değişikliklerini dinle
       OneSignal.User.pushSubscription.addObserver((state) {
@@ -216,8 +223,19 @@ class NotificationService with WidgetsBindingObserver {
     try {
       if (receiverId.isEmpty) return;
 
+      // Alıcının kayıtlı Player/Subscription ID'sini veritabanından çek (Çift Garanti)
+      String? receiverPushToken;
+      try {
+        final uRes = await Supabase.instance.client
+            .from('users')
+            .select('push_token')
+            .eq('id', receiverId)
+            .maybeSingle();
+        receiverPushToken = uRes?['push_token']?.toString();
+      } catch (_) {}
+
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
-      final body = jsonEncode({
+      final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
         'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
         'channel_for_external_user_ids': 'push',
@@ -245,7 +263,11 @@ class NotificationService with WidgetsBindingObserver {
         'android_channel_id': 'high_importance_channel',
         'apns_priority': 10,
         'content_available': true,
-      });
+      };
+
+      if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        payload['include_player_ids'] = [receiverPushToken];
+      }
 
       final response = await http.post(
         url,
@@ -253,12 +275,77 @@ class NotificationService with WidgetsBindingObserver {
           'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Key ${OneSignalConfig.restApiKey}',
         },
-        body: body,
+        body: jsonEncode(payload),
       );
 
       debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode}');
     } catch (e) {
       debugPrint('[NotificationService] ❌ OneSignal Push gönderme hatası: $e');
+    }
+  }
+
+  /// Yeni Eşleşme İsteği için anında Push Bildirimi Gönderir
+  Future<void> sendMatchRequestPushNotification({
+    required String receiverId,
+    required String senderName,
+    String? source,
+  }) async {
+    try {
+      if (receiverId.isEmpty) return;
+
+      String? receiverPushToken;
+      try {
+        final uRes = await Supabase.instance.client
+            .from('users')
+            .select('push_token')
+            .eq('id', receiverId)
+            .maybeSingle();
+        receiverPushToken = uRes?['push_token']?.toString();
+      } catch (_) {}
+
+      final url = Uri.parse('https://onesignal.com/api/v1/notifications');
+      final Map<String, dynamic> payload = {
+        'app_id': OneSignalConfig.appId,
+        'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
+        'channel_for_external_user_ids': 'push',
+        'priority': 10,
+        'android_priority': 5,
+        'headings': {
+          'tr': '⚡ Yeni Eşleşme İsteği!',
+          'en': '⚡ New Match Request!',
+        },
+        'contents': {
+          'tr': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
+          'en': '$senderName sent you a match request!',
+        },
+        'data': {
+          'type': 'match_request',
+          'source': source ?? 'radar',
+        },
+        'ios_badgeType': 'Increase',
+        'ios_badgeCount': 1,
+        'ios_sound': 'default',
+        'android_sound': 'default',
+        'android_channel_id': 'high_importance_channel',
+        'apns_priority': 10,
+        'content_available': true,
+      };
+
+      if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        payload['include_player_ids'] = [receiverPushToken];
+      }
+
+      await http.post(
+        url,
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': 'Key ${OneSignalConfig.restApiKey}',
+        },
+        body: jsonEncode(payload),
+      );
+      debugPrint('[NotificationService] ⚡ Eşleşme isteği bildirimi gönderildi -> $receiverId');
+    } catch (e) {
+      debugPrint('[NotificationService] ⚠️ Eşleşme isteği bildirim hatası: $e');
     }
   }
 

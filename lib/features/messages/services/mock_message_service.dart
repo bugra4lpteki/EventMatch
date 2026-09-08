@@ -549,39 +549,123 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
-      final exists = chat.messages.any((m) =>
-          m.id == msgId ||
-          (m.text == content && m.senderId.toLowerCase() == lowerSender && m.timestamp.difference(timestamp).abs().inSeconds < 3));
 
-      if (!exists) {
-        final newMsg = MessageModel(
+      // 1. KESİN ID KONTROLÜ: Aynı mesaj ID'si varsa kesinlikle mükerrerdir, yok say
+      if (chat.messages.any((m) => m.id == msgId)) {
+        return;
+      }
+
+      // 2. OPTIMISTIC MESAJ UZLAŞTIRMASI:
+      // Gönderici istemci tarafında geçici 'msg_' ID'siyle eklemişse,
+      // bu mesajı tekrar eklemek YERİNE var olan geçici mesajın ID'sini ve durumunu güncelle!
+      final optIndex = chat.messages.indexWhere((m) =>
+          m.id.startsWith('msg_') &&
+          m.senderId.toLowerCase().trim() == lowerSender &&
+          m.text.trim() == content.trim() &&
+          m.timestamp.difference(timestamp).abs().inSeconds < 120);
+
+      if (optIndex >= 0) {
+        final old = chat.messages[optIndex];
+        chat.messages[optIndex] = MessageModel(
           id: msgId,
-          senderId: senderId,
-          receiverId: receiverId,
-          text: content,
+          senderId: old.senderId,
+          receiverId: old.receiverId,
+          text: old.text,
           timestamp: timestamp,
           status: MessageStatus.delivered,
         );
-        chat.messages.add(newMsg);
-        chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        if (lowerSender != lowerCurrent) {
-          chat.unreadCount += 1;
-          if (!chat.isMuted) {
-            NotificationService().showMessageNotification(
-              chatId: partnerId,
-              senderName: chat.participant.name,
-              message: content,
-              unreadCount: chat.unreadCount,
-              messageId: msgId,
-            );
-          }
-        }
-        _sortChats();
+        _deduplicateMessagesList(chat.messages);
         _saveChatsToLocalStorage();
         _emitRoomUpdate(partnerId);
         notifyListeners();
+        return;
+      }
+
+      // 3. YAKIN ZAMANLI MÜKERRER KONTROLÜ:
+      // Realtime CDC ile WebSocket yayını peş peşe geldiğinde aynı mesajın iki kez eklenmesini önle
+      final duplicateIndex = chat.messages.indexWhere((m) =>
+          m.senderId.toLowerCase().trim() == lowerSender &&
+          m.text.trim() == content.trim() &&
+          m.timestamp.difference(timestamp).abs().inSeconds < 15);
+
+      if (duplicateIndex >= 0) {
+        debugPrint('[MessageService] ⏭️ Yakın zamanlı mükerrer mesaj filtrelendi: $content');
+        return;
+      }
+
+      final newMsg = MessageModel(
+        id: msgId,
+        senderId: senderId,
+        receiverId: receiverId,
+        text: content,
+        timestamp: timestamp,
+        status: MessageStatus.delivered,
+      );
+      chat.messages.add(newMsg);
+      _deduplicateMessagesList(chat.messages);
+
+      if (lowerSender != lowerCurrent) {
+        chat.unreadCount += 1;
+        if (!chat.isMuted) {
+          NotificationService().showMessageNotification(
+            chatId: partnerId,
+            senderName: chat.participant.name,
+            message: content,
+            unreadCount: chat.unreadCount,
+            messageId: msgId,
+          );
+        }
+      }
+      _sortChats();
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(partnerId);
+      notifyListeners();
+    }
+  }
+
+  /// Tüm sohbet mesajları listesini mükerrer kayıtlardan temizleyen kesin filtreleme motoru
+  static void _deduplicateMessagesList(List<MessageModel> list) {
+    if (list.length <= 1) return;
+
+    final seenIds = <String>{};
+    final toRemove = <MessageModel>[];
+
+    // 1. Aynı ID'ye sahip mükerrer kayıtları temizle
+    for (int i = 0; i < list.length; i++) {
+      final m = list[i];
+      if (seenIds.contains(m.id)) {
+        toRemove.add(m);
+      } else {
+        seenIds.add(m.id);
       }
     }
+    for (var m in toRemove) {
+      list.remove(m);
+    }
+    toRemove.clear();
+
+    // 2. Aynı gönderici, aynı metin ve 15 saniye içinde gönderilmiş geçici (optimistic) ile gerçek DB kayıtlarını uzlaştır
+    for (int i = 0; i < list.length; i++) {
+      for (int j = i + 1; j < list.length; j++) {
+        final m1 = list[i];
+        final m2 = list[j];
+        if (m1.senderId.toLowerCase().trim() == m2.senderId.toLowerCase().trim() &&
+            m1.text.trim() == m2.text.trim() &&
+            m1.timestamp.difference(m2.timestamp).abs().inSeconds < 15) {
+          // Biri geçici 'msg_' ile başlıyorsa, diğeri kalıcı DB ID'li ise geçiciyi kaldır
+          if (m1.id.startsWith('msg_') && !m2.id.startsWith('msg_')) {
+            toRemove.add(m1);
+          } else {
+            toRemove.add(m2);
+          }
+        }
+      }
+    }
+    for (var m in toRemove) {
+      list.remove(m);
+    }
+
+    list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
   }
 
   bool isBlocked(String userId) => _blockedUserIds.contains(userId);
@@ -697,9 +781,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       isOnline: isUserOnline(user.id),
     );
 
+    final initialClientMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
     if (initialMessage != null && initialMessage.trim().isNotEmpty) {
       final firstMsg = MessageModel(
-        id: 'msg_${DateTime.now().millisecondsSinceEpoch}',
+        id: initialClientMsgId,
         senderId: currentUserId.isNotEmpty ? currentUserId : 'user_mobile',
         receiverId: user.id,
         text: initialMessage.trim(),
@@ -715,7 +800,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     if (initialMessage != null && initialMessage.trim().isNotEmpty) {
-      _persistMessage(newChat.id, user.id, initialMessage.trim(), 'msg_${DateTime.now().millisecondsSinceEpoch}');
+      _persistMessage(newChat.id, user.id, initialMessage.trim(), initialClientMsgId);
     }
 
     return newChat;
@@ -768,27 +853,58 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
             if (text.trim().isEmpty) continue;
 
-            final existingMsgIndex = chat.messages.indexWhere((m) =>
-                m.id == mId ||
-                (m.text == text && m.senderId.toLowerCase() == sender.toLowerCase().trim() && m.timestamp.difference(ts).abs().inSeconds < 3));
+            // 1. Zaten aynı kesin veritabanı ID'si varsa yok say
+            final exactIdIndex = chat.messages.indexWhere((m) => m.id == mId);
+            if (exactIdIndex >= 0) {
+              continue;
+            }
 
-            if (existingMsgIndex < 0) {
-              chat.messages.add(MessageModel(
+            // 2. Geçici optimistic ID'li ('msg_...') bir mesaj varsa onu bu gerçek ID'ye güncelle (YENİDEN EKLEME!)
+            final optIndex = chat.messages.indexWhere((m) =>
+                m.id.startsWith('msg_') &&
+                m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
+                m.text.trim() == text.trim() &&
+                m.timestamp.difference(ts).abs().inSeconds < 120);
+
+            if (optIndex >= 0) {
+              chat.messages[optIndex] = MessageModel(
                 id: mId,
                 senderId: sender,
                 receiverId: receiver,
                 text: text,
                 timestamp: ts,
                 status: MessageStatus.delivered,
-              ));
+              );
               hasNew = true;
+              continue;
             }
+
+            // 3. 15 saniye içinde aynı kullanıcıdan aynı metin varsa mükerrerdir, yok say
+            final recentDupIndex = chat.messages.indexWhere((m) =>
+                m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
+                m.text.trim() == text.trim() &&
+                m.timestamp.difference(ts).abs().inSeconds < 15);
+
+            if (recentDupIndex >= 0) {
+              continue;
+            }
+
+            // 4. Yeni bir mesaj, listeye ekle
+            chat.messages.add(MessageModel(
+              id: mId,
+              senderId: sender,
+              receiverId: receiver,
+              text: text,
+              timestamp: ts,
+              status: MessageStatus.delivered,
+            ));
+            hasNew = true;
           } catch (e) {
             debugPrint('MODEL PARSE HATASI: $e');
           }
         }
 
-        chat.messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        _deduplicateMessagesList(chat.messages);
         if (hasNew) {
           _sortChats();
           _saveChatsToLocalStorage();
@@ -1051,7 +1167,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final event = eventId != null ? _eventService.getEventById(eventId) : existingChat?.relatedEvent;
         final matchId = matchIdByPartner[partnerId] ?? existingChat?.id ?? 'chat_$partnerId';
 
-        final rawMessages = messagesByPartner[lowerPartnerId] ?? [];
+        final List<MessageModel> rawMessages = List<MessageModel>.from(messagesByPartner[lowerPartnerId] ?? []);
         if (existingChat != null) {
           final lowerCurrent = currentId.toLowerCase();
           for (var localMsg in existingChat.messages) {
@@ -1059,25 +1175,23 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             final r = (localMsg.receiverId ?? '').toLowerCase().trim();
             final isLocalValid = (s == lowerCurrent && (r == lowerPartnerId || r.isEmpty)) ||
                                  (s == lowerPartnerId && (r == lowerCurrent || r.isEmpty));
-            if (isLocalValid) {
+            if (!isLocalValid) continue;
+
+            // Eğer bu yerel mesaj sunucudan gelen mesajlar arasında zaten varsa kesinlikle tekrar ekleme
+            final alreadyInServer = rawMessages.any((m) =>
+                m.id == localMsg.id ||
+                (m.senderId.toLowerCase().trim() == s &&
+                 m.text.trim() == localMsg.text.trim() &&
+                 m.timestamp.difference(localMsg.timestamp).abs().inSeconds < 120));
+
+            if (!alreadyInServer) {
               rawMessages.add(localMsg);
             }
           }
         }
 
-        final dedupedMessages = <MessageModel>[];
-        final seenMsgKeys = <String>{};
-
-        for (var msg in rawMessages) {
-          if (msg.text.trim().isEmpty) continue;
-          final key = '${msg.id}_${msg.text}_${msg.senderId}';
-          if (!seenMsgKeys.contains(key)) {
-            seenMsgKeys.add(key);
-            dedupedMessages.add(msg);
-          }
-        }
-
-        dedupedMessages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        final dedupedMessages = List<MessageModel>.from(rawMessages);
+        _deduplicateMessagesList(dedupedMessages);
 
         consolidatedChats[lowerPartnerId] = ChatModel(
           id: matchId,
@@ -1233,8 +1347,36 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         messagePayload['match_id'] = numericMatchId;
       }
 
-      await _supabase.from('messages').insert(messagePayload);
+      final insertedRow = await _supabase.from('messages').insert(messagePayload).select('id, created_at').maybeSingle();
       debugPrint('--> [TELEFON BAŞARILI] Supabase messages tablosuna yazıldı: $messagePayload');
+
+      if (insertedRow != null) {
+        final realId = insertedRow['id']?.toString();
+        final createdAtStr = insertedRow['created_at']?.toString();
+        final realTs = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+
+        if (realId != null && realId.isNotEmpty) {
+          final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase());
+          if (chatIndex >= 0) {
+            final chat = _chats[chatIndex];
+            final optIdx = chat.messages.indexWhere((m) => m.id == clientMsgId);
+            if (optIdx >= 0) {
+              final old = chat.messages[optIdx];
+              chat.messages[optIdx] = MessageModel(
+                id: realId,
+                senderId: old.senderId,
+                receiverId: old.receiverId,
+                text: old.text,
+                timestamp: realTs,
+                status: MessageStatus.delivered,
+              );
+              _deduplicateMessagesList(chat.messages);
+              _saveChatsToLocalStorage();
+              _emitRoomUpdate(partnerId);
+            }
+          }
+        }
+      }
 
       // Alıcıya anında Apple APNs & OneSignal kapalı durum/arka plan push bildirimi gönder
       final senderName = _eventService.currentUser.name.isNotEmpty

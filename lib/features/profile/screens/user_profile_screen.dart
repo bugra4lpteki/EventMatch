@@ -11,6 +11,10 @@ import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/widgets/vibe_check_widget.dart';
 import '../../../core/widgets/report_block_sheet.dart';
+import '../../messages/services/mock_message_service.dart';
+import '../../messages/screens/chat_detail_screen.dart';
+import '../../events/widgets/match_dialog.dart';
+import '../../../services/notification_service.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final UserModel user;
@@ -207,7 +211,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final hideEvents = isCurrentUser ? false : (_targetUserHideEvents || user.hideEvents);
     final isPrivateProfile = isCurrentUser ? false : (_targetUserPrivateProfile || user.isPrivateProfile);
 
-    final hasSentReq = widget.eventId != null ? matchService.hasSentRequest(widget.eventId!, user.id) : false;
+    final msgService = context.watch<MockMessageService>();
+    final effectiveEventId = widget.eventId ?? 'radar';
+    final hasSentReq = matchService.hasSentRequest(effectiveEventId, user.id);
+    final isAlreadyMatched = msgService.individualChats.any((c) =>
+        c.participant.id.toLowerCase() == user.id.toLowerCase());
 
     final displayPhotos = user.avatarUrls.isNotEmpty
         ? user.avatarUrls
@@ -554,38 +562,91 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   const SizedBox(height: 24),
                   _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService, isHidden: hideEvents || isPrivateProfile),
 
-                  if (widget.eventId != null) ...[
+                  if (!isCurrentUser) ...[
                     const SizedBox(height: 32),
                     SizedBox(
                       width: double.infinity,
                       height: 54,
-                      child: ElevatedButton(
-                        onPressed: hasSentReq
-                            ? null
-                            : () {
-                                matchService.sendRequest(widget.eventId!, user);
-                                Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text("Eşleşme isteği gönderildi!"),
-                                    backgroundColor: AppColors.secondary,
-                                  ),
+                      child: isAlreadyMatched
+                          ? ElevatedButton.icon(
+                              onPressed: () {
+                                final chat = msgService.individualChats.firstWhere(
+                                  (c) => c.participant.id.toLowerCase() == user.id.toLowerCase(),
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
                                 );
                               },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: hasSentReq ? AppColors.surface : AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
-                        ),
-                        child: Text(
-                          hasSentReq ? 'İSTEK GÖNDERİLDİ' : 'TANIŞMAK İSTER MİSİN? (İSTEK GÖNDER)',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.2,
-                            color: hasSentReq ? AppColors.textSecondary : Colors.white,
-                          ),
-                        ),
-                      ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+                              ),
+                              icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 20),
+                              label: const Text(
+                                'SOHBETE GİT',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            )
+                          : ElevatedButton(
+                              onPressed: hasSentReq
+                                  ? null
+                                  : () async {
+                                      final isMutual = await matchService.sendRequest(effectiveEventId, user);
+                                      if (!context.mounted) return;
+
+                                      if (isMutual) {
+                                        final chat = msgService.createOrGetChatForUser(user);
+                                        await msgService.reloadChats();
+                                        if (!context.mounted) return;
+                                        MatchDialog.show(
+                                          context,
+                                          matchedUser: user,
+                                          onSendMessage: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => ChatDetailScreen(chat: chat),
+                                              ),
+                                            );
+                                          },
+                                        );
+                                      } else {
+                                        NotificationService().sendMatchRequestPushNotification(
+                                          receiverId: user.id,
+                                          senderName: eventService.currentUser.name.isNotEmpty
+                                              ? eventService.currentUser.name
+                                              : 'Biri',
+                                          source: widget.eventId != null ? 'event' : 'radar',
+                                        );
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: const Text("⚡ Eşleşme isteği gönderildi! Karşı taraf kabul ettiğinde sohbetiniz başlayacak."),
+                                            backgroundColor: AppColors.primary,
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                          ),
+                                        );
+                                      }
+                                    },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: hasSentReq ? AppColors.surface : AppColors.primary,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+                              ),
+                              child: Text(
+                                hasSentReq ? 'İSTEK GÖNDERİLDİ' : 'TANIŞMAK İSTER MİSİN? (İSTEK GÖNDER)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  color: hasSentReq ? AppColors.textSecondary : Colors.white,
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                   const SizedBox(height: 32),
