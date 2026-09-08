@@ -69,13 +69,60 @@ class MockEventService extends ChangeNotifier {
     super.dispose();
   }
 
-  Future<void> fetchEvents() async {
-    try {
-      final preservedEvents = _events.where((e) => e.attendees.isNotEmpty || currentUser.plannedEvents.contains(e.id)).toList();
-      _events.clear();
-      _events.addAll(preservedEvents);
+  static const String _eventsCacheKey = 'eventmatch_cached_events_v1';
 
-      // 1. ÖNEMLİ: Biletix / Ticketmaster Canlı API'sinden tüm turne ve kategorileri eş zamanlı çek
+  Future<void> _saveEventsToCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = _events.map((e) => e.toMap()).toList();
+      await prefs.setString(_eventsCacheKey, jsonEncode(list));
+    } catch (_) {}
+  }
+
+  Future<bool> _loadEventsFromCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString(_eventsCacheKey);
+      if (cached != null && cached.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(cached);
+        if (decoded.isNotEmpty) {
+          for (var item in decoded) {
+            if (item is Map<String, dynamic>) {
+              final ev = EventModel.fromMap(item);
+              if (!_events.any((e) => e.id == ev.id)) {
+                _events.add(ev);
+              }
+            }
+          }
+          return _events.isNotEmpty;
+        }
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> fetchEvents() async {
+    // A. Anında render: Önbellekteki etkinlikleri veya popüler vitrin etkinliklerini anında yükle
+    await _loadEventsFromCache();
+    if (_events.isEmpty) {
+      _populateFallbackEvents();
+    }
+    await _loadLocalAttendeesCache();
+    _syncPlannedEventsWithAttendees();
+    notifyListeners(); // Kullanıcı anasayfayı 0.05 saniyede dolu olarak görür!
+
+    // B. Arka planda sessizce Supabase ve Canlı Biletix/Biletinial API'lerini güncelle
+    _fetchLiveEventsInBackground();
+  }
+
+  Future<void> _fetchLiveEventsInBackground() async {
+    try {
+      // 1. Supabase'den gerçek kayıtlı katılımcıları çek
+      await _loadSupabaseAttendees();
+      _syncPlannedEventsWithAttendees();
+      notifyListeners();
+
+      // 2. Canlı Biletix & Biletinial API'lerini arka planda çek
       try {
         final service = ExternalEventService();
         final results = await Future.wait([
@@ -92,42 +139,31 @@ class MockEventService extends ChangeNotifier {
           service.fetchLiveBiletinialEvents(city: 'Ankara'),
         ]);
 
+        bool addedAny = false;
         for (var list in results) {
           for (var live in list) {
-            if (!_events.any((e) => e.id == live.id)) {
+            final idx = _events.indexWhere((e) => e.id == live.id);
+            if (idx < 0) {
               _events.add(live);
+              addedAny = true;
             }
           }
         }
-        debugPrint('[EventService] 🎟️ Biletix & Biletinial canlı tüm turne ve tiyatro etkinlikleri eklendi: ${_events.length}');
+        if (addedAny) {
+          await _saveEventsToCache();
+          notifyListeners();
+        }
+        debugPrint('[EventService] 🎟️ Biletix & Biletinial canlı tüm turne ve tiyatro etkinlikleri senkronize edildi: ${_events.length}');
       } catch (e) {
         debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
 
-      // 3. Popüler garantili sanatçı etkinliklerini ekle (Sıla, Duman, Mabel Matiz vb.)
-      _populateFallbackEvents();
-
-      // 4. Yerel önbellekten katılımcıları yükle (offline ve yeniden başlatma desteği)
-      await _loadLocalAttendeesCache();
-
-      // 5. Supabase'den gerçek kayıtlı katılımcıları çek
-      await _loadSupabaseAttendees();
-
-      // 6. Kullanıcının planladığı etkinlikleri katılımcı listelerine bağla
-      _syncPlannedEventsWithAttendees();
-
-      // 7. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
+      // 3. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
       await _enrichEventsWithSpotifyArtistImages();
-
+      await _saveEventsToCache();
       notifyListeners();
     } catch (e) {
-      debugPrint('Events fetch error: $e');
-      if (_events.isEmpty) {
-        _populateFallbackEvents();
-      }
-      await _loadLocalAttendeesCache();
-      _syncPlannedEventsWithAttendees();
-      notifyListeners();
+      debugPrint('[EventService] Arka plan etkinlik yenileme hatası: $e');
     }
   }
 

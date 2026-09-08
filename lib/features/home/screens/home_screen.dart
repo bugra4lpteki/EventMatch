@@ -93,19 +93,29 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
           animation: _controller,
           builder: (context, child) {
             return GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                if (radarService.nearbyUsers.isEmpty) {
+              onLongPress: () async {
+                HapticFeedback.heavyImpact();
+                await radarService.toggleRadar(false);
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: const Text('Şu an çevrede kitle aktif görünmüyor.', style: TextStyle(color: Colors.white)),
-                      backgroundColor: AppColors.surface,
+                      content: const Row(
+                        children: [
+                          Icon(Icons.radar, color: Colors.white70, size: 20),
+                          SizedBox(width: 8),
+                          Text('Radar kapatıldı. 🛑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                      backgroundColor: Colors.grey.shade900,
                       behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      duration: const Duration(seconds: 2),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
                   );
-                  return;
                 }
+              },
+              onTap: () {
+                HapticFeedback.lightImpact();
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -127,22 +137,87 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
-                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const SizedBox(width: 40),
+                            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(2))),
+                            IconButton(
+                              icon: const Icon(Icons.close_rounded, color: Colors.white70, size: 24),
+                              onPressed: () => Navigator.pop(context),
+                              tooltip: 'Kapat',
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
                         ShaderMask(
                           shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
                           child: const Icon(Icons.radar, color: Colors.white, size: 52),
                         ),
-                            const SizedBox(height: 8),
-                            Text('Yakındaki ${radarService.nearbyUsersCount} Kişi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-                            const SizedBox(height: 4),
-                            Text('Etkinlik alanında seninle aynı vibedaki insanlar', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
-                            const SizedBox(height: 20),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
-                              child: ListView.builder(
-                                shrinkWrap: true,
-                                itemCount: radarService.nearbyUsers.length,
+                        const SizedBox(height: 8),
+                        Text('Yakındaki ${radarService.nearbyUsersCount} Kişi', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                        const SizedBox(height: 4),
+                        Text('Etkinlik alanında seninle aynı vibedaki insanlar', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                        const SizedBox(height: 14),
+                        // Radar Kapatma Butonu
+                        OutlinedButton.icon(
+                          onPressed: () async {
+                            Navigator.pop(context);
+                            HapticFeedback.heavyImpact();
+                            await radarService.toggleRadar(false);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Row(
+                                    children: [
+                                      Icon(Icons.radar, color: Colors.white70, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('Radar kapatıldı. 🛑', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                    ],
+                                  ),
+                                  backgroundColor: Colors.grey.shade900,
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 2),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                ),
+                              );
+                            }
+                          },
+                          icon: const Icon(Icons.power_settings_new_rounded, color: Colors.redAccent, size: 18),
+                          label: const Text('Radarı Kapat', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 13)),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(color: Colors.redAccent.withOpacity(0.4)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          ),
+                        ),
+                        if (radarService.nearbyUsers.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 24.0),
+                            child: Column(
+                              children: [
+                                Icon(Icons.wifi_tethering_rounded, color: AppColors.primary.withOpacity(0.6), size: 44),
+                                const SizedBox(height: 12),
+                                Text(
+                                  'Şu an yakında radar açmış kullanıcı bulunmuyor.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Radarınız arka planda taranmaya devam ediyor.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: AppColors.textSecondary.withOpacity(0.7), fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.5),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: radarService.nearbyUsers.length,
                                 itemBuilder: (context, index) {
                                   final u = radarService.nearbyUsers[index];
                                   return InkWell(

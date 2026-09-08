@@ -364,15 +364,18 @@ class EventModel {
         location: json['city'] != null && json['venue'] != null 
             ? '${json['venue']}, ${json['city']}' 
             : json['venue']?.toString() ?? json['city']?.toString() ?? json['location']?.toString() ?? 'Bilinmiyor',
-        dateTime: json['date'] != null ? DateTime.tryParse(json['date'].toString()) ?? DateTime.now() : DateTime.now(),
+        dateTime: json['dateTime'] != null
+            ? DateTime.tryParse(json['dateTime'].toString()) ?? DateTime.now()
+            : (json['date'] != null ? DateTime.tryParse(json['date'].toString()) ?? DateTime.now() : DateTime.now()),
         description: json['description']?.toString() ?? '',
-        imageUrl: json['image_url']?.toString() ?? json['imageUrl']?.toString() ?? '',
-        latitude: json['lat'] != null ? double.tryParse(json['lat'].toString()) : (json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null),
-        longitude: json['lng'] != null ? double.tryParse(json['lng'].toString()) : (json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null),
-        ticketUrl: json['ticket_url']?.toString() ?? json['ticketUrl']?.toString() ?? json['url']?.toString(),
-        ticketProvider: json['ticket_provider']?.toString() ?? json['ticketProvider']?.toString() ?? json['provider']?.toString(),
-        isPopular: json['tag']?.toString().toLowerCase().contains('popüler') ?? false,
-        atmosphere: json['tag']?.toString() ?? 'Canlı',
+        imageUrl: json['imageUrl']?.toString() ?? json['image_url']?.toString() ?? '',
+        latitude: json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null),
+        longitude: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null),
+        ticketUrl: json['ticketUrl']?.toString() ?? json['ticket_url']?.toString() ?? json['url']?.toString(),
+        ticketProvider: json['ticketProvider']?.toString() ?? json['ticket_provider']?.toString() ?? json['provider']?.toString(),
+        isActive: json['isActive'] as bool? ?? true,
+        isPopular: json['isPopular'] is bool ? json['isPopular'] as bool : (json['tag']?.toString().toLowerCase().contains('popüler') ?? false),
+        atmosphere: json['atmosphere']?.toString() ?? json['tag']?.toString() ?? 'Canlı',
       );
     } catch (e) {
       debugPrint('EventModel fromJson error: $e');
@@ -507,5 +510,24 @@ class EventModel {
       atmosphere: atmosphere ?? this.atmosphere,
       isPopular: isPopular ?? this.isPopular,
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'title': title,
+      'category': category,
+      'location': location,
+      'dateTime': dateTime.toIso8601String(),
+      'description': description,
+      'imageUrl': imageUrl,
+      'latitude': latitude,
+      'longitude': longitude,
+      'ticketUrl': ticketUrl,
+      'ticketProvider': ticketProvider,
+      'isActive': isActive,
+      'atmosphere': atmosphere,
+      'isPopular': isPopular,
+    };
   }
 }
