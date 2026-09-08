@@ -6,19 +6,13 @@ workflows:
     integrations:
       app_store_connect: Codemagic
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.eventmatch.social
       flutter: stable
       xcode: latest
       cocoapods: default
     scripts:
-      - name: Set up keychain
-        script: keychain initialize
-      - name: Fetch signing files from Apple Developer
-        script: |
-          app-store-connect fetch-signing-files "com.eventmatch.social" \
-            --type IOS_APP_STORE \
-            --create
-      - name: Add certificates to keychain
-        script: keychain add-certificates
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles --project ios/Runner.xcodeproj
       - name: Get Flutter dependencies
