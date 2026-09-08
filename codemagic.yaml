@@ -16,10 +16,13 @@ workflows:
       - name: Install Provisioning Profile
         script: |
           PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-          mkdir -p "$PROFILES_DIR"
+          PROFILES_DIR2="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR" "$PROFILES_DIR2"
           cp ios/EventMatch_AppStore.mobileprovision "$PROFILES_DIR/"
+          cp ios/EventMatch_AppStore.mobileprovision "$PROFILES_DIR2/"
+          ls -la "$PROFILES_DIR"
       - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles --project ios/Runner.xcodeproj
+        script: xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
       - name: Get Flutter dependencies
         script: flutter pub get
       - name: Install CocoaPods
