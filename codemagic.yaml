@@ -13,6 +13,11 @@ workflows:
       xcode: latest
       cocoapods: default
     scripts:
+      - name: Install Provisioning Profile
+        script: |
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR"
+          cp ios/EventMatch_AppStore.mobileprovision "$PROFILES_DIR/"
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles --project ios/Runner.xcodeproj
       - name: Get Flutter dependencies
