@@ -34,10 +34,8 @@ BEGIN
       ),
       body := jsonb_build_object(
         'app_id', v_onesignal_app_id,
-        'include_aliases', jsonb_build_object(
-          'external_id', jsonb_build_array(LOWER(NEW.receiver_id), NEW.receiver_id)
-        ),
-        'target_channel', 'push',
+        'include_external_user_ids', jsonb_build_array(LOWER(NEW.receiver_id), NEW.receiver_id),
+        'channel_for_external_user_ids', 'push',
         'priority', 10,
         'android_priority', 5,
         'headings', jsonb_build_object(
