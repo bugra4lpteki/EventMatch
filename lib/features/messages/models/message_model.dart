@@ -40,7 +40,8 @@ class MessageModel {
   }) : reactions = reactions ?? {};
 
   bool get isRead => status == MessageStatus.read;
-  bool get isAudio => messageType == 'audio' || (mediaUrl != null && mediaUrl!.isNotEmpty);
+  bool get isAudio => messageType == 'audio' || (mediaUrl != null && mediaUrl!.isNotEmpty && (mediaUrl!.contains('/chat_audio/') || mediaUrl!.endsWith('.m4a')));
+  bool get isImage => messageType == 'image' || (mediaUrl != null && mediaUrl!.isNotEmpty && (mediaUrl!.contains('/chat_images/') || mediaUrl!.endsWith('.jpg') || mediaUrl!.endsWith('.jpeg') || mediaUrl!.endsWith('.png') || mediaUrl!.endsWith('.webp')));
 
   Map<String, int> get reactionCounts {
     final counts = <String, int>{};
@@ -136,7 +137,15 @@ class MessageModel {
       }
     }
 
-    if (currentText.startsWith('[audio:')) {
+    if (currentText.startsWith('[image:')) {
+      final closeBracket = currentText.indexOf(']');
+      if (closeBracket > 7) {
+        mediaUrl = currentText.substring(7, closeBracket);
+        messageType = 'image';
+        final rest = currentText.substring(closeBracket + 1).trim();
+        currentText = rest.isNotEmpty ? rest : '📷 Fotoğraf';
+      }
+    } else if (currentText.startsWith('[audio:')) {
       final closeBracket = currentText.indexOf(']');
       if (closeBracket > 7) {
         final inner = currentText.substring(7, closeBracket);

@@ -1141,9 +1141,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      Map<String, Map<String, dynamic>> profilesMap = {};
-      Map<String, String> photosMap = {};
-      Map<String, List<String>> socialLinksMap = {};
+      final Map<String, Map<String, dynamic>> profilesMap = {};
+      final Map<String, String> photosMap = {};
+      final Map<String, List<String>> socialLinksMap = {};
 
       final validUuidList = partnerUserIds.where((id) => _isValidUuid(id)).toList();
 
@@ -1320,7 +1320,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             existingChat?.participant.avatarUrl ??
             'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
 
-        List<String> socialLinks = List<String>.from(socialLinksMap[lowerPartnerId] ?? existingChat?.participant.socialLinks ?? []);
+        final List<String> socialLinks = List<String>.from(socialLinksMap[lowerPartnerId] ?? existingChat?.participant.socialLinks ?? []);
         List<String> tags = [];
         if (profile?['interests'] != null && profile!['interests'] is List) {
           tags = List<String>.from(profile['interests'] as List);
@@ -1599,6 +1599,109 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  /// 3. Fotoğraf Gönderme (Photo / Image Message)
+  Future<void> sendImageMessage(
+    String chatId,
+    String partnerId,
+    String localImagePath, {
+    String? caption,
+    MessageModel? replyToMessage,
+  }) async {
+    try {
+      final currentId = currentUserId.isNotEmpty ? currentUserId : 'user_mobile';
+      if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) return;
+      if (isBlocked(partnerId)) return;
+
+      int chatIndex = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      if (chatIndex < 0) {
+        final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''));
+        chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      }
+      if (chatIndex < 0) return;
+
+      final chat = _chats[chatIndex];
+      final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now();
+
+      final file = File(localImagePath);
+      String imageUrl = localImagePath;
+
+      if (await file.exists()) {
+        try {
+          final bytes = await file.readAsBytes();
+          final isPng = localImagePath.toLowerCase().endsWith('.png');
+          final ext = isPng ? 'png' : 'jpg';
+          final storagePath = 'chat_images/${DateTime.now().millisecondsSinceEpoch}_${currentId.hashCode.abs()}.$ext';
+          await _supabase.storage.from('avatars').uploadBinary(
+            storagePath,
+            bytes,
+            fileOptions: FileOptions(contentType: isPng ? 'image/png' : 'image/jpeg', upsert: true),
+          );
+          imageUrl = _supabase.storage.from('avatars').getPublicUrl(storagePath);
+        } catch (e) {
+          debugPrint('[MessageService] ⚠️ Image upload fallback: $e');
+        }
+      }
+
+      final trimmedCaption = caption?.trim() ?? '';
+      String? replySender;
+      String? replyText;
+      String encodedContent = '[image:$imageUrl]${trimmedCaption.isNotEmpty ? '\n$trimmedCaption' : ''}';
+
+      if (replyToMessage != null) {
+        replySender = replyToMessage.senderId.toLowerCase().trim() == currentId.toLowerCase().trim()
+            ? 'Sen'
+            : chat.participant.name;
+        replyText = replyToMessage.isAudio
+            ? '🎤 Sesli Mesaj'
+            : (replyToMessage.isImage ? '📷 Fotoğraf' : replyToMessage.text);
+        encodedContent = '[reply:$replySender:$replyText]\n$encodedContent';
+      }
+
+      final newMsg = MessageModel(
+        id: newMsgId,
+        senderId: currentId,
+        receiverId: partnerId,
+        text: trimmedCaption.isNotEmpty ? trimmedCaption : '📷 Fotoğraf',
+        timestamp: now,
+        status: MessageStatus.sending,
+        mediaUrl: imageUrl,
+        messageType: 'image',
+        replyToMessageId: replyToMessage?.id,
+        replyToText: replyText,
+        replyToSenderName: replySender,
+      );
+
+      chat.messages.add(newMsg);
+      _sortChats();
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(partnerId);
+      notifyListeners();
+
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'new_message',
+        payload: {
+          'id': newMsgId,
+          'sender_id': currentId,
+          'receiver_id': partnerId,
+          'content': encodedContent,
+          'created_at': now.toUtc().toIso8601String(),
+          'media_url': imageUrl,
+          'message_type': 'image',
+          'reply_to_id': replyToMessage?.id,
+          'reply_to_text': replyText,
+          'reply_to_sender_name': replySender,
+        },
+      );
+
+      sendTypingStatus(partnerId, false);
+
+      await _persistMessage(chat.id, partnerId, encodedContent, newMsgId, senderUserId: currentId);
+    } catch (e) {
+      debugPrint('[MessageService] ❌ Send Image Error: $e');
+    }
+  }
+
   Future<void> _persistMessage(String chatId, String partnerId, String text, String clientMsgId, {String? senderUserId}) async {
     final effectiveSenderId = (senderUserId != null && senderUserId.isNotEmpty)
         ? senderUserId
@@ -1672,7 +1775,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           ? _eventService.currentUser.name
           : (_supabase.auth.currentUser?.userMetadata?['name'] as String? ?? 'Biri');
 
-      final pushContent = text.contains('[audio:') ? '🎤 Sesli Mesaj' : MessageModel.parseEncodedContent(text).cleanText;
+      final pushContent = text.contains('[audio:')
+          ? '🎤 Sesli Mesaj'
+          : (text.contains('[image:') ? '📷 Fotoğraf' : MessageModel.parseEncodedContent(text).cleanText);
 
       NotificationService().sendRemotePushNotification(
         receiverId: partnerId,
