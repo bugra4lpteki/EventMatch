@@ -150,7 +150,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json; charset=utf-8",
-            Authorization: `Basic ${ONESIGNAL_REST_API_KEY}`,
+            Authorization: `Key ${ONESIGNAL_REST_API_KEY}`,
           },
           body: JSON.stringify(oneSignalBody),
         });
