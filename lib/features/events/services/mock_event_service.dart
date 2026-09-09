@@ -559,6 +559,21 @@ class MockEventService extends ChangeNotifier {
     final now = DateTime.now();
     final mockList = [
       EventModel(
+        id: 'blok3_today_1',
+        title: 'Blok3 - Canlı Performans & Gece',
+        category: 'Konser',
+        location: 'Dorock XL Kadıköy, İstanbul',
+        dateTime: now.add(const Duration(hours: 4, minutes: 30)),
+        description: 'Blok3 en popüler hit şarkıları ve dinamik sahnesiyle Dorock XL sahnesinde bu akşam sahnede!',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/bcd7669bc107dd4b066deb45a31b1f9d/1000x1000-000000-80-0-0.jpg',
+        latitude: 40.9902,
+        longitude: 29.0289,
+        ticketUrl: 'https://www.biletix.com',
+        ticketProvider: 'Biletix',
+        atmosphere: '🔥 Canlı & Aktif',
+        isPopular: true,
+      ),
+      EventModel(
         id: 'sila_bursa_1',
         title: 'Sıla Konseri',
         category: 'Konser',
@@ -1693,6 +1708,8 @@ class MockEventService extends ChangeNotifier {
     _subscribeToVenueChat(eventId);
   }
 
+  void Function(String emoji)? onVenueReactionReceived;
+
   void _subscribeToVenueChat(String eventId) {
     try {
       _venueBroadcastChannel?.unsubscribe();
@@ -1719,10 +1736,30 @@ class MockEventService extends ChangeNotifier {
               }
             },
           )
+          .onBroadcast(
+            event: 'new_venue_reaction',
+            callback: (payload) {
+              final emoji = payload['emoji']?.toString() ?? '❤️';
+              onVenueReactionReceived?.call(emoji);
+            },
+          )
           .subscribe();
     } catch (e) {
       debugPrint('[EventService] subscribe venue chat error: $e');
     }
+  }
+
+  void sendVenueReaction(String eventId, String emoji) {
+    try {
+      _venueBroadcastChannel?.sendBroadcastMessage(
+        event: 'new_venue_reaction',
+        payload: {
+          'userId': currentUserId,
+          'emoji': emoji,
+          'time': DateTime.now().toIso8601String(),
+        },
+      );
+    } catch (_) {}
   }
 
   Future<void> sendVenueMessage(String eventId, String message) async {

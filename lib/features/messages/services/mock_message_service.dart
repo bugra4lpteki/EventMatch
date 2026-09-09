@@ -720,7 +720,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           m.senderId.toLowerCase().trim() == lowerSender &&
           (m.text.trim() == content.trim() ||
            content.contains(m.text.trim()) ||
-           (m.isAudio && content.startsWith('[audio:'))) &&
+           (m.isAudio && content.startsWith('[audio:')) ||
+           (m.isImage && content.startsWith('[image:'))) &&
           m.timestamp.difference(timestamp).abs().inSeconds < 120);
 
       if (optIndex >= 0) {
@@ -740,7 +741,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       // 3. YAKIN ZAMANLI MÜKERRER KONTROLÜ:
       final duplicateIndex = chat.messages.indexWhere((m) =>
           m.senderId.toLowerCase().trim() == lowerSender &&
-          (m.text.trim() == content.trim() || (m.isAudio && content.startsWith('[audio:'))) &&
+          (m.text.trim() == content.trim() ||
+           (m.isAudio && content.startsWith('[audio:')) ||
+           (m.isImage && content.startsWith('[image:'))) &&
           m.timestamp.difference(timestamp).abs().inSeconds < 15);
 
       if (duplicateIndex >= 0) {
@@ -1058,7 +1061,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             final optIndex = chat.messages.indexWhere((m) =>
                 m.id.startsWith('msg_') &&
                 m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
-                (m.text.trim() == cleanMsgText.trim() || text.contains(m.text.trim()) || (m.isAudio && text.startsWith('[audio:'))) &&
+                (m.text.trim() == cleanMsgText.trim() ||
+                 text.contains(m.text.trim()) ||
+                 (m.isAudio && text.startsWith('[audio:')) ||
+                 (m.isImage && text.startsWith('[image:'))) &&
                 m.timestamp.difference(ts).abs().inSeconds < 120);
 
             if (optIndex >= 0) {
@@ -1075,7 +1081,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             // 3. 15 saniye içinde aynı kullanıcıdan aynı metin varsa mükerrerdir, yok say
             final recentDupIndex = chat.messages.indexWhere((m) =>
                 m.senderId.toLowerCase().trim() == sender.toLowerCase().trim() &&
-                (m.text.trim() == cleanMsgText.trim() || (m.isAudio && text.startsWith('[audio:'))) &&
+                (m.text.trim() == cleanMsgText.trim() ||
+                 (m.isAudio && text.startsWith('[audio:')) ||
+                 (m.isImage && text.startsWith('[image:'))) &&
                 m.timestamp.difference(ts).abs().inSeconds < 15);
 
             if (recentDupIndex >= 0) {
@@ -1578,18 +1586,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       String audioUrl = localAudioPath;
 
       if (await file.exists()) {
-        try {
-          final bytes = await file.readAsBytes();
-          final storagePath = 'chat_audio/${DateTime.now().millisecondsSinceEpoch}_${currentId.hashCode.abs()}.m4a';
-          await _supabase.storage.from('avatars').uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: const FileOptions(contentType: 'audio/m4a', upsert: true),
-          );
-          audioUrl = _supabase.storage.from('avatars').getPublicUrl(storagePath);
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ Audio upload fallback: $e');
-        }
+        final bytes = await file.readAsBytes();
+        // Reliable self-contained Base64 data URI (speech audio is compact)
+        audioUrl = 'data:audio/m4a;base64,${base64Encode(bytes)}';
       }
 
       String? replySender;
@@ -1678,20 +1677,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       String imageUrl = localImagePath;
 
       if (await file.exists()) {
-        try {
-          final bytes = await file.readAsBytes();
-          final isPng = localImagePath.toLowerCase().endsWith('.png');
-          final ext = isPng ? 'png' : 'jpg';
-          final storagePath = 'chat_images/${DateTime.now().millisecondsSinceEpoch}_${currentId.hashCode.abs()}.$ext';
-          await _supabase.storage.from('avatars').uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: isPng ? 'image/png' : 'image/jpeg', upsert: true),
-          );
-          imageUrl = _supabase.storage.from('avatars').getPublicUrl(storagePath);
-        } catch (e) {
-          debugPrint('[MessageService] ⚠️ Image upload fallback: $e');
-        }
+        final bytes = await file.readAsBytes();
+        final isPng = localImagePath.toLowerCase().endsWith('.png');
+        final ext = isPng ? 'png' : 'jpg';
+        // Reliable self-contained Base64 data URI (optimized resolution)
+        imageUrl = 'data:image/$ext;base64,${base64Encode(bytes)}';
       }
 
       final trimmedCaption = caption?.trim() ?? '';

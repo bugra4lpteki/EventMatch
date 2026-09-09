@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -178,7 +179,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               onTap: () async {
                 Navigator.pop(ctx);
                 final picker = ImagePicker();
-                final xFile = await picker.pickImage(source: ImageSource.camera, imageQuality: 75);
+                final xFile = await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                  imageQuality: 50,
+                );
                 if (xFile != null) {
                   final replyCopy = _replyingToMessage;
                   setState(() => _replyingToMessage = null);
@@ -207,7 +213,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
               onTap: () async {
                 Navigator.pop(ctx);
                 final picker = ImagePicker();
-                final xFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+                final xFile = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 800,
+                  maxHeight: 800,
+                  imageQuality: 50,
+                );
                 if (xFile != null) {
                   final replyCopy = _replyingToMessage;
                   setState(() => _replyingToMessage = null);
@@ -228,6 +239,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   void _openFullScreenImage(BuildContext context, String imageUrl) {
+    final trimmed = imageUrl.trim();
+    Widget imageWidget;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      imageWidget = CachedNetworkImage(
+        imageUrl: trimmed,
+        fit: BoxFit.contain,
+        placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+        errorWidget: (context, url, error) => const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48),
+      );
+    } else if (trimmed.startsWith('data:image') || trimmed.startsWith('data:') || trimmed.length > 100) {
+      try {
+        final b64 = trimmed.contains(',') ? trimmed.split(',').last.trim() : trimmed;
+        imageWidget = Image.memory(base64Decode(b64), fit: BoxFit.contain);
+      } catch (_) {
+        imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
+      }
+    } else {
+      final f = File(trimmed);
+      if (f.existsSync()) {
+        imageWidget = Image.file(f, fit: BoxFit.contain);
+      } else {
+        imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
+      }
+    }
+
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -242,19 +278,96 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
             child: InteractiveViewer(
               minScale: 0.5,
               maxScale: 4.0,
-              child: imageUrl.startsWith('http')
-                  ? CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.contain,
-                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                      errorWidget: (context, url, error) => const Icon(Icons.broken_image, color: Colors.white, size: 48),
-                    )
-                  : Image.file(File(imageUrl), fit: BoxFit.contain),
+              child: imageWidget,
             ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildMessageImage(String mediaUrl) {
+    final trimmed = mediaUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return CachedNetworkImage(
+        imageUrl: trimmed,
+        width: 240,
+        height: 240,
+        fit: BoxFit.cover,
+        placeholder: (context, url) => Container(
+          width: 240,
+          height: 240,
+          color: const Color(0xFF1E2235),
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+            ),
+          ),
+        ),
+        errorWidget: (context, url, error) => Container(
+          width: 240,
+          height: 240,
+          color: const Color(0xFF1E2235),
+          child: const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+              SizedBox(height: 4),
+              Text('Görsel yüklenemedi', style: TextStyle(color: Colors.white54, fontSize: 11)),
+            ],
+          ),
+        ),
+      );
+    } else if (trimmed.startsWith('data:image') || trimmed.startsWith('data:') || trimmed.length > 100) {
+      try {
+        final b64 = trimmed.contains(',') ? trimmed.split(',').last.trim() : trimmed;
+        final bytes = base64Decode(b64);
+        return Image.memory(
+          bytes,
+          width: 240,
+          height: 240,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 240,
+            height: 240,
+            color: const Color(0xFF1E2235),
+            child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+          ),
+        );
+      } catch (e) {
+        return Container(
+          width: 240,
+          height: 240,
+          color: const Color(0xFF1E2235),
+          child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+        );
+      }
+    } else {
+      final f = File(trimmed);
+      if (f.existsSync()) {
+        return Image.file(
+          f,
+          width: 240,
+          height: 240,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => Container(
+            width: 240,
+            height: 240,
+            color: const Color(0xFF1E2235),
+            child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+          ),
+        );
+      }
+      return Container(
+        width: 240,
+        height: 240,
+        color: const Color(0xFF1E2235),
+        child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+      );
+    }
   }
 
   // --- SES KAYDI (VOICE NOTE) MOTORU ---
@@ -265,7 +378,15 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
         _currentRecordingPath = path;
 
-        await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 32000,
+            sampleRate: 22050,
+            numChannels: 1,
+          ),
+          path: path,
+        );
         HapticFeedback.mediumImpact();
 
         setState(() {
@@ -1075,32 +1196,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   borderRadius: BorderRadius.circular(14),
                   child: Stack(
                     children: [
-                      message.mediaUrl!.startsWith('http')
-                          ? CachedNetworkImage(
-                              imageUrl: message.mediaUrl!,
-                              width: 240,
-                              height: 240,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                width: 240,
-                                height: 240,
-                                color: const Color(0xFF1E2235),
-                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                              ),
-                              errorWidget: (context, url, error) {
-                                final f = File(message.mediaUrl!);
-                                if (f.existsSync()) {
-                                  return Image.file(f, width: 240, height: 240, fit: BoxFit.cover);
-                                }
-                                return Container(
-                                  width: 240,
-                                  height: 240,
-                                  color: const Color(0xFF1E2235),
-                                  child: const Icon(Icons.broken_image_rounded, color: Colors.white60),
-                                );
-                              },
-                            )
-                          : Image.file(File(message.mediaUrl!), width: 240, height: 240, fit: BoxFit.cover),
+                      _buildMessageImage(message.mediaUrl!),
                       Positioned(
                         bottom: 6,
                         right: 8,
@@ -1513,7 +1609,7 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
   }
 
   Future<void> _togglePlay() async {
-    final url = widget.message.mediaUrl;
+    final url = widget.message.mediaUrl?.trim();
     if (url == null || url.isEmpty) return;
 
     HapticFeedback.selectionClick();
@@ -1521,9 +1617,26 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
       await _player.pause();
     } else {
       if (url.startsWith('http://') || url.startsWith('https://')) {
+        await _player.stop();
         await _player.play(UrlSource(url));
+      } else if (url.startsWith('data:audio') || url.startsWith('data:') || (url.length > 50 && !url.startsWith('/'))) {
+        try {
+          final b64 = url.contains(',') ? url.split(',').last.trim() : url.trim();
+          final bytes = base64Decode(b64);
+          final tempDir = await getTemporaryDirectory();
+          final tempFile = File('${tempDir.path}/vn_${widget.message.id.hashCode.abs()}.m4a');
+          await tempFile.writeAsBytes(bytes, flush: true);
+          await _player.stop();
+          await _player.play(DeviceFileSource(tempFile.path));
+        } catch (e) {
+          debugPrint('Error playing base64 audio: $e');
+        }
       } else {
-        await _player.play(DeviceFileSource(url));
+        final f = File(url);
+        if (await f.exists()) {
+          await _player.stop();
+          await _player.play(DeviceFileSource(url));
+        }
       }
     }
   }

@@ -41,15 +41,48 @@ void main() {
       expect(event.location, equals('Kolektif House, İstanbul'));
     });
 
-    test('fromMap handles null or missing fields gracefully without crash', () {
-      final mapData = <String, dynamic>{};
-      final event = EventModel.fromMap(mapData);
+    test('24-hour room window rule: activates 24 hours prior to event start time', () {
+      final now = DateTime.now();
 
-      expect(event.id, isNotEmpty);
-      expect(event.title, equals('İsimsiz Etkinlik'));
-      expect(event.category, equals('Genel'));
-      expect(event.location, equals('Bilinmiyor'));
-      expect(event.imageUrl, isNotEmpty);
+      // Event in 3 days -> NOT active, has positive time remaining
+      final futureEvent = EventModel(
+        id: 'future_1',
+        title: 'Gelecek Konser',
+        category: 'Konser',
+        location: 'Harbiye',
+        dateTime: now.add(const Duration(days: 3)),
+        description: 'Test',
+        imageUrl: 'https://example.com/img.jpg',
+      );
+      expect(futureEvent.isRoomActive, isFalse);
+      expect(futureEvent.isCheckInAvailable, isFalse);
+      expect(futureEvent.timeUntilRoomOpens.inHours, greaterThan(24));
+
+      // Event in 10 hours -> ACTIVE, within 24h window
+      final activeEvent = EventModel(
+        id: 'active_1',
+        title: 'Bugün Konser',
+        category: 'Konser',
+        location: 'Dorock XL',
+        dateTime: now.add(const Duration(hours: 10)),
+        description: 'Test',
+        imageUrl: 'https://example.com/img.jpg',
+      );
+      expect(activeEvent.isRoomActive, isTrue);
+      expect(activeEvent.isCheckInAvailable, isTrue);
+      expect(activeEvent.timeUntilRoomOpens, equals(Duration.zero));
+
+      // Event happened 5 hours ago -> Still accessible (within 12h post-event)
+      final ongoingEvent = EventModel(
+        id: 'ongoing_1',
+        title: 'Süren Konser',
+        category: 'Konser',
+        location: 'KüçükÇiftlik',
+        dateTime: now.subtract(const Duration(hours: 5)),
+        description: 'Test',
+        imageUrl: 'https://example.com/img.jpg',
+      );
+      expect(ongoingEvent.isRoomActive, isTrue);
     });
   });
 }

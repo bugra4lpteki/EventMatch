@@ -40,8 +40,37 @@ class MessageModel {
   }) : reactions = reactions ?? {};
 
   bool get isRead => status == MessageStatus.read;
-  bool get isAudio => messageType == 'audio' || (mediaUrl != null && mediaUrl!.isNotEmpty && (mediaUrl!.contains('/chat_audio/') || mediaUrl!.endsWith('.m4a')));
-  bool get isImage => messageType == 'image' || (mediaUrl != null && mediaUrl!.isNotEmpty && (mediaUrl!.contains('/chat_images/') || mediaUrl!.endsWith('.jpg') || mediaUrl!.endsWith('.jpeg') || mediaUrl!.endsWith('.png') || mediaUrl!.endsWith('.webp')));
+  
+  bool get isAudio {
+    if (messageType == 'audio') return true;
+    if (mediaUrl != null && mediaUrl!.isNotEmpty) {
+      final m = mediaUrl!.toLowerCase();
+      return m.startsWith('data:audio') ||
+          m.contains('audio') ||
+          m.contains('.m4a') ||
+          m.contains('.aac') ||
+          m.contains('.mp3') ||
+          m.contains('.wav') ||
+          m.contains('.ogg');
+    }
+    return false;
+  }
+
+  bool get isImage {
+    if (messageType == 'image') return true;
+    if (mediaUrl != null && mediaUrl!.isNotEmpty) {
+      final m = mediaUrl!.toLowerCase();
+      return m.startsWith('data:image') ||
+          m.contains('image') ||
+          m.contains('foto_') ||
+          m.contains('.jpg') ||
+          m.contains('.jpeg') ||
+          m.contains('.png') ||
+          m.contains('.webp') ||
+          m.contains('.gif');
+    }
+    return false;
+  }
 
   Map<String, int> get reactionCounts {
     final counts = <String, int>{};
@@ -115,13 +144,14 @@ class MessageModel {
   }
 
   static ({String cleanText, String? replySender, String? replyText, String? mediaUrl, int? audioDuration, String messageType}) parseEncodedContent(String rawContent) {
-    String currentText = rawContent;
+    String currentText = rawContent.trim();
     String? replySender;
     String? replyText;
     String? mediaUrl;
     int? audioDuration;
     String messageType = 'text';
 
+    // 1. Parse [reply:Sender:Text]
     if (currentText.startsWith('[reply:')) {
       final closeBracket = currentText.indexOf(']');
       if (closeBracket > 7) {
@@ -137,22 +167,30 @@ class MessageModel {
       }
     }
 
+    // 2. Parse [image:URL] or [image:DATA_URI]
     if (currentText.startsWith('[image:')) {
-      final closeBracket = currentText.indexOf(']');
+      final closeBracket = currentText.lastIndexOf(']');
       if (closeBracket > 7) {
         mediaUrl = currentText.substring(7, closeBracket);
         messageType = 'image';
         final rest = currentText.substring(closeBracket + 1).trim();
         currentText = rest.isNotEmpty ? rest : '📷 Fotoğraf';
       }
-    } else if (currentText.startsWith('[audio:')) {
-      final closeBracket = currentText.indexOf(']');
+    } 
+    // 3. Parse [audio:URL:duration] or [audio:DATA_URI:duration]
+    else if (currentText.startsWith('[audio:')) {
+      final closeBracket = currentText.lastIndexOf(']');
       if (closeBracket > 7) {
         final inner = currentText.substring(7, closeBracket);
         final lastColon = inner.lastIndexOf(':');
-        if (lastColon >= 0) {
-          mediaUrl = inner.substring(0, lastColon);
-          audioDuration = int.tryParse(inner.substring(lastColon + 1));
+        if (lastColon >= 0 && lastColon < inner.length - 1) {
+          final possibleDuration = int.tryParse(inner.substring(lastColon + 1));
+          if (possibleDuration != null) {
+            mediaUrl = inner.substring(0, lastColon);
+            audioDuration = possibleDuration;
+          } else {
+            mediaUrl = inner;
+          }
         } else {
           mediaUrl = inner;
         }
@@ -198,11 +236,35 @@ class MessageModel {
     final replyId = map['reply_to_id']?.toString();
     final replyText = map['reply_to_text']?.toString() ?? parsed.replyText;
     final replySender = map['reply_to_sender_name']?.toString() ?? parsed.replySender;
-    final mediaUrl = map['media_url']?.toString() ?? parsed.mediaUrl;
+    final mediaUrl = (map['media_url']?.toString() ?? parsed.mediaUrl)?.trim();
     final audioDuration = map['audio_duration'] is int
         ? map['audio_duration'] as int
         : (int.tryParse(map['audio_duration']?.toString() ?? '') ?? parsed.audioDuration);
-    final messageType = map['message_type']?.toString() ?? (parsed.messageType != 'text' ? parsed.messageType : (mediaUrl != null && mediaUrl.isNotEmpty ? 'audio' : 'text'));
+
+    // Düzgün message_type tespiti (asla görsele yanlışlıkla audio atanmaz!)
+    String determinedType = 'text';
+    if (parsed.messageType != 'text') {
+      determinedType = parsed.messageType;
+    } else if (map['message_type'] != null && map['message_type'].toString().isNotEmpty) {
+      determinedType = map['message_type'].toString();
+    } else if (mediaUrl != null && mediaUrl.isNotEmpty) {
+      final lowerMedia = mediaUrl.toLowerCase();
+      if (lowerMedia.startsWith('data:image') ||
+          lowerMedia.contains('image') ||
+          lowerMedia.contains('foto_') ||
+          lowerMedia.contains('.jpg') ||
+          lowerMedia.contains('.jpeg') ||
+          lowerMedia.contains('.png') ||
+          lowerMedia.contains('.webp')) {
+        determinedType = 'image';
+      } else if (lowerMedia.startsWith('data:audio') ||
+          lowerMedia.contains('audio') ||
+          lowerMedia.contains('.m4a') ||
+          lowerMedia.contains('.mp3') ||
+          lowerMedia.contains('.aac')) {
+        determinedType = 'audio';
+      }
+    }
 
     return MessageModel(
       id: map['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
@@ -219,7 +281,7 @@ class MessageModel {
       replyToSenderName: replySender,
       mediaUrl: mediaUrl,
       audioDurationSeconds: audioDuration,
-      messageType: messageType,
+      messageType: determinedType,
     );
   }
 }

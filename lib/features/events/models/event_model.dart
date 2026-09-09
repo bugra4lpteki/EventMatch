@@ -490,6 +490,27 @@ class EventModel {
     }
   }
 
+  /// Etkinlik odası ve check-in 24 saat kuralı:
+  /// Etkinlik başlangıcından 24 saat önce açılır, etkinlik başlangıcından 12 saat sonrasına kadar aktif kalır.
+  bool get isRoomActive {
+    final now = DateTime.now();
+    final openTime = dateTime.subtract(const Duration(hours: 24));
+    final closeTime = dateTime.add(const Duration(hours: 12));
+    return now.isAfter(openTime) && now.isBefore(closeTime);
+  }
+
+  /// Odanın açılmasına kalan süre (24 saat öncesine kadar olan süre)
+  Duration get timeUntilRoomOpens {
+    final now = DateTime.now();
+    final openTime = dateTime.subtract(const Duration(hours: 24));
+    if (now.isAfter(openTime)) return Duration.zero;
+    return openTime.difference(now);
+  }
+
+  /// Check-in yapılabilir durumda mı (Etkinliğe 24 saat kala açılır)
+  bool get isCheckInAvailable => isRoomActive;
+
+
   EventModel copyWith({
     String? id,
     String? title,

@@ -918,11 +918,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                   const SizedBox(height: 32),
 
-                  // Check-in and Venue Chat Section
+                  // Check-in and Streamer Live Chat Section
                   Consumer<MockEventService>(
                     builder: (context, eventService, child) {
                       final isAttending = eventService.isUserAttending(event.id);
                       final isCheckedIn = eventService.isUserCheckedIn(event.id);
+                      final isRoomActive = event.isRoomActive;
+                      final timeUntil = event.timeUntilRoomOpens;
 
                       if (!isAttending) return const SizedBox.shrink();
 
@@ -937,12 +939,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
-                                        color: isCheckedIn ? Colors.green.withOpacity(0.2) : AppColors.primary.withOpacity(0.15),
+                                        color: !isRoomActive
+                                            ? Colors.amber.withOpacity(0.15)
+                                            : (isCheckedIn ? Colors.green.withOpacity(0.2) : AppColors.primary.withOpacity(0.15)),
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
-                                        isCheckedIn ? Icons.location_on_rounded : Icons.location_on_outlined,
-                                        color: isCheckedIn ? Colors.green : AppColors.primary,
+                                        !isRoomActive
+                                            ? Icons.lock_clock_rounded
+                                            : (isCheckedIn ? Icons.location_on_rounded : Icons.location_on_outlined),
+                                        color: !isRoomActive
+                                            ? Colors.amberAccent
+                                            : (isCheckedIn ? Colors.green : AppColors.primary),
                                       ),
                                     ),
                                     const SizedBox(width: 16),
@@ -951,63 +959,98 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            isCheckedIn ? 'Mekandasın!' : 'Mekanda mısın?',
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                                            !isRoomActive
+                                                ? 'Check-in & Canlı Sohbet 🔒'
+                                                : (isCheckedIn ? 'Mekandasın! 📍' : 'Mekanda mısın?'),
+                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15.5),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            isCheckedIn ? 'Diğerleriyle sohbete başla.' : 'Check-in yap, rozetini kap!',
-                                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                                            !isRoomActive
+                                                ? (timeUntil.inDays > 0
+                                                    ? 'Etkinliğe 24 saat kala açılır (${timeUntil.inDays} gün kaldı).'
+                                                    : 'Etkinliğe 24 saat kala açılır (${timeUntil.inHours} saat kaldı).')
+                                                : (isCheckedIn ? 'Canlı yayında diğerleriyle sohbettesin.' : 'Check-in yap, rozetini kap!'),
+                                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                           ),
                                         ],
                                       ),
                                     ),
-                                    if (!isCheckedIn)
-                                      ElevatedButton(
-                                        onPressed: () {
-                                          HapticFeedback.heavyImpact();
-                                          eventService.checkIn(event.id);
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: AppColors.primary,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    if (isRoomActive) ...[
+                                      if (!isCheckedIn)
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            HapticFeedback.heavyImpact();
+                                            eventService.checkIn(event.id);
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                          ),
+                                          child: const Text('CHECK-IN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11.5)),
+                                        )
+                                      else
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.green),
+                                          ),
+                                          child: const Text('MEKANDA', style: TextStyle(color: Colors.green, fontSize: 10.5, fontWeight: FontWeight.w900)),
                                         ),
-                                        child: const Text('CHECK-IN', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                                      )
-                                    else
+                                    ] else ...[
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
-                                          color: Colors.green.withOpacity(0.2),
+                                          color: Colors.amber.withOpacity(0.15),
                                           borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: Colors.green),
+                                          border: Border.all(color: Colors.amber.withOpacity(0.4)),
                                         ),
-                                        child: const Text('MEKANDA', style: TextStyle(color: Colors.green, fontSize: 11, fontWeight: FontWeight.w900)),
+                                        child: const Text('24S KALA', style: TextStyle(color: Colors.amberAccent, fontSize: 10.5, fontWeight: FontWeight.w900)),
                                       ),
+                                    ],
                                   ],
                                 ),
-                                if (isCheckedIn) ...[
-                                  const Divider(color: Colors.white10, height: 32),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: OutlinedButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (context) => VenueChatScreen(event: event)),
-                                        );
-                                      },
-                                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                                      label: const Text('MEKAN SOHBETİNE KATIL', style: TextStyle(fontWeight: FontWeight.bold)),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: AppColors.primaryVariant,
-                                        side: BorderSide(color: AppColors.primary),
-                                        padding: const EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                const Divider(color: Colors.white10, height: 28),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: isRoomActive
+                                      ? ElevatedButton.icon(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (context) => VenueChatScreen(event: event)),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.stream_rounded, color: Colors.white, size: 18),
+                                          label: const Text('CANLI YAYIN CHAT\'E KATIL 🔴', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: AppColors.primary,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                            elevation: 4,
+                                          ),
+                                        )
+                                      : OutlinedButton.icon(
+                                          onPressed: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (context) => VenueChatScreen(event: event)),
+                                            );
+                                          },
+                                          icon: const Icon(Icons.timer_outlined, size: 18),
+                                          label: const Text('GERİ SAYIM & ODA ÖNİZLEMESİ', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5)),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor: Colors.amberAccent,
+                                            side: BorderSide(color: Colors.amberAccent.withOpacity(0.5)),
+                                            padding: const EdgeInsets.symmetric(vertical: 14),
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                          ),
+                                        ),
+                                ),
                               ],
                             ),
                           ),
