@@ -63,9 +63,21 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       final authService = context.read<AuthService>();
       final userId = authService.currentUserId ?? 'user_1';
 
+      final newUsername = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+      if (newUsername.isNotEmpty && newUsername != (mockService.currentUser.username ?? '').toLowerCase().replaceAll('@', '')) {
+        final isTaken = await mockService.isUsernameTaken(newUsername, excludeUserId: userId);
+        if (isTaken) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+            _showSnackBar('Bu kullanıcı adı zaten alınmış. Lütfen başka bir kullanıcı adı seçin.', isError: true);
+          }
+          return;
+        }
+      }
+
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('${userId}_userName', _nameController.text.trim());
-      await prefs.setString('${userId}_userUsername', _usernameController.text.trim());
+      await prefs.setString('${userId}_userUsername', newUsername.isNotEmpty ? newUsername : _usernameController.text.trim());
       await prefs.setString('${userId}_userBio', _bioController.text.trim());
 
       if (_selectedAvatarPath != null) {
@@ -73,12 +85,21 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       }
 
       // Update in memory & persistent storage via service
+      final currentUrls = List<dynamic>.from(mockService.currentUser.avatarUrls);
+      if (_selectedAvatarPath != null) {
+        if (currentUrls.isNotEmpty) {
+          currentUrls[0] = _selectedAvatarPath!;
+        } else {
+          currentUrls.add(_selectedAvatarPath!);
+        }
+      }
+
       await mockService.updateCurrentUser(
         name: _nameController.text.trim(),
         username: _usernameController.text.trim(),
         aboutMe: _bioController.text.trim(),
         avatarUrl: _selectedAvatarPath ?? mockService.currentUser.avatarUrl,
-        avatarImages: _selectedAvatarPath != null ? [_selectedAvatarPath!] : mockService.currentUser.avatarUrls,
+        avatarImages: currentUrls,
       );
 
       if (mounted) {

@@ -300,19 +300,19 @@ class _EventCardState extends State<EventCard> {
                                 ),
                               ],
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Text(
-                                  'Biletler',
-                                  style: TextStyle(
+                                  widget.event.effectiveTicketProvider,
+                                  style: const TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
-                                SizedBox(width: 4),
-                                Icon(Icons.chevron_right_rounded,
+                                const SizedBox(width: 4),
+                                const Icon(Icons.chevron_right_rounded,
                                     size: 15, color: Colors.white),
                               ],
                             ),

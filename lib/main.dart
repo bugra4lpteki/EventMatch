@@ -193,7 +193,7 @@ class _EventMatchAppState extends State<EventMatchApp> {
         return MaterialApp(
           navigatorKey: navigatorKey,
           title: 'EventMatch',
-          theme: AppTheme.darkTheme,
+          theme: AppTheme.getTheme(isLight: themeService.isLightTheme),
           debugShowCheckedModeBanner: false,
           home: const SplashScreen(),
         );

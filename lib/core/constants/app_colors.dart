@@ -15,32 +15,37 @@ class AppColors {
   static Color error = const Color(0xFFEF4444); 
   static Color success = const Color(0xFF10B981); 
 
-  // Gradients for modern UI Depth
-  static const LinearGradient primaryGradient = LinearGradient(
-    colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)],
+  // Gradients for modern UI Depth (dynamic — tema renklerine göre güncellenir)
+  static LinearGradient get primaryGradient => LinearGradient(
+    colors: [primary, secondary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+  static LinearGradient get accentGradient => LinearGradient(
+    colors: [accent, primary],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient goldGradient = LinearGradient(
-    colors: [Color(0xFFF59E0B), Color(0xFFEF4444)],
+  static LinearGradient get goldGradient => LinearGradient(
+    colors: [const Color(0xFFF59E0B), error],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient glassGradient = LinearGradient(
+  static LinearGradient get glassGradient => LinearGradient(
     colors: [
-      Color(0x20FFFFFF),
-      Color(0x08FFFFFF),
+      // Light temada koyu glass, dark temada beyaz glass
+      _isLightBackground ? const Color(0x12000000) : const Color(0x20FFFFFF),
+      _isLightBackground ? const Color(0x06000000) : const Color(0x08FFFFFF),
     ],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Background'un light olup olmadığını kontrol eder
+  static bool get _isLightBackground =>
+      background.computeLuminance() > 0.5;
 }
 

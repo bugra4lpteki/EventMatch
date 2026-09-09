@@ -283,15 +283,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
               _buildStyleMenuItem('dark', '🌙 Gece Modu (Karanlık/Modern)', Icons.dark_mode_rounded),
             ],
           ),
-          IconButton(
-            tooltip: 'Tüm Etkinliklere Odaklan',
-            icon: Icon(Icons.fit_screen_rounded, color: AppColors.primary),
-            onPressed: () {
-              if (mapEvents.isNotEmpty) {
-                _fitBoundsToEvents(mapEvents);
-              }
-            },
-          ),
         ],
       ),
       body: Stack(
@@ -684,32 +675,69 @@ class _EventMapScreenState extends State<EventMapScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '${_selectedEvent!.dateTime.day}.${_selectedEvent!.dateTime.month}.${_selectedEvent!.dateTime.year}',
-                                  style: TextStyle(color: AppColors.primary, fontSize: 11.5, fontWeight: FontWeight.bold),
-                                ),
-                                if (_selectedEvent!.effectiveTicketUrl.isNotEmpty)
+                              Row(
+                                children: [
+                                  Text(
+                                    '${_selectedEvent!.dateTime.day.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.month.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.year}',
+                                    style: TextStyle(color: AppColors.primary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                  ),
+                                  const Spacer(),
                                   GestureDetector(
                                     onTap: () async {
-                                      await UrlLauncherHelper.launchURL(_selectedEvent!.effectiveTicketUrl);
+                                      final dest = (_selectedEvent!.latitude != null && _selectedEvent!.longitude != null)
+                                          ? '${_selectedEvent!.latitude},${_selectedEvent!.longitude}'
+                                          : Uri.encodeComponent(_selectedEvent!.location);
+                                      final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=$dest';
+                                      await UrlLauncherHelper.launchURL(mapsUrl);
                                     },
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF2563EB),
+                                        color: const Color(0xFF0284C7),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Text(
-                                        'BİLET AL',
-                                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.near_me_rounded, color: Colors.white, size: 12),
+                                          SizedBox(width: 3),
+                                          Text(
+                                            'Yol Tarifi Al',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 10.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),
-                              ],
-                            ),
+                                  if (_selectedEvent!.effectiveTicketUrl.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () async {
+                                        await UrlLauncherHelper.launchURL(_selectedEvent!.effectiveTicketUrl);
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF2563EB),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _selectedEvent!.effectiveTicketProvider.toUpperCase(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
                           ],
                         ),
                       ),

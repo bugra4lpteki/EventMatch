@@ -52,6 +52,20 @@ class _PopularEventsCarouselState extends State<PopularEventsCarousel> {
   }
 
   @override
+  void didUpdateWidget(covariant PopularEventsCarousel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.events.length != oldWidget.events.length) {
+      if (_currentPageNotifier.value >= widget.events.length) {
+        _currentPageNotifier.value = 0;
+        if (_pageController.hasClients) {
+          _pageController.jumpToPage(0);
+        }
+      }
+      _startAutoPlay();
+    }
+  }
+
+  @override
   void dispose() {
     _timer?.cancel();
     _pageController.dispose();

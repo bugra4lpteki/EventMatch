@@ -40,10 +40,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _tagsController = TextEditingController(text: user.tags.join(', '));
     _socialControllers = user.socialLinks.map((link) => TextEditingController(text: link)).toList();
     _selectedGender = ['Kadın', 'Erkek', 'Belirtmek İstemiyorum'].contains(user.gender) ? user.gender : null;
-    if (user.avatarUrls.isNotEmpty) {
-      _avatarImages = List.from(user.avatarUrls);
-    } else if (user.avatarUrl.isNotEmpty) {
+    final validUrls = user.avatarUrls
+        .where((u) => u.isNotEmpty && u != 'assets/images/user_avatar.jpg')
+        .toList();
+    if (validUrls.isNotEmpty) {
+      _avatarImages = List.from(validUrls);
+    } else if (user.avatarUrl.isNotEmpty && user.avatarUrl != 'assets/images/user_avatar.jpg') {
       _avatarImages = [user.avatarUrl];
+    } else {
+      _avatarImages = [];
     }
     _selectedPastEvents = List.from(user.pastEvents);
     _selectedPlannedEvents = List.from(user.plannedEvents);
@@ -67,12 +72,59 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null && mounted) {
       final croppedFile = await ImageScaleDialog.show(context, pickedFile);
-      if (croppedFile != null && _avatarImages.length < 3) {
+      if (croppedFile != null && mounted) {
         setState(() {
-          _avatarImages.add(croppedFile);
+          if (index < _avatarImages.length) {
+            _avatarImages[index] = croppedFile;
+          } else if (_avatarImages.length < 3) {
+            _avatarImages.add(croppedFile);
+          }
         });
       }
     }
+  }
+
+  void _showPhotoOptions(int index) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(Icons.photo_library, color: AppColors.primary),
+                title: Text('Galeriden Değiştir', style: TextStyle(color: AppColors.textPrimary)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _pickImage(index);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.crop_rotate, color: AppColors.primary),
+                title: Text('Kırp ve Ölçeklendir', style: TextStyle(color: AppColors.textPrimary)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _editImageScale(index);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Fotoğrafı Kaldır', style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _removeImage(index);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _editImageScale(int index) async {
@@ -121,11 +173,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       try {
+        final eventService = context.read<MockEventService>();
+        final currentUserId = eventService.currentUser.id;
+        final newUsername = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+        
+        if (newUsername.isNotEmpty && newUsername != (eventService.currentUser.username ?? '').toLowerCase().replaceAll('@', '')) {
+          final isTaken = await eventService.isUsernameTaken(newUsername, excludeUserId: currentUserId);
+          if (isTaken) {
+            if (mounted) {
+              setState(() => _isLoading = false);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Bu kullanıcı adı zaten alınmış. Lütfen başka bir kullanıcı adı seçin.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
+
         final tags = _tagsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
         
-        await context.read<MockEventService>().updateCurrentUser(
-          name: _nameController.text,
-          username: _usernameController.text,
+        await eventService.updateCurrentUser(
+          name: _nameController.text.trim(),
+          username: newUsername.isNotEmpty ? newUsername : _usernameController.text.trim(),
           city: _cityController.text,
           gender: _selectedGender,
           aboutMe: _aboutController.text,
@@ -155,173 +227,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  void _selectPlannedEvents() {
-    final allEvents = context.read<MockEventService>().getAdminEvents();
-    showDialog(
-      context: context,
-      builder: (context) {
-        String searchQuery = '';
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final filteredEvents = allEvents.where((e) {
-              return e.title.toLowerCase().contains(searchQuery) ||
-                     e.category.toLowerCase().contains(searchQuery);
-            }).toList();
 
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              title: Text('Gideceğim Etkinlikleri Seç 🎟️', style: TextStyle(color: AppColors.textPrimary)),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 400,
-                child: Column(
-                  children: [
-                    TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Etkinlik Ara...',
-                        hintStyle: TextStyle(color: AppColors.textSecondary),
-                        prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      ),
-                      style: TextStyle(color: AppColors.textPrimary),
-                      onChanged: (val) {
-                        setDialogState(() {
-                          searchQuery = val.toLowerCase();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filteredEvents.length,
-                        itemBuilder: (context, index) {
-                          final event = filteredEvents[index];
-                          final isSelected = _selectedPlannedEvents.contains(event.id);
-                          return CheckboxListTile(
-                            activeColor: AppColors.primary,
-                            checkColor: Colors.black,
-                            title: Text(event.title, style: TextStyle(color: AppColors.textPrimary)),
-                            subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary)),
-                            value: isSelected,
-                            onChanged: (val) {
-                              setDialogState(() {
-                                if (val == true) {
-                                  _selectedPlannedEvents.add(event.id);
-                                } else {
-                                  _selectedPlannedEvents.remove(event.id);
-                                }
-                              });
-                              setState(() {});
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('TAMAM', style: TextStyle(color: AppColors.textPrimary)),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    );
-  }
-
-  void _selectPastEvents() {
-    final allEvents = context.read<MockEventService>().getAdminEvents();
-    showDialog(
-      context: context,
-      builder: (context) {
-        String searchQuery = '';
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final filteredEvents = allEvents.where((e) {
-              return e.title.toLowerCase().contains(searchQuery) ||
-                     e.category.toLowerCase().contains(searchQuery);
-            }).toList();
-
-            return AlertDialog(
-              backgroundColor: AppColors.surface,
-              title: Text('Geçmiş Etkinlikleri Seç', style: TextStyle(color: AppColors.textPrimary)),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: 400,
-                child: Column(
-                  children: [
-                    TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Etkinlik Ara...',
-                        hintStyle: TextStyle(color: AppColors.textSecondary),
-                        prefixIcon: Icon(Icons.search, color: AppColors.textSecondary),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-                      ),
-                      style: TextStyle(color: AppColors.textPrimary),
-                      onChanged: (val) {
-                        setDialogState(() {
-                          searchQuery = val.toLowerCase();
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 10),
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: filteredEvents.length,
-                        itemBuilder: (context, index) {
-                          final event = filteredEvents[index];
-                          final isSelected = _selectedPastEvents.contains(event.id);
-                          return CheckboxListTile(
-                            activeColor: AppColors.primary,
-                            checkColor: Colors.black,
-                            title: Text(event.title, style: TextStyle(color: AppColors.textPrimary)),
-                            subtitle: Text(event.category, style: TextStyle(color: AppColors.textSecondary)),
-                            value: isSelected,
-                            onChanged: (val) {
-                              setDialogState(() {
-                                if (val == true) {
-                                  _selectedPastEvents.add(event.id);
-                                } else {
-                                  _selectedPastEvents.remove(event.id);
-                                }
-                              });
-                              setState(() {});
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text('TAMAM', style: TextStyle(color: AppColors.textPrimary)),
-                ),
-              ],
-            );
-          }
-        );
-      },
-    );
-  }
 
   static const List<String> _turkiyeSehirleri = [
     'Adana', 'Adıyaman', 'Afyonkarahisar', 'Ağrı', 'Aksaray', 'Amasya', 'Ankara', 'Antalya', 'Ardahan', 'Artvin',
@@ -490,7 +396,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           clipBehavior: Clip.none,
                           children: [
                             GestureDetector(
-                              onTap: () => _editImageScale(index),
+                              onTap: () => _showPhotoOptions(index),
                               child: Container(
                                 width: 80,
                                 height: 100,
@@ -501,11 +407,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(12),
-                                  child: _avatarImages[index] is String
-                                      ? Image.network(_avatarImages[index] as String, fit: BoxFit.cover)
-                                      : (kIsWeb
-                                          ? Image.network((_avatarImages[index] as XFile).path, fit: BoxFit.cover)
-                                          : Image.file(File((_avatarImages[index] as XFile).path), fit: BoxFit.cover)),
+                                  child: _buildAvatarPreview(_avatarImages[index]),
                                 ),
                               ),
                             ),
@@ -527,16 +429,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                               ),
                             ),
                             Positioned(
-                              top: -5,
-                              right: -5,
+                              top: -4,
+                              right: -4,
                               child: GestureDetector(
                                 onTap: () => _removeImage(index),
                                 child: Container(
-                                  decoration: const BoxDecoration(
-                                    color: Colors.red,
+                                  padding: const EdgeInsets.all(3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.85),
                                     shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white24, width: 1),
                                   ),
-                                  child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
                                 ),
                               ),
                             ),
@@ -676,53 +580,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               _buildLabel('Hobiler (Virgülle ayırın)'),
               _buildTextField(_tagsController, 'Örn: Müzik, Tiyatro, Doğa'),
               
-              // Gideceğim Etkinlikler
-              _buildLabel('Gideceğim Etkinlikler 🎟️'),
-              GestureDetector(
-                onTap: _selectPlannedEvents,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _selectedPlannedEvents.isEmpty ? 'Etkinlik Seç' : '${_selectedPlannedEvents.length} etkinlik seçildi',
-                        style: TextStyle(color: AppColors.textPrimary),
-                      ),
-                      Icon(Icons.arrow_forward_ios, color: AppColors.textPrimary, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Geçmiş Etkinlikler
-              _buildLabel('Geçmiş Etkinlikler 🏛️'),
-              GestureDetector(
-                onTap: _selectPastEvents,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        _selectedPastEvents.isEmpty ? 'Etkinlik Seç' : '${_selectedPastEvents.length} etkinlik seçildi',
-                        style: TextStyle(color: AppColors.textPrimary),
-                      ),
-                      Icon(Icons.arrow_forward_ios, color: AppColors.textPrimary, size: 16),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
             ],
           ),
         ),
@@ -764,5 +622,61 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildAvatarPreview(dynamic imageItem) {
+    Widget fallback = Container(
+      color: AppColors.surface,
+      child: Center(
+        child: Icon(Icons.person, color: AppColors.primary, size: 36),
+      ),
+    );
+
+    if (imageItem is String) {
+      final str = imageItem.trim();
+      if (str.isEmpty || str == 'assets/images/user_avatar.jpg') {
+        return fallback;
+      }
+      if (str.startsWith('http')) {
+        return Image.network(
+          str,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      } else if (str.startsWith('assets/')) {
+        return Image.asset(
+          str,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      } else {
+        try {
+          final file = File(str);
+          if (file.existsSync()) {
+            return Image.file(
+              file,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => fallback,
+            );
+          }
+        } catch (_) {}
+        return fallback;
+      }
+    } else if (imageItem is XFile) {
+      if (kIsWeb) {
+        return Image.network(
+          imageItem.path,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      } else {
+        return Image.file(
+          File(imageItem.path),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      }
+    }
+    return fallback;
   }
 }

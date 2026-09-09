@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:excel/excel.dart';
@@ -104,14 +105,27 @@ class MockEventService extends ChangeNotifier {
   Future<void> fetchEvents() async {
     // A. Anında render: Önbellekteki etkinlikleri veya popüler vitrin etkinliklerini anında yükle
     await _loadEventsFromCache();
+    // Biletinial API tamamen kaldırıldığı için kalan etkinlikleri önbellekten temizle
+    final hadBiletinial = _events.any((e) =>
+        e.id.toLowerCase().contains('biletinial') ||
+        (e.ticketProvider?.toLowerCase().contains('biletinial') ?? false) ||
+        (e.ticketUrl?.toLowerCase().contains('biletinial') ?? false));
+    if (hadBiletinial) {
+      _events.removeWhere((e) =>
+          e.id.toLowerCase().contains('biletinial') ||
+          (e.ticketProvider?.toLowerCase().contains('biletinial') ?? false) ||
+          (e.ticketUrl?.toLowerCase().contains('biletinial') ?? false));
+      await _saveEventsToCache();
+    }
     if (_events.isEmpty) {
       _populateFallbackEvents();
     }
+    _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     await _loadLocalAttendeesCache();
     _syncPlannedEventsWithAttendees();
     notifyListeners(); // Kullanıcı anasayfayı 0.05 saniyede dolu olarak görür!
 
-    // B. Arka planda sessizce Supabase ve Canlı Biletix/Biletinial API'lerini güncelle
+    // B. Arka planda sessizce Supabase ve Canlı Biletix API'lerini güncelle
     _fetchLiveEventsInBackground();
   }
 
@@ -122,7 +136,7 @@ class MockEventService extends ChangeNotifier {
       _syncPlannedEventsWithAttendees();
       notifyListeners();
 
-      // 2. Canlı Biletix & Biletinial API'lerini arka planda çek
+      // 2. Canlı Biletix (Ticketmaster) API'sini arka planda çek
       try {
         final service = ExternalEventService();
         final results = await Future.wait([
@@ -135,8 +149,7 @@ class MockEventService extends ChangeNotifier {
           service.fetchLiveTicketmasterEvents(keyword: 'tiyatro'),
           service.fetchLiveTicketmasterEvents(keyword: 'stand up'),
           service.fetchLiveTicketmasterEvents(keyword: 'konser'),
-          service.fetchLiveBiletinialEvents(city: 'İstanbul'),
-          service.fetchLiveBiletinialEvents(city: 'Ankara'),
+          service.fetchLiveSportsEvents(),
         ]);
 
         bool addedAny = false;
@@ -146,16 +159,21 @@ class MockEventService extends ChangeNotifier {
             if (idx < 0) {
               _events.add(live);
               addedAny = true;
+            } else {
+              // Biletix/Passo'dan gelen yeni tarih, saat ve bilet linkleri ile güncelle
+              _events[idx] = live;
+              addedAny = true;
             }
           }
         }
         if (addedAny) {
+          _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
           await _saveEventsToCache();
           notifyListeners();
         }
-        debugPrint('[EventService] 🎟️ Biletix & Biletinial canlı tüm turne ve tiyatro etkinlikleri senkronize edildi: ${_events.length}');
+        debugPrint('[EventService] 🎟️ Biletix & Canlı Spor (Passo) müsabakaları senkronize edildi: ${_events.length}');
       } catch (e) {
-        debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
+        debugPrint('[EventService] Canlı Biletix & Spor API çekme hatası: $e');
       }
 
       // 3. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
@@ -267,7 +285,7 @@ class MockEventService extends ChangeNotifier {
         try {
           final usersRes = await _supabase
               .from('users')
-              .select('id, name, username, city, avatar_url')
+              .select('id, name, username, city')
               .inFilter('id', userIds);
           for (var u in usersRes) {
             final id = u['id'].toString();
@@ -276,7 +294,7 @@ class MockEventService extends ChangeNotifier {
               name: u['name']?.toString() ?? 'Kullanıcı',
               username: u['username']?.toString(),
               city: u['city']?.toString(),
-              avatarUrl: u['avatar_url']?.toString() ?? '',
+              avatarUrl: '',
             );
           }
         } catch (_) {}
@@ -539,9 +557,16 @@ class MockEventService extends ChangeNotifier {
             }
           } else {
             try {
-              final uRes = await _supabase.from('users').select('name, avatar_url').eq('id', rawUserId).maybeSingle();
+              final uRes = await _supabase.from('users').select('name').eq('id', rawUserId).maybeSingle();
+              String attendeeAvatar = '';
+              try {
+                final pRes = await _supabase.from('user_photos').select('storage_url').eq('user_id', rawUserId).eq('is_active', true).order('sort_order', ascending: true).limit(1).maybeSingle();
+                if (pRes != null && pRes['storage_url'] != null) {
+                  attendeeAvatar = pRes['storage_url'].toString();
+                }
+              } catch (_) {}
               if (uRes != null) {
-                attendee = UserModel(id: rawUserId, name: uRes['name'] ?? 'Katılımcı', avatarUrl: uRes['avatar_url'] ?? '');
+                attendee = UserModel(id: rawUserId, name: uRes['name'] ?? 'Katılımcı', avatarUrl: attendeeAvatar);
               }
             } catch (_) {}
           }
@@ -568,7 +593,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/bcd7669bc107dd4b066deb45a31b1f9d/1000x1000-000000-80-0-0.jpg',
         latitude: 40.9902,
         longitude: 29.0289,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=blok3',
         ticketProvider: 'Biletix',
         atmosphere: '🔥 Canlı & Aktif',
         isPopular: true,
@@ -583,7 +608,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',
         latitude: 40.1932,
         longitude: 29.0492,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=s%C4%B1la',
         ticketProvider: 'Biletix',
         atmosphere: '✨ Unutulmaz',
         isPopular: true,
@@ -598,7 +623,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/420bd789cacec4d562f981f6eae6c76e/1000x1000-000000-80-0-0.jpg',
         latitude: 41.0422,
         longitude: 28.9897,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=duman',
         ticketProvider: 'Biletix',
         atmosphere: '🔥 Coşkulu',
         isPopular: true,
@@ -613,7 +638,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/200a518f2a5b6e5c3f215111275bac10/1000x1000-000000-80-0-0.jpg',
         latitude: 41.0468,
         longitude: 28.9882,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mabel+matiz',
         ticketProvider: 'Biletix',
         atmosphere: '💖 Duygusal',
         isPopular: true,
@@ -628,7 +653,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aee2502f3565318f12a5b90e9fb3d67c/1000x1000-000000-80-0-0.jpg',
         latitude: 41.0664,
         longitude: 29.0172,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mor+ve+%C3%B6tesi',
         ticketProvider: 'Biletix',
         atmosphere: '🎸 Efsane',
         isPopular: true,
@@ -643,7 +668,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg',
         latitude: 40.9634,
         longitude: 29.0945,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=teoman',
         ticketProvider: 'Biletix',
         atmosphere: '🍷 Büyüleyici',
         isPopular: true,
@@ -658,7 +683,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/641b9164594081e14059fdf87404eb8d/1000x1000-000000-80-0-0.jpg',
         latitude: 41.1114,
         longitude: 29.0233,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=zeynep+bast%C4%B1k',
         ticketProvider: 'Biletix',
         atmosphere: '🌟 Enerjik',
         isPopular: true,
@@ -673,9 +698,24 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg',
         latitude: 41.0082,
         longitude: 29.0494,
-        ticketUrl: 'https://www.biletix.com',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=baturay',
         ticketProvider: 'Biletix',
         atmosphere: '😂 Eğlenceli',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'spor_gs_bjk_derbi',
+        title: 'Galatasaray - Beşiktaş',
+        category: 'Spor',
+        location: 'RAMS Park Stadyumu, İstanbul',
+        dateTime: now.add(const Duration(days: 4, hours: 20)),
+        description: 'Trendyol Süper Lig Dev Derbi heyecanı! RAMS Park tribünlerinde dev derbide taraftarlar buluşuyor. Biletler Passo üzerinden satışta.',
+        imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop',
+        latitude: 41.1032,
+        longitude: 28.9912,
+        ticketUrl: 'https://www.passo.com.tr/tr/etkinlik-ara/spor?aranan=Galatasaray',
+        ticketProvider: 'Passo',
+        atmosphere: '🔥 Dev Derbi',
         isPopular: true,
       ),
       EventModel(
@@ -685,12 +725,27 @@ class MockEventService extends ChangeNotifier {
         location: 'Ülker Spor ve Etkinlik Salonu, İstanbul',
         dateTime: now.add(const Duration(days: 7, hours: 19)),
         description: 'EuroLeague ve Türkiye Sigorta Basketbol Süper Ligi dev derbisinde Ülker Arena sahnesinde kıyasıya mücadele.',
-        imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop',
+        imageUrl: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=1200&auto=format&fit=crop',
         latitude: 40.9934,
         longitude: 29.1093,
-        ticketUrl: 'https://www.biletix.com',
-        ticketProvider: 'Biletix',
+        ticketUrl: 'https://www.passo.com.tr/tr/arama?q=fenerbahce+beko',
+        ticketProvider: 'Passo',
         atmosphere: '⚡ Heyecanlı',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'spor_bjk_ts_derbi',
+        title: 'Beşiktaş - Trabzonspor',
+        category: 'Spor',
+        location: 'Tüpraş Stadyumu, İstanbul',
+        dateTime: now.add(const Duration(days: 6, hours: 19)),
+        description: 'Beşiktaş Tüpraş Stadyumu\'nda Trabzonspor\'u konuk ediyor. Muhteşem Boğaz manzaralı stadyumda maç coşkusuna katıl!',
+        imageUrl: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1200&auto=format&fit=crop',
+        latitude: 41.0392,
+        longitude: 28.9946,
+        ticketUrl: 'https://www.passo.com.tr/tr/etkinlik-ara/spor?aranan=Be%C5%9Fikta%C5%9F',
+        ticketProvider: 'Passo',
+        atmosphere: '🔥 Büyük Maç',
         isPopular: true,
       ),
     ];
@@ -767,8 +822,14 @@ class MockEventService extends ChangeNotifier {
         try {
           final photos = await _supabase.from('user_photos').select().eq('user_id', userId).eq('is_active', true).order('sort_order');
           if (photos.isNotEmpty) {
-            currentUser.avatarUrls = photos.map((p) => p['storage_url'].toString()).toList();
-            currentUser.avatarUrl = currentUser.avatarUrls.first;
+            final validUrls = photos
+                .map((p) => p['storage_url']?.toString() ?? '')
+                .where((u) => u.startsWith('http'))
+                .toList();
+            if (validUrls.isNotEmpty) {
+              currentUser.avatarUrls = validUrls;
+              currentUser.avatarUrl = validUrls.first;
+            }
           }
         } catch (_) {}
 
@@ -796,14 +857,38 @@ class MockEventService extends ChangeNotifier {
           }
         } catch (_) {}
 
-        if (currentUser.avatarUrl.isEmpty) {
-          currentUser.avatarUrl = prefs.getString('${userId}_userAvatarUrl') ?? 'assets/images/user_avatar.jpg';
-          if (currentUser.avatarUrls.isEmpty) {
+        if (currentUser.avatarUrls.isEmpty) {
+          final cachedUrls = prefs.getStringList('${userId}_userAvatarUrls');
+          if (cachedUrls != null && cachedUrls.isNotEmpty) {
+            currentUser.avatarUrls = cachedUrls.where((u) => u.startsWith('http') || u.startsWith('assets/')).toList();
+            if (currentUser.avatarUrls.isNotEmpty) {
+              currentUser.avatarUrl = currentUser.avatarUrls.first;
+            }
+          }
+        }
+        if (currentUser.avatarUrl.isEmpty || currentUser.avatarUrl == 'assets/images/user_avatar.jpg') {
+          final cachedSingle = prefs.getString('${userId}_userAvatarUrl');
+          currentUser.avatarUrl = (cachedSingle != null && cachedSingle.startsWith('http'))
+              ? cachedSingle
+              : '';
+          if (currentUser.avatarUrl.isNotEmpty && currentUser.avatarUrls.isEmpty) {
             currentUser.avatarUrls = [currentUser.avatarUrl];
           }
         }
+        currentUser.avatarUrls = currentUser.avatarUrls.where((u) => u != 'assets/images/user_avatar.jpg').toList();
+        if (currentUser.aboutMe == 'Konser ve festival sever 🎸' || currentUser.aboutMe == 'Festival ve konser tutkunu') {
+          currentUser.aboutMe = null;
+        }
         if (currentUser.aboutMe == null || currentUser.aboutMe!.isEmpty) {
-          currentUser.aboutMe = prefs.getString('${userId}_userAbout') ?? 'Konser ve festival sever 🎸';
+          final cachedAbout = prefs.getString('${userId}_userAbout');
+          if (cachedAbout != null &&
+              cachedAbout != 'Konser ve festival sever 🎸' &&
+              cachedAbout != 'Festival ve konser tutkunu' &&
+              cachedAbout.trim().isNotEmpty) {
+            currentUser.aboutMe = cachedAbout.trim();
+          } else {
+            currentUser.aboutMe = null;
+          }
         }
         if (currentUser.city == null || currentUser.city!.isEmpty) {
           currentUser.city = prefs.getString('${userId}_userCity') ?? 'İstanbul';
@@ -820,9 +905,21 @@ class MockEventService extends ChangeNotifier {
 
       currentUser.city = prefs.getString('${userId}_userCity') ?? 'İstanbul';
       currentUser.gender = prefs.getString('${userId}_userGender') ?? 'Erkek';
-      currentUser.aboutMe = prefs.getString('${userId}_userAbout') ?? 'Konser ve festival sever 🎸';
-      currentUser.avatarUrl = prefs.getString('${userId}_userAvatarUrl') ?? 'assets/images/user_avatar.jpg';
-      currentUser.avatarUrls = prefs.getStringList('${userId}_userAvatarUrls') ?? [currentUser.avatarUrl];
+      final cachedAbout = prefs.getString('${userId}_userAbout');
+      if (cachedAbout != null &&
+          cachedAbout != 'Konser ve festival sever 🎸' &&
+          cachedAbout != 'Festival ve konser tutkunu' &&
+          cachedAbout.trim().isNotEmpty) {
+        currentUser.aboutMe = cachedAbout.trim();
+      } else {
+        currentUser.aboutMe = null;
+      }
+      final cachedAvatar = prefs.getString('${userId}_userAvatarUrl');
+      currentUser.avatarUrl = (cachedAvatar != null && cachedAvatar.startsWith('http')) ? cachedAvatar : '';
+      final cachedAvatars = prefs.getStringList('${userId}_userAvatarUrls');
+      currentUser.avatarUrls = (cachedAvatars != null && cachedAvatars.isNotEmpty)
+          ? cachedAvatars.where((u) => u.startsWith('http')).toList()
+          : (currentUser.avatarUrl.isNotEmpty ? [currentUser.avatarUrl] : []);
       currentUser.tags = prefs.getStringList('${userId}_userTags') ?? ['Konser', 'Müzik', 'Tiyatro'];
       currentUser.socialLinks = prefs.getStringList('${userId}_userSocialLinks') ?? [];
       final localPlanned = prefs.getStringList('${userId}_userPlannedEvents');
@@ -836,9 +933,7 @@ class MockEventService extends ChangeNotifier {
       currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
     }
 
-    currentUser.isPrivateProfile = prefs.getBool('${userId}_privacy_private_profile') ??
-                                   prefs.getBool('${currentUser.name}_privacy_private_profile') ??
-                                   prefs.getBool('privacy_private_profile') ?? false;
+    currentUser.isPrivateProfile = false;
     currentUser.hideEvents = prefs.getBool('${userId}_privacy_hide_events') ??
                              prefs.getBool('${currentUser.name}_privacy_hide_events') ??
                              prefs.getBool('privacy_hide_events') ?? false;
@@ -850,16 +945,29 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> isUsernameTaken(String username, {String? excludeUserId}) async {
+    final clean = username.trim().toLowerCase().replaceAll('@', '');
+    if (clean.isEmpty) return false;
+    try {
+      var query = _supabase.from('users').select('id').ilike('username', clean);
+      if (excludeUserId != null && excludeUserId.isNotEmpty) {
+        query = query.neq('id', excludeUserId);
+      }
+      final res = await query.maybeSingle();
+      return res != null;
+    } catch (e) {
+      debugPrint('isUsernameTaken error: $e');
+      return false;
+    }
+  }
+
   Future<void> updatePrivacySettings({
     bool? privateProfile,
     bool? hideEvents,
     bool? locationSharing,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    if (privateProfile != null) {
-      currentUser.isPrivateProfile = privateProfile;
-      await prefs.setBool('privacy_private_profile', privateProfile);
-    }
+    currentUser.isPrivateProfile = false;
     if (hideEvents != null) {
       currentUser.hideEvents = hideEvents;
       await prefs.setBool('privacy_hide_events', hideEvents);
@@ -879,7 +987,11 @@ class MockEventService extends ChangeNotifier {
     if (currentUser.username != null) prefs.setString('${userId}_userUsername', currentUser.username!);
     if (currentUser.city != null) prefs.setString('${userId}_userCity', currentUser.city!);
     if (currentUser.gender != null) prefs.setString('${userId}_userGender', currentUser.gender!);
-    if (currentUser.aboutMe != null) prefs.setString('${userId}_userAbout', currentUser.aboutMe!);
+    if (currentUser.aboutMe != null && currentUser.aboutMe!.trim().isNotEmpty) {
+      prefs.setString('${userId}_userAbout', currentUser.aboutMe!.trim());
+    } else {
+      prefs.remove('${userId}_userAbout');
+    }
     if (currentUser.birthDate != null) prefs.setString('${userId}_userBirthDate', currentUser.birthDate!.toIso8601String());
     
     prefs.setString('${userId}_userAvatarUrl', currentUser.avatarUrl);
@@ -899,9 +1011,9 @@ class MockEventService extends ChangeNotifier {
   UserModel currentUser = UserModel(
     id: 'user_1',
     name: 'Ali Rıza',
-    avatarUrl: 'assets/images/user_avatar.jpg',
-    avatarUrls: ['assets/images/user_avatar.jpg'],
-    aboutMe: 'Konser ve festival sever 🎸',
+    avatarUrl: '',
+    avatarUrls: const [],
+    aboutMe: null,
     city: 'İstanbul',
     gender: 'Erkek',
     birthDate: DateTime(1998, 1, 1),
@@ -936,6 +1048,8 @@ class MockEventService extends ChangeNotifier {
       }
     }
 
+    final cleanBio = aboutMe.trim().isNotEmpty ? aboutMe.trim() : null;
+
     if (userId != 'user_1') {
       try {
         try {
@@ -944,7 +1058,7 @@ class MockEventService extends ChangeNotifier {
             'username': username,
             'city': city,
             'gender': gender,
-            'bio': aboutMe,
+            'bio': cleanBio,
             if (tags != null) 'interests': tags,
           }).eq('id', userId);
         } catch (e) {
@@ -952,7 +1066,7 @@ class MockEventService extends ChangeNotifier {
             'username': username,
             'city': city,
             'gender': gender,
-            'bio': aboutMe,
+            'bio': cleanBio,
             if (tags != null) 'interests': tags,
           }).eq('id', userId);
         }
@@ -977,34 +1091,60 @@ class MockEventService extends ChangeNotifier {
           int photoIndex = 0;
           for (var item in avatarImages) {
             if (item is String) {
-              finalAvatarUrls.add(item);
+              if (item.startsWith('http')) {
+                finalAvatarUrls.add(item);
+              } else if (item.isNotEmpty && !item.startsWith('assets/')) {
+                try {
+                  final file = File(item);
+                  if (await file.exists()) {
+                    final bytes = await file.readAsBytes();
+                    final ext = item.toLowerCase().endsWith('.png') ? 'png' : 'jpg';
+                    final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+                    final pathInBucket = '${userId}/foto_${DateTime.now().millisecondsSinceEpoch}_$photoIndex.$ext';
+                    await _supabase.storage.from('avatars').uploadBinary(
+                      pathInBucket,
+                      bytes,
+                      fileOptions: FileOptions(
+                        cacheControl: '3600',
+                        upsert: true,
+                        contentType: mime,
+                      ),
+                    );
+                    final publicUrl = _supabase.storage.from('avatars').getPublicUrl(pathInBucket);
+                    finalAvatarUrls.add(publicUrl);
+                  }
+                } catch (e) {
+                  debugPrint('[Storage] Local file upload to avatars failed: $e');
+                }
+              }
             } else if (item is XFile) {
               try {
-                final pathInBucket = '${userId}/foto_${DateTime.now().millisecondsSinceEpoch}_$photoIndex.jpg';
                 final bytes = await item.readAsBytes();
-                
+                final ext = item.name.toLowerCase().endsWith('.png') || item.mimeType == 'image/png' ? 'png' : 'jpg';
+                final mime = ext == 'png' ? 'image/png' : 'image/jpeg';
+                final pathInBucket = '${userId}/foto_${DateTime.now().millisecondsSinceEpoch}_$photoIndex.$ext';
                 await _supabase.storage.from('avatars').uploadBinary(
                   pathInBucket,
                   bytes,
-                  fileOptions: const FileOptions(
+                  fileOptions: FileOptions(
                     cacheControl: '3600',
-                    upsert: false,
-                    contentType: 'image/jpeg',
+                    upsert: true,
+                    contentType: mime,
                   ),
                 );
-                
                 final publicUrl = _supabase.storage.from('avatars').getPublicUrl(pathInBucket);
                 finalAvatarUrls.add(publicUrl);
               } catch (e) {
-                finalAvatarUrls.add(item.path);
+                debugPrint('[Storage] XFile upload to avatars failed: $e');
               }
             }
             photoIndex++;
           }
           
-          await _supabase.from('user_photos').delete().eq('user_id', userId);
-          if (finalAvatarUrls.isNotEmpty) {
-            final photosData = finalAvatarUrls.asMap().entries.map((entry) => {
+          final validHttpUrls = finalAvatarUrls.where((u) => u.startsWith('http')).toList();
+          if (validHttpUrls.isNotEmpty) {
+            await _supabase.from('user_photos').delete().eq('user_id', userId);
+            final photosData = validHttpUrls.asMap().entries.map((entry) => {
               'user_id': userId,
               'storage_url': entry.value,
               'sort_order': entry.key,
@@ -1022,13 +1162,14 @@ class MockEventService extends ChangeNotifier {
     if (username != null) currentUser.username = username;
     if (city != null) currentUser.city = city;
     if (gender != null) currentUser.gender = gender;
-    currentUser.aboutMe = aboutMe;
+    currentUser.aboutMe = cleanBio;
     if (socialLinks != null) currentUser.socialLinks = socialLinks;
     
     if (avatarImages != null) {
-      currentUser.avatarUrls = finalAvatarUrls;
-      if (finalAvatarUrls.isNotEmpty) {
-        currentUser.avatarUrl = finalAvatarUrls.first;
+      final validHttpUrls = finalAvatarUrls.where((u) => u.startsWith('http')).toList();
+      currentUser.avatarUrls = validHttpUrls.isNotEmpty ? validHttpUrls : finalAvatarUrls;
+      if (currentUser.avatarUrls.isNotEmpty) {
+        currentUser.avatarUrl = currentUser.avatarUrls.first;
       } else {
         currentUser.avatarUrl = '';
       }
@@ -1075,7 +1216,7 @@ class MockEventService extends ChangeNotifier {
 
   final List<String> activityFeed = [];
 
-  List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Festival'];
+  List<String> categories = ['Tümü', '🌟 Sana Özel', '🔥 Popüler', '💖 Eşleşme Oranı Yüksek', 'Konser', 'Tiyatro', 'Stand-up', 'Spor', 'Festival'];
   List<String> cities = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana', 'Gaziantep', 'Mersin'];
   
   static const List<String> allTurkishCities = [
@@ -1135,30 +1276,68 @@ class MockEventService extends ChangeNotifier {
   List<EventModel> getCarouselEvents() {
     final now = DateTime.now();
     final active = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
-    
-    if (_featuredCarouselEventIds.isNotEmpty) {
-      final List<EventModel> customList = [];
-      for (var id in _featuredCarouselEventIds) {
-        for (var ev in active) {
-          if (ev.id == id && !customList.any((c) => c.id == id)) {
-            customList.add(ev);
-            break;
-          }
+    if (active.isEmpty) return [];
+
+    // 1. Şehir ve Konum Önceliği Belirleme:
+    // Kullanıcı açıkça bir il seçtiyse (Örn: 'Ankara', 'İzmir', 'İstanbul') -> Öncelik kesinlikle seçtiği ildedir.
+    // Eğer il filtrelemesi kullanmazsa ('Tüm Şehirler') -> Kullanıcının konumundaki / kayıtlı olduğu ildeki (currentUser.city) etkinlikler öncelikli akar.
+    final bool hasExplicitCityFilter = _selectedCity.isNotEmpty && _selectedCity != 'Tüm Şehirler';
+    final String? priorityCity = hasExplicitCityFilter
+        ? _selectedCity
+        : (currentUser.city != null && currentUser.city!.trim().isNotEmpty ? currentUser.city : null);
+
+    List<EventModel> prioritizedEvents = [];
+    List<EventModel> otherEvents = [];
+
+    if (priorityCity != null && priorityCity.trim().isNotEmpty) {
+      final normPriority = _normalizeText(priorityCity);
+      for (var ev in active) {
+        final locNorm = _normalizeText(ev.location);
+        if (locNorm.contains(normPriority)) {
+          prioritizedEvents.add(ev);
+        } else {
+          otherEvents.add(ev);
         }
       }
-      if (customList.isNotEmpty) {
-        return customList;
+    } else {
+      prioritizedEvents = List.from(active);
+    }
+
+    // Etkinlikleri ilgi ve popülerlik puanına göre sırala
+    int scoreEvent(EventModel a) {
+      int score = (a.attendees.length * 6) + (a.isPopular ? 15 : 0);
+      final diffDays = a.dateTime.difference(now).inDays;
+      if (diffDays >= 0 && diffDays <= 7) score += 10;
+      if (a.ticketUrl != null && a.ticketUrl!.isNotEmpty) score += 5;
+      return score;
+    }
+
+    prioritizedEvents.sort((a, b) => scoreEvent(b).compareTo(scoreEvent(a)));
+    otherEvents.sort((a, b) => scoreEvent(b).compareTo(scoreEvent(a)));
+
+    // Eğer admin panelinden özel vitrin için sabitlenmiş etkinlikler varsa en başa al
+    if (_featuredCarouselEventIds.isNotEmpty) {
+      final pinnedInPriority = prioritizedEvents.where((e) => _featuredCarouselEventIds.contains(e.id)).toList();
+      prioritizedEvents.removeWhere((e) => _featuredCarouselEventIds.contains(e.id));
+      prioritizedEvents.insertAll(0, pinnedInPriority);
+    }
+
+    // Sonuç listesini oluştur:
+    // Kullanıcı il seçtiyse öncelikle o ildeki etkinlikler akar.
+    // Eğer il filtrelemesi seçilmemişse kullanıcının konumundaki etkinlikler öncelikli akar, ardından vitrin zenginliği için popüler etkinlikler akar.
+    final List<EventModel> result = [];
+    result.addAll(prioritizedEvents);
+
+    if (!hasExplicitCityFilter || result.length < 3) {
+      for (var ev in otherEvents) {
+        if (!result.any((e) => e.id == ev.id)) {
+          result.add(ev);
+          if (result.length >= 8) break;
+        }
       }
     }
 
-    // Default fallback: Top popular / highest attendance active events
-    final sorted = List<EventModel>.from(active)
-      ..sort((a, b) {
-        final scoreA = (a.attendees.length * 5) + (a.isPopular ? 10 : 0);
-        final scoreB = (b.attendees.length * 5) + (b.isPopular ? 10 : 0);
-        return scoreB.compareTo(scoreA);
-      });
-    return sorted.take(6).toList();
+    return result.take(8).toList();
   }
 
   String get selectedCategory => _selectedCategory;
@@ -1440,6 +1619,9 @@ class MockEventService extends ChangeNotifier {
       }
       if (selectedNorm == 'tiyatro') {
         return catNorm.contains('tiyatro') || catNorm.contains('theatre') || catNorm.contains('art');
+      }
+      if (selectedNorm == 'spor') {
+        return catNorm.contains('spor') || catNorm.contains('sport') || catNorm.contains('futbol') || catNorm.contains('basketbol') || catNorm.contains('voleybol') || catNorm.contains('derbi') || catNorm.contains('lig');
       }
       return catNorm.contains(selectedNorm);
     }).toList();

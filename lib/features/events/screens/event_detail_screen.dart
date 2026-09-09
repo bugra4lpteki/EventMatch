@@ -687,9 +687,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 await UrlLauncherHelper.launchURL(targetUrl);
                               },
                               icon: const Icon(Icons.confirmation_number_outlined, color: Colors.white, size: 20),
-                              label: const Text(
-                                'BİLETLER',
-                                style: TextStyle(
+                              label: Text(
+                                '${event.effectiveTicketProvider.toUpperCase()}\'DEN BİLET AL',
+                                style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,
                                   color: Colors.white,

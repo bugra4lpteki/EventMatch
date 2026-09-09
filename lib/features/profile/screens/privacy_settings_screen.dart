@@ -15,7 +15,6 @@ class PrivacySettingsScreen extends StatefulWidget {
 }
 
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
-  bool _isPrivateProfile = false;
   bool _hideEventActivity = false;
   bool _enableLocationSharing = true;
 
@@ -35,9 +34,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
     if (!mounted) return;
     setState(() {
-      _isPrivateProfile = prefs.getBool('${userId}_privacy_private_profile') ??
-                          prefs.getBool('${userName}_privacy_private_profile') ??
-                          prefs.getBool('privacy_private_profile') ?? false;
       _hideEventActivity = prefs.getBool('${userId}_privacy_hide_events') ??
                           prefs.getBool('${userName}_privacy_hide_events') ??
                           prefs.getBool('privacy_hide_events') ?? false;
@@ -64,7 +60,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     });
 
     eventService.updatePrivacySettings(
-      privateProfile: key == 'privacy_private_profile' ? value : null,
       hideEvents: key == 'privacy_hide_events' ? value : null,
       locationSharing: key == 'privacy_location_sharing' ? value : null,
     );
@@ -97,14 +92,6 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
             ),
             child: Column(
               children: [
-                _buildPrivacyTile(
-                  icon: Icons.visibility_off_rounded,
-                  title: 'Gizli Profil',
-                  subtitle: 'Profiliniz sadece katıldığınız etkinlikteki kişiler tarafından görülebilir.',
-                  value: _isPrivateProfile,
-                  onChanged: (val) => _updateSetting('privacy_private_profile', val, (v) => _isPrivateProfile = v),
-                ),
-                Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                 _buildPrivacyTile(
                   icon: Icons.event_busy_rounded,
                   title: 'Etkinlik Katılımlarımı Gizle',

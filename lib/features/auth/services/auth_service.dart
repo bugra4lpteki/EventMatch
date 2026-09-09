@@ -120,14 +120,35 @@ class AuthService extends ChangeNotifier {
     }
   }
 
+  Future<bool> isUsernameTaken(String username, {String? excludeUserId}) async {
+    final clean = username.trim().toLowerCase().replaceAll('@', '');
+    if (clean.isEmpty) return false;
+    try {
+      var query = _supabase.from('users').select('id').ilike('username', clean);
+      if (excludeUserId != null && excludeUserId.isNotEmpty) {
+        query = query.neq('id', excludeUserId);
+      }
+      final res = await query.maybeSingle();
+      return res != null;
+    } catch (e) {
+      debugPrint('Auth isUsernameTaken error: $e');
+      return false;
+    }
+  }
+
   Future<bool> register(String name, String username, String email, String password, DateTime birthDate) async {
     try {
+      final cleanUsername = username.trim().toLowerCase().replaceAll('@', '');
+      if (await isUsernameTaken(cleanUsername)) {
+        throw Exception('Bu kullanıcı adı zaten alınmış. Lütfen başka bir kullanıcı adı seçin.');
+      }
+
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
         data: {
           'name': name,
-          'username': username,
+          'username': cleanUsername,
           'birth_date': birthDate.toIso8601String().split('T')[0],
         }, 
       );

@@ -423,34 +423,93 @@ class EventModel {
     return clean;
   }
 
+  /// Etkinliğin bilet sağlayıcısını akıllıca tespit eder (Biletinial, Biletix, Bubilet, Passo vb.)
+  String get effectiveTicketProvider {
+    final explicit = ticketProvider?.trim();
+    if (explicit != null && explicit.isNotEmpty) {
+      final el = explicit.toLowerCase();
+      if (el.contains('biletinial')) return 'Biletinial';
+      if (el.contains('biletix') || el.contains('ticketmaster')) return 'Biletix';
+      if (el.contains('bubilet')) return 'Bubilet';
+      if (el.contains('passo')) return 'Passo';
+      return explicit;
+    }
+
+    final url = (ticketUrl ?? '').toLowerCase();
+    if (url.contains('biletinial.com')) return 'Biletinial';
+    if (url.contains('biletix.com') || url.contains('ticketm.net') || url.contains('ticketmaster')) return 'Biletix';
+    if (url.contains('bubilet.com')) return 'Bubilet';
+    if (url.contains('passo.com')) return 'Passo';
+
+    final desc = description.toLowerCase();
+    if (desc.contains('biletinial.com')) return 'Biletinial';
+    if (desc.contains('biletix.com')) return 'Biletix';
+    if (desc.contains('bubilet.com')) return 'Bubilet';
+    if (desc.contains('passo.com')) return 'Passo';
+
+    if (id.toLowerCase().startsWith('biletinial')) return 'Biletinial';
+    if (id.toLowerCase().startsWith('biletix')) return 'Biletix';
+    if (id.toLowerCase().startsWith('bubilet')) return 'Bubilet';
+    if (id.toLowerCase().startsWith('passo')) return 'Passo';
+
+    return 'Biletix';
+  }
+
   String get effectiveTicketUrl {
     // 1. Doğrudan ticketUrl tanımlıysa ve geçerliyse
     if (ticketUrl != null && ticketUrl!.trim().isNotEmpty) {
       String clean = _cleanUrl(ticketUrl!);
-      final lClean = clean.toLowerCase();
       
-      final isTicketmasterUs = lClean.contains('ticketmaster.com') || lClean.contains('evyy.net');
-      final isMockBroken = lClean.contains('5zemx');
+      // Tracking/affiliate (Ticketmaster evyy.net veya pxf.io) linkiyse içindeki gerçek hedef URL'yi çıkar
+      if (clean.contains('u=')) {
+        final match = RegExp(r'[?&]u=([^&]+)').firstMatch(clean);
+        if (match != null) {
+          clean = _cleanUrl(Uri.decodeComponent(match.group(1)!));
+        }
+      }
 
-      if (!isTicketmasterUs && !isMockBroken && clean.length > 25) {
+      final lClean = clean.toLowerCase();
+
+      // Doğrudan performans/etkinlik bilet satış sayfası mı?
+      final isDirectPerformance = lClean.contains('biletix.com/performance') ||
+          lClean.contains('biletinial.com/tr-tr/') ||
+          lClean.contains('bubilet.com.tr/') ||
+          lClean.contains('passo.com.tr/');
+
+      if (isDirectPerformance) {
+        return clean;
+      }
+
+      // Genel ana sayfa değilse ve kırık mock değilse doğrudan kullan
+      final isJustHome = clean == 'https://www.biletix.com' ||
+          clean == 'https://biletix.com' ||
+          clean == 'https://www.biletinial.com' ||
+          clean == 'https://biletinial.com';
+
+      if (!isJustHome && clean.length > 25 && !lClean.contains('5zemx') && !lClean.contains('evyy.net')) {
         return clean;
       }
     }
 
-    // 2. Açıklama metninde yer alan Biletinial / Biletix / Bubilet doğrudan etkinlik linkini bul
+    // 2. Açıklama metninde yer alan sağlayıcı linklerini bul
+    final biletixMatch = RegExp(r'https?://(?:www\.)?biletix\.com/performance/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
+    if (biletixMatch != null) {
+      return _cleanUrl(biletixMatch.group(0)!);
+    }
+
     final biletinialMatch = RegExp(r'https?://(?:www\.)?biletinial\.com/tr-tr/(?:muzik|tiyatro|stand-up|festival|opera-ve-bale|sinema|etkinlik)/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
     if (biletinialMatch != null) {
       return _cleanUrl(biletinialMatch.group(0)!);
     }
 
+    final bubiletMatch = RegExp(r'https?://(?:www\.)?bubilet\.com\.tr/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
+    if (bubiletMatch != null) {
+      return _cleanUrl(bubiletMatch.group(0)!);
+    }
+
     final genericBiletinial = RegExp(r'https?://(?:www\.)?biletinial\.com/tr-tr/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
     if (genericBiletinial != null) {
       return _cleanUrl(genericBiletinial.group(0)!);
-    }
-
-    final biletixMatch = RegExp(r'https?://(?:www\.)?biletix\.com/performance/[^\s\)\",]+', caseSensitive: false).firstMatch(description);
-    if (biletixMatch != null) {
-      return _cleanUrl(biletixMatch.group(0)!);
     }
 
     final genericMatches = RegExp(r'https?://[^\s\)\",]+').allMatches(description);
@@ -467,9 +526,25 @@ class EventModel {
       }
     }
 
-    // 3. Özel linki bulunmayan etkinlikler için Biletinial üzerinde doğrudan bu etkinliği arat (Asla boş ana sayfaya yönlendirmez!)
-    final cleanTitle = title.replaceAll(RegExp(r'[\(\)\[\]\-]'), ' ').trim();
-    return 'https://biletinial.com/tr-tr/search?q=${Uri.encodeComponent(cleanTitle)}';
+    // 3. Sağlayıcının kendi arama motoruna temiz anahtar kelime ile yönlendir
+    String cleanKeyword = title;
+    if (cleanKeyword.contains('-')) {
+      cleanKeyword = cleanKeyword.split('-').first.trim();
+    } else if (cleanKeyword.contains(':')) {
+      cleanKeyword = cleanKeyword.split(':').first.trim();
+    }
+    cleanKeyword = cleanKeyword.replaceAll(RegExp(r'[\(\)\[\]&,!]'), ' ').trim();
+    final encodedKeyword = Uri.encodeComponent(cleanKeyword);
+
+    final provider = effectiveTicketProvider;
+    if (provider == 'Biletinial') {
+      return 'https://biletinial.com/tr-tr/search?q=$encodedKeyword';
+    } else if (provider == 'Bubilet') {
+      return 'https://www.bubilet.com.tr/arama?q=$encodedKeyword';
+    } else if (provider == 'Passo') {
+      return 'https://www.passo.com.tr/tr/arama?q=$encodedKeyword';
+    }
+    return 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=$encodedKeyword';
   }
 
   /// Ekranda gösterilecek temiz açıklama (Bilet satış linki metinlerini açıklamadan temizler)

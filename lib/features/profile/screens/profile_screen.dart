@@ -9,7 +9,6 @@ import '../../events/services/mock_event_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
 import '../../events/screens/event_detail_screen.dart';
-import 'edit_profile_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
 
@@ -201,6 +200,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ],
                               ),
+                              if (user.username != null && user.username!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  user.username!.trim().replaceAll('@', ''),
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.2,
+                                  ),
+                                ),
+                              ],
                               const SizedBox(height: 4),
                               Text(
                                 '${user.age ?? '26'} • ${user.city != null && user.city!.isNotEmpty ? user.city : 'İstanbul'}',
@@ -209,24 +220,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 14,
                                 ),
                               ),
-                              if (user.isPrivateProfile)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.lock_rounded, size: 14, color: AppColors.primaryVariant),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Gizli Hesap',
-                                        style: TextStyle(
-                                          color: AppColors.primaryVariant,
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
                             ],
                           ),
                         ),
@@ -336,54 +329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                 const SizedBox(height: 30),
 
-                // ── Action Buttons ─────────────────────────────────────
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const EditProfileScreen()),
-                          ),
-                          child: Container(
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                  color: AppColors.primary.withOpacity(0.4)),
-                            ),
-                            child: Center(
-                              child: Text(
-                                'Profili Düzenle',
-                                style: TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(Icons.share_outlined,
-                            color: AppColors.textSecondary, size: 20),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
+
 
                 // ── Radar Ayarları ─────────────────────────────────────
                 Padding(

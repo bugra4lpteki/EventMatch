@@ -8,6 +8,8 @@ enum AppThemeType {
   emeraldLuma,
   sunsetFire,
   midnightCobalt,
+  elegantWhite,
+  elegantBlack,
 }
 
 class ThemeService extends ChangeNotifier {
@@ -15,6 +17,9 @@ class ThemeService extends ChangeNotifier {
   AppThemeType _currentTheme = AppThemeType.electricViolet;
 
   AppThemeType get currentTheme => _currentTheme;
+
+  /// Light tema mı kontrol et (beyaz tema için ThemeData.light() kullanılacak)
+  bool get isLightTheme => _currentTheme == AppThemeType.elegantWhite;
 
   ThemeService() {
     _loadTheme();
@@ -94,6 +99,42 @@ class ThemeService extends ChangeNotifier {
         AppColors.accent = const Color(0xFF2DD4BF);
         AppColors.textPrimary = Colors.white;
         AppColors.textSecondary = const Color(0xFF94A3B8);
+        AppColors.surfaceLight = const Color(0xFF1E293B);
+        AppColors.textMuted = const Color(0xFF64748B);
+        AppColors.error = const Color(0xFFEF4444);
+        AppColors.success = const Color(0xFF10B981);
+        break;
+
+      case AppThemeType.elegantWhite:
+        // Şık beyaz tema — premium, temiz, aydınlık
+        AppColors.background = const Color(0xFFF8F9FC);
+        AppColors.surface = const Color(0xFFFFFFFF);
+        AppColors.surfaceLight = const Color(0xFFF0F1F5);
+        AppColors.primary = const Color(0xFF6C5CE7);
+        AppColors.primaryVariant = const Color(0xFF8B7CF6);
+        AppColors.secondary = const Color(0xFFE84393);
+        AppColors.accent = const Color(0xFF00B894);
+        AppColors.textPrimary = const Color(0xFF1A1A2E);
+        AppColors.textSecondary = const Color(0xFF636E82);
+        AppColors.textMuted = const Color(0xFF9CA3B0);
+        AppColors.error = const Color(0xFFE74C3C);
+        AppColors.success = const Color(0xFF00B894);
+        break;
+
+      case AppThemeType.elegantBlack:
+        // Şık siyah tema — AMOLED, premium, derin karanlık
+        AppColors.background = const Color(0xFF000000);
+        AppColors.surface = const Color(0xFF0A0A0F);
+        AppColors.surfaceLight = const Color(0xFF141419);
+        AppColors.primary = const Color(0xFFD4A574);
+        AppColors.primaryVariant = const Color(0xFFE8C9A0);
+        AppColors.secondary = const Color(0xFFC9A0DC);
+        AppColors.accent = const Color(0xFF7EC8E3);
+        AppColors.textPrimary = const Color(0xFFF5F5F5);
+        AppColors.textSecondary = const Color(0xFF8A8A9A);
+        AppColors.textMuted = const Color(0xFF555566);
+        AppColors.error = const Color(0xFFFF6B6B);
+        AppColors.success = const Color(0xFF51CF66);
         break;
     }
   }
@@ -105,6 +146,8 @@ class ThemeService extends ChangeNotifier {
       case AppThemeType.emeraldLuma: return 'Zümrüt Yeşili & Nane (Luma Style) 🟢';
       case AppThemeType.sunsetFire: return 'Gün Batımı Alevi & Kırmızı 🌅';
       case AppThemeType.midnightCobalt: return 'Gece Kobaltı & Buz Mavisi 🧊';
+      case AppThemeType.elegantWhite: return 'Şık Beyaz & Lavanta 🤍';
+      case AppThemeType.elegantBlack: return 'Şık Siyah & Rose Gold 🖤';
     }
   }
 }

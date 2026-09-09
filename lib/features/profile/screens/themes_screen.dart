@@ -106,6 +106,10 @@ class ThemesScreen extends StatelessWidget {
         return const Color(0xFFFF5722);
       case AppThemeType.midnightCobalt:
         return const Color(0xFF2563EB);
+      case AppThemeType.elegantWhite:
+        return const Color(0xFF6C5CE7);
+      case AppThemeType.elegantBlack:
+        return const Color(0xFFD4A574);
     }
   }
 }

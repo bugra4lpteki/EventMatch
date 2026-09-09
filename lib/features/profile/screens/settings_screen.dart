@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../events/services/mock_event_service.dart';
+import 'edit_profile_screen.dart';
 import 'account_settings_screen.dart';
 import 'security_settings_screen.dart';
 import 'privacy_settings_screen.dart';
@@ -40,6 +41,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('PROFİL & GÜVENLİK'),
           const SizedBox(height: 8),
           _buildGroupedCard([
+            _buildSettingsTile(
+              icon: Icons.edit_note_rounded,
+              title: 'Profili Düzenle',
+              subtitle: 'Fotoğraflar, isim, şehir, cinsiyet ve biyografi',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+            ),
+            _buildDivider(),
             _buildSettingsTile(
               icon: Icons.person_outline_rounded,
               title: 'Hesabım',

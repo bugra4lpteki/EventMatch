@@ -109,6 +109,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    final cleanUsername = _usernameController.text.trim().toLowerCase().replaceAll('@', '');
+    if (cleanUsername.length < 3) {
+      _showSnackBar('Kullanıcı adı en az 3 karakter olmalıdır.', isError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     final authService = context.read<AuthService>();

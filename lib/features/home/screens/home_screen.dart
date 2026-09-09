@@ -244,7 +244,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                             children: [
                                               Container(
                                                 padding: const EdgeInsets.all(2),
-                                                decoration: const BoxDecoration(
+                                                decoration: BoxDecoration(
                                                   shape: BoxShape.circle,
                                                   gradient: AppColors.primaryGradient,
                                                 ),

@@ -215,7 +215,7 @@ class LocationRadarService extends ChangeNotifier {
         'avatar_url': user.avatarUrl,
         'avatar_urls': user.avatarUrls,
         'city': user.city ?? 'İstanbul',
-        'about_me': user.aboutMe ?? 'Müzik ve festival sever 🎶',
+        'about_me': user.aboutMe ?? '',
         'age': user.age ?? '24',
         'gender': user.gender,
         'interests': user.tags,
@@ -272,7 +272,7 @@ class LocationRadarService extends ChangeNotifier {
           avatarUrl: payload['avatar_url']?.toString() ?? '',
           avatarUrls: List<String>.from(payload['avatar_urls'] ?? []),
           city: payload['city']?.toString() ?? 'İstanbul',
-          aboutMe: payload['about_me']?.toString() ?? 'Müzik ve festival sever',
+          aboutMe: payload['about_me']?.toString(),
           gender: payload['gender']?.toString(),
           points: int.tryParse(payload['points']?.toString() ?? '0') ?? 0,
           latitude: remoteLat,
@@ -302,6 +302,22 @@ class LocationRadarService extends ChangeNotifier {
       // Supabase 'users' tablosundaki kullanıcıları çek
       final List<dynamic> rows = await _supabase.from('users').select();
 
+      final Map<String, String> userPhotosMap = {};
+      try {
+        final photosRes = await _supabase
+            .from('user_photos')
+            .select('user_id, storage_url')
+            .eq('is_active', true)
+            .order('sort_order', ascending: true);
+        for (var p in photosRes) {
+          final uId = p['user_id']?.toString().toLowerCase();
+          final url = p['storage_url']?.toString();
+          if (uId != null && url != null && url.startsWith('http') && !userPhotosMap.containsKey(uId)) {
+            userPhotosMap[uId] = url;
+          }
+        }
+      } catch (_) {}
+
       for (var row in rows) {
         final uid = row['id']?.toString() ?? '';
         final uname = row['name']?.toString() ?? '';
@@ -325,14 +341,15 @@ class LocationRadarService extends ChangeNotifier {
           }
 
           if (dist <= _radarDistanceKm * 1000 || dist == 0) {
+            final userPhoto = userPhotosMap[uid.toLowerCase()] ?? '';
             _liveRealtimeUsers[uid.toLowerCase()] = UserModel(
               id: uid,
               name: uname,
               username: row['username']?.toString(),
-              avatarUrl: row['avatar_url']?.toString() ?? '',
-              avatarUrls: row['avatar_url'] != null ? [row['avatar_url'].toString()] : [],
+              avatarUrl: userPhoto,
+              avatarUrls: userPhoto.isNotEmpty ? [userPhoto] : [],
               city: row['city']?.toString() ?? 'İstanbul',
-              aboutMe: row['about_me']?.toString() ?? 'Festival ve konser tutkunu',
+              aboutMe: (row['bio'] ?? row['about_me'])?.toString(),
               latitude: uLat,
               longitude: uLng,
               enableLocationSharing: true,
