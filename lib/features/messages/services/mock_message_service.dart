@@ -1129,6 +1129,42 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
   }
 
+  /// Medya dosyasını Supabase Storage'a yükler ve public URL döndürür.
+  /// Yükleme başarısız olursa null döner.
+  Future<String?> _uploadMediaToStorage(String localFilePath, {required String folder, required String extension}) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) return null;
+
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final userId = currentUserId.isNotEmpty ? currentUserId : 'anonymous';
+      final fileName = '$folder/${userId}_$timestamp.$extension';
+
+      // Bucket'a yükle (bucket yoksa otomatik oluşturulur Supabase Dashboard'dan)
+      await _supabase.storage
+          .from('chat-media')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: extension == 'm4a' ? 'audio/mp4' : 'image/$extension',
+              upsert: true,
+            ),
+          );
+
+      // Public URL al
+      final publicUrl = _supabase.storage.from('chat-media').getPublicUrl(fileName);
+      debugPrint('[Storage] ✅ Medya yüklendi: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      debugPrint('[Storage] ❌ Yükleme hatası: $e');
+      return null;
+    }
+  }
+
   Future<void> _loadChatsFromSupabase() async {
     try {
       final currentId = currentUserId;
@@ -1582,13 +1618,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final now = DateTime.now();
 
-      final file = File(localAudioPath);
+      // Supabase Storage'a yükle, başarısız olursa local path kullan
       String audioUrl = localAudioPath;
-
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        // Reliable self-contained Base64 data URI (speech audio is compact)
-        audioUrl = 'data:audio/m4a;base64,${base64Encode(bytes)}';
+      final storageUrl = await _uploadMediaToStorage(localAudioPath, folder: 'voice', extension: 'm4a');
+      if (storageUrl != null) {
+        audioUrl = storageUrl;
       }
 
       String? replySender;
@@ -1673,15 +1707,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final now = DateTime.now();
 
-      final file = File(localImagePath);
-      String imageUrl = localImagePath;
+      final isPng = localImagePath.toLowerCase().endsWith('.png');
+      final ext = isPng ? 'png' : 'jpg';
 
-      if (await file.exists()) {
-        final bytes = await file.readAsBytes();
-        final isPng = localImagePath.toLowerCase().endsWith('.png');
-        final ext = isPng ? 'png' : 'jpg';
-        // Reliable self-contained Base64 data URI (optimized resolution)
-        imageUrl = 'data:image/$ext;base64,${base64Encode(bytes)}';
+      // Supabase Storage'a yükle, başarısız olursa local path kullan
+      String imageUrl = localImagePath;
+      final storageUrl = await _uploadMediaToStorage(localImagePath, folder: 'images', extension: ext);
+      if (storageUrl != null) {
+        imageUrl = storageUrl;
       }
 
       final trimmedCaption = caption?.trim() ?? '';

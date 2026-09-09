@@ -9,7 +9,6 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/report_block_sheet.dart';
@@ -241,14 +240,19 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   void _openFullScreenImage(BuildContext context, String imageUrl) {
     final trimmed = imageUrl.trim();
     Widget imageWidget;
+    
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      imageWidget = CachedNetworkImage(
-        imageUrl: trimmed,
+      imageWidget = Image.network(
+        trimmed,
         fit: BoxFit.contain,
-        placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-        errorWidget: (context, url, error) => const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (context, error, stackTrace) =>
+            const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48),
       );
-    } else if (trimmed.startsWith('data:image') || trimmed.startsWith('data:') || trimmed.length > 100) {
+    } else if (trimmed.startsWith('data:image') || trimmed.startsWith('data:')) {
       try {
         final b64 = trimmed.contains(',') ? trimmed.split(',').last.trim() : trimmed;
         imageWidget = Image.memory(base64Decode(b64), fit: BoxFit.contain);
@@ -288,39 +292,59 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
 
   Widget _buildMessageImage(String mediaUrl) {
     final trimmed = mediaUrl.trim();
+    
+    // 1. Network URL (Supabase Storage veya herhangi bir HTTP URL)
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      return CachedNetworkImage(
-        imageUrl: trimmed,
-        width: 240,
-        height: 240,
-        fit: BoxFit.cover,
-        placeholder: (context, url) => Container(
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          trimmed,
           width: 240,
           height: 240,
-          color: const Color(0xFF1E2235),
-          child: const Center(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
-            ),
-          ),
-        ),
-        errorWidget: (context, url, error) => Container(
-          width: 240,
-          height: 240,
-          color: const Color(0xFF1E2235),
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
-              SizedBox(height: 4),
-              Text('Görsel yüklenemedi', style: TextStyle(color: Colors.white54, fontSize: 11)),
-            ],
-          ),
+          fit: BoxFit.cover,
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return Container(
+              width: 240,
+              height: 240,
+              color: const Color(0xFF1E2235),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white70,
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                        : null,
+                  ),
+                ),
+              ),
+            );
+          },
+          errorBuilder: (context, error, stackTrace) {
+            debugPrint('[ImageError] Network image load failed: $error');
+            return Container(
+              width: 240,
+              height: 240,
+              color: const Color(0xFF1E2235),
+              child: const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+                  SizedBox(height: 4),
+                  Text('Görsel yüklenemedi', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                ],
+              ),
+            );
+          },
         ),
       );
-    } else if (trimmed.startsWith('data:image') || trimmed.startsWith('data:') || trimmed.length > 100) {
+    }
+    
+    // 2. Base64 Data URI (eski mesajlar için geriye dönük uyumluluk)
+    if (trimmed.startsWith('data:image') || trimmed.startsWith('data:')) {
       try {
         final b64 = trimmed.contains(',') ? trimmed.split(',').last.trim() : trimmed;
         final bytes = base64Decode(b64);
@@ -338,6 +362,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         );
       } catch (e) {
+        debugPrint('[ImageError] Base64 decode failed: $e');
         return Container(
           width: 240,
           height: 240,
@@ -345,29 +370,31 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
         );
       }
-    } else {
-      final f = File(trimmed);
-      if (f.existsSync()) {
-        return Image.file(
-          f,
-          width: 240,
-          height: 240,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => Container(
-            width: 240,
-            height: 240,
-            color: const Color(0xFF1E2235),
-            child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
-          ),
-        );
-      }
-      return Container(
+    }
+    
+    // 3. Yerel dosya yolu
+    final f = File(trimmed);
+    if (f.existsSync()) {
+      return Image.file(
+        f,
         width: 240,
         height: 240,
-        color: const Color(0xFF1E2235),
-        child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 240,
+          height: 240,
+          color: const Color(0xFF1E2235),
+          child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+        ),
       );
     }
+    
+    return Container(
+      width: 240,
+      height: 240,
+      color: const Color(0xFF1E2235),
+      child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+    );
   }
 
   // --- SES KAYDI (VOICE NOTE) MOTORU ---
