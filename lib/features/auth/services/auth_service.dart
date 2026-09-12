@@ -23,9 +23,19 @@ class AuthService extends ChangeNotifier {
     const webClientId = '1089492303271-usnrteug9r9o2j8cge5t6b7ctk0acvik.apps.googleusercontent.com';
     
     try {
+      if (kIsWeb) {
+        // Web ortamında origin_mismatch ve port çakışmalarını önlemek için doğrudan Supabase OAuth kullanılır
+        final res = await _supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+          authScreenLaunchMode: LaunchMode.platformDefault,
+        );
+        notifyListeners();
+        return res;
+      }
+
       final googleSignIn = GoogleSignIn(
-        clientId: kIsWeb ? webClientId : null,
-        serverClientId: kIsWeb ? null : webClientId,
+        serverClientId: webClientId,
         scopes: ['email', 'profile'],
       );
 
