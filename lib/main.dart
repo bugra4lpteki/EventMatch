@@ -37,8 +37,9 @@ void main() async {
     NotificationService().syncUserWithOneSignal(existingUser.id);
   }
 
-  // Sanatçı görsel cache'ini sıfırla: eski albüm kapağı URL'leri kalmasın,
-  // Wikipedia / Deezer'dan gerçek sanatçı fotoğrafı çekilsin.
+  // Görsel cache'ini sıfırla: Eski bellek görselleri temizlensin
+  PaintingBinding.instance.imageCache.clear();
+  PaintingBinding.instance.imageCache.clearLiveImages();
   SpotifyService().clearCache();
 
   try {

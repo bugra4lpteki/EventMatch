@@ -9,7 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import 'external_event_service.dart';
-import 'spotify_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -103,23 +102,34 @@ class MockEventService extends ChangeNotifier {
   }
 
   Future<void> fetchEvents() async {
-    // A. Anında render: Önbellekteki etkinlikleri veya popüler vitrin etkinliklerini anında yükle
-    await _loadEventsFromCache();
+    // A. Anında render: Önbellek sürümü kontrolü (Eski önbelleği tamamen sil ve sıfırdan Ticketmaster ile başlat)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cacheVersion = prefs.getInt('eventmatch_cache_version_num') ?? 0;
+      if (cacheVersion < 7) {
+        await prefs.remove(_eventsCacheKey);
+        await prefs.setInt('eventmatch_cache_version_num', 7);
+        _events.clear();
+      } else {
+        await _loadEventsFromCache();
+      }
+    } catch (_) {}
+
     // Eski harici API ve mock görsellerini temizle (Yalnızca Ticketmaster fotoğrafları)
     _events.removeWhere((e) =>
         e.imageUrl.contains('dzcdn.net') ||
         e.imageUrl.contains('spotifycdn.com') ||
         e.id.toLowerCase().contains('biletinial'));
 
-    if (_events.isEmpty) {
-      _populateFallbackEvents();
-    }
+    // Her zaman Ticketmaster resmi vitrin etkinliklerini yükle
+    _populateFallbackEvents();
+
     _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     await _loadLocalAttendeesCache();
     _syncPlannedEventsWithAttendees();
     notifyListeners(); // Kullanıcı anasayfayı 0.05 saniyede dolu olarak görür!
 
-    // B. Arka planda sessizce Supabase ve Canlı Biletix API'lerini güncelle
+    // B. Arka planda sessizce Canlı Biletix API'lerini güncelle
     _fetchLiveEventsInBackground();
   }
 
