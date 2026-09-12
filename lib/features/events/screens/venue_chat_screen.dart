@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -6,6 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
@@ -55,41 +60,20 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
   final List<_FloatingReaction> _reactions = [];
   final math.Random _random = math.Random();
 
-  // Animation controller for live pulsing indicator
-  late AnimationController _livePulseController;
-  late Animation<double> _livePulseAnimation;
-
   // Unread / scroll tracking
   bool _showScrollToBottom = false;
-  bool _showEmojiTray = false;
   bool _isReminderSet = false;
 
-  // Quick prompt chips
-  final List<String> _quickPrompts = [
-    '👋 Selamlar!',
-    '📍 Giriş kapısındayım',
-    '🎸 Sahne önü harika!',
-    '🍻 İçecek alanındayım',
-    '🔥 Harika bir atmosfer!',
-    '✨ Biriyle tanışmak isteyen?',
-    '📸 Çok iyi bir gece!',
-  ];
-
-  // Quick reactions
-  final List<String> _quickEmojis = ['❤️', '🔥', '🎉', '👏', '🍻', '⚡', '🎸', '💃'];
+  // Audio Recording (Ses Kaydı) State
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  int _recordSeconds = 0;
+  Timer? _recordTimer;
+  String? _currentRecordingPath;
 
   @override
   void initState() {
     super.initState();
-
-    // Pulse animation for live badge
-    _livePulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat(reverse: true);
-    _livePulseAnimation = Tween<double>(begin: 0.85, end: 1.15).animate(
-      CurvedAnimation(parent: _livePulseController, curve: Curves.easeInOut),
-    );
 
     // Scroll listener
     _scrollController.addListener(_onScroll);
@@ -129,7 +113,8 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
   void dispose() {
     _countdownTimer?.cancel();
     _particlesTicker?.cancel();
-    _livePulseController.dispose();
+    _recordTimer?.cancel();
+    _audioRecorder.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     _controller.dispose();
@@ -178,13 +163,6 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     });
   }
 
-  void _onReactionTapped(String emoji) {
-    HapticFeedback.lightImpact();
-    _spawnFloatingReaction(emoji);
-    _spawnFloatingReaction(emoji);
-    context.read<MockEventService>().sendVenueReaction(widget.event.id, emoji);
-  }
-
   void _sendMessage([String? customText]) {
     final text = customText ?? _controller.text.trim();
     if (text.isEmpty) return;
@@ -198,6 +176,228 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     Future.delayed(const Duration(milliseconds: 120), () {
       _scrollToBottom(animated: true);
     });
+  }
+
+  // --- SES KAYDI (VOICE NOTE) MOTORU ---
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final dir = await getTemporaryDirectory();
+        final path = '${dir.path}/venue_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+        _currentRecordingPath = path;
+
+        await _audioRecorder.start(
+          const RecordConfig(
+            encoder: AudioEncoder.aacLc,
+            bitRate: 32000,
+            sampleRate: 22050,
+            numChannels: 1,
+          ),
+          path: path,
+        );
+        HapticFeedback.mediumImpact();
+
+        setState(() {
+          _isRecording = true;
+          _recordSeconds = 0;
+        });
+
+        _recordTimer?.cancel();
+        _recordTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (mounted) {
+            setState(() => _recordSeconds++);
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Sesli mesaj için mikrofon izni gereklidir.')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Venue start recording error: $e');
+    }
+  }
+
+  Future<void> _stopAndSendRecording() async {
+    try {
+      _recordTimer?.cancel();
+      final path = await _audioRecorder.stop();
+      final duration = _recordSeconds;
+
+      setState(() {
+        _isRecording = false;
+        _recordSeconds = 0;
+      });
+
+      if (path != null && duration >= 1 && mounted) {
+        HapticFeedback.lightImpact();
+        final service = context.read<MockEventService>();
+
+        // Yerel olarak anında listede göster
+        service.sendVenueMessage(
+          widget.event.id,
+          '',
+          audioUrl: path,
+          audioDuration: duration,
+        );
+
+        // Arka planda Supabase Storage'a yükle
+        service.uploadVenueMedia(path, folder: 'voice', extension: 'm4a');
+
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _scrollToBottom(animated: true);
+        });
+      }
+    } catch (e) {
+      debugPrint('Venue stop recording error: $e');
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    try {
+      _recordTimer?.cancel();
+      await _audioRecorder.stop();
+      if (_currentRecordingPath != null) {
+        final f = File(_currentRecordingPath!);
+        if (await f.exists()) {
+          await f.delete();
+        }
+      }
+      HapticFeedback.lightImpact();
+      setState(() {
+        _isRecording = false;
+        _recordSeconds = 0;
+      });
+    } catch (e) {
+      debugPrint('Venue cancel recording error: $e');
+    }
+  }
+
+  String _formatRecordSeconds(int totalSec) {
+    final m = (totalSec ~/ 60).toString().padLeft(2, '0');
+    final s = (totalSec % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  // --- FOTOĞRAF ÇEKME / GALERİDEN SEÇME MOTORU ---
+  Future<void> _showImagePickerSheet() async {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161928),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.6),
+              blurRadius: 24,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.camera_alt_rounded, color: AppColors.primary),
+              ),
+              title: const Text('Fotoğraf Çek (Kamera)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('Kameran ile anlık mekan fotoğrafı çek ve paylaş', style: TextStyle(color: Colors.white60, fontSize: 12)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final picker = ImagePicker();
+                final xFile = await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1200,
+                  maxHeight: 1200,
+                  imageQuality: 70,
+                );
+                if (xFile != null && mounted) {
+                  final service = context.read<MockEventService>();
+                  service.sendVenueMessage(widget.event.id, '', imageUrl: xFile.path);
+                  service.uploadVenueMedia(xFile.path, folder: 'images', extension: 'jpg');
+                  _scrollToBottom(animated: true);
+                }
+              },
+            ),
+            const Divider(color: Colors.white10),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.photo_library_rounded, color: Color(0xFF00E5FF)),
+              ),
+              title: const Text('Galeriden Seç', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              subtitle: const Text('Galerindeki fotoğraflardan birini seç ve paylaş', style: TextStyle(color: Colors.white60, fontSize: 12)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final picker = ImagePicker();
+                final xFile = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 1200,
+                  maxHeight: 1200,
+                  imageQuality: 70,
+                );
+                if (xFile != null && mounted) {
+                  final service = context.read<MockEventService>();
+                  service.sendVenueMessage(widget.event.id, '', imageUrl: xFile.path);
+                  service.uploadVenueMedia(xFile.path, folder: 'images', extension: 'jpg');
+                  _scrollToBottom(animated: true);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openFullScreenImage(String imageUrl) {
+    final trimmed = imageUrl.trim();
+    Widget imgWidget;
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      imgWidget = Image.network(trimmed, fit: BoxFit.contain);
+    } else if (File(trimmed).existsSync()) {
+      imgWidget = Image.file(File(trimmed), fit: BoxFit.contain);
+    } else {
+      imgWidget = const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64);
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (ctx) => Scaffold(
+          backgroundColor: Colors.black,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: const IconThemeData(color: Colors.white),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: imgWidget,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   /// Dynamic distinct streamer color for usernames
@@ -725,7 +925,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
   Widget _buildStreamerChatView() {
     return Column(
       children: [
-        // Top Streamer Header
+        // Top Streamer Header (Clean, without "CANLI CHAT" badge)
         _buildStreamerHeader(),
 
         // Flowing Stream Chat Feed
@@ -748,7 +948,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                       final msg = messages[index];
                       final isMe = (msg['userId'] ?? '').toString().toLowerCase().trim() ==
                           service.currentUserId.toLowerCase().trim();
-                      return _buildStreamerMessageRow(msg, isMe, index);
+                      return _buildStreamerMessageRow(msg, isMe, index, service);
                     },
                   );
                 },
@@ -792,19 +992,13 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
           ),
         ),
 
-        // Quick Event Prompts Chips
-        _buildQuickPromptsBar(),
-
-        // Quick Floating Reactions Pill Bar
-        _buildQuickReactionsPillBar(),
-
-        // Bottom Input or Check-in Lock Action
+        // Bottom Input or Check-in Lock Action (Clean without quick emojis/prompts)
         _buildStreamerBottomArea(),
       ],
     );
   }
 
-  // Streamer Header with Live Pulse and Viewer Pill
+  // Streamer Header with Attendees Pill (without the "CANLI CHAT" badge)
   Widget _buildStreamerHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 16, 10),
@@ -831,60 +1025,15 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    // Pulsing Red Live Badge
-                    AnimatedBuilder(
-                      animation: _livePulseAnimation,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _livePulseAnimation.value,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFF2E56),
-                              borderRadius: BorderRadius.circular(6),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: const Color(0xFFFF2E56).withValues(alpha: 0.6),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.circle, size: 6, color: Colors.white),
-                                SizedBox(width: 4),
-                                Text(
-                                  'CANLI CHAT',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9.5,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.5,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        widget.event.title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14.5,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+                Text(
+                  widget.event.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15.5,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Row(
@@ -933,28 +1082,46 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     );
   }
 
-  // Streamer Message Row (Twitch / Kick / YouTube live chat style)
-  Widget _buildStreamerMessageRow(Map<String, dynamic> msg, bool isMe, int index) {
+  // Streamer Message Row with User Avatars, Photos & Voice Notes
+  Widget _buildStreamerMessageRow(Map<String, dynamic> msg, bool isMe, int index, MockEventService service) {
     final senderName = msg['userName'] ?? (isMe ? 'Sen' : 'Katılımcı');
-    final messageText = msg['message'] ?? '';
+    final messageText = (msg['message'] ?? '').toString();
+    final imageUrl = msg['imageUrl']?.toString();
+    final audioUrl = msg['audioUrl']?.toString();
+    final audioDuration = msg['audioDuration'] != null ? int.tryParse(msg['audioDuration'].toString()) ?? 0 : 0;
     final senderColor = _getStreamerColor(senderName);
     final timeStr = msg['time'] is DateTime
         ? DateFormat('HH:mm').format(msg['time'] as DateTime)
         : DateFormat('HH:mm').format(DateTime.now());
+
+    // Resolve user avatar
+    String? userAvatar = msg['userAvatar']?.toString();
+    if (userAvatar == null || userAvatar.isEmpty) {
+      if (isMe) {
+        userAvatar = service.currentUser.avatarUrl;
+      } else {
+        final attendee = widget.event.attendees
+            .where((a) => a.id == msg['userId'] || a.name.toLowerCase() == senderName.toLowerCase())
+            .firstOrNull;
+        if (attendee != null && attendee.avatarUrl.isNotEmpty) {
+          userAvatar = attendee.avatarUrl;
+        }
+      }
+    }
 
     // Role tags
     final isHost = index == 0 && !isMe;
     final isVip = (index % 3 == 0) && !isMe;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
         decoration: BoxDecoration(
           color: isMe
               ? AppColors.primary.withValues(alpha: 0.18)
               : const Color(0xFF141724).withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isMe
                 ? AppColors.primary.withValues(alpha: 0.35)
@@ -964,24 +1131,8 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // User mini avatar with neon border
-            Container(
-              width: 28,
-              height: 28,
-              margin: const EdgeInsets.only(top: 2),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [senderColor, senderColor.withValues(alpha: 0.4)],
-                ),
-                border: Border.all(color: senderColor, width: 1.2),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-            ),
+            // User photo avatar
+            _buildUserAvatarWidget(userAvatar, senderName, senderColor),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -990,7 +1141,6 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                   // Badges, Name and Time row
                   Row(
                     children: [
-                      // Role badges
                       if (isHost)
                         Container(
                           margin: const EdgeInsets.only(right: 6),
@@ -1034,7 +1184,6 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                           ),
                         ),
 
-                      // Sender Name
                       Text(
                         isMe ? 'Sen' : senderName,
                         style: TextStyle(
@@ -1050,16 +1199,34 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                       ),
                     ],
                   ),
-                  const SizedBox(height: 3),
-                  // Message Text
-                  Text(
-                    messageText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13.5,
-                      height: 1.3,
+                  const SizedBox(height: 5),
+
+                  // 1. Photo Attachment
+                  if (imageUrl != null && imageUrl.isNotEmpty) ...[
+                    _buildMessageImage(imageUrl),
+                    if (messageText.isNotEmpty && messageText != '📷 Fotoğraf') const SizedBox(height: 6),
+                  ],
+
+                  // 2. Voice Note Attachment
+                  if (audioUrl != null && audioUrl.isNotEmpty) ...[
+                    _VenueVoiceMessageBubble(
+                      audioUrl: audioUrl,
+                      durationSeconds: audioDuration,
+                      isMe: isMe,
                     ),
-                  ),
+                    if (messageText.isNotEmpty && messageText != '🎤 Sesli Mesaj') const SizedBox(height: 6),
+                  ],
+
+                  // 3. Text Message
+                  if (messageText.isNotEmpty && messageText != '📷 Fotoğraf' && messageText != '🎤 Sesli Mesaj')
+                    Text(
+                      messageText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13.5,
+                        height: 1.3,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1069,7 +1236,135 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     );
   }
 
-  // Empty state placeholder
+  Widget _buildUserAvatarWidget(String? userAvatar, String senderName, Color senderColor) {
+    return Container(
+      width: 34,
+      height: 34,
+      margin: const EdgeInsets.only(top: 2),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: senderColor.withValues(alpha: 0.8), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: senderColor.withValues(alpha: 0.3),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: (userAvatar != null && userAvatar.trim().isNotEmpty)
+            ? (userAvatar.startsWith('http')
+                ? CachedNetworkImage(
+                    imageUrl: userAvatar,
+                    fit: BoxFit.cover,
+                    width: 34,
+                    height: 34,
+                    placeholder: (_, __) => _buildInitialsAvatar(senderName, senderColor),
+                    errorWidget: (_, __, ___) => _buildInitialsAvatar(senderName, senderColor),
+                  )
+                : (File(userAvatar).existsSync()
+                    ? Image.file(
+                        File(userAvatar),
+                        fit: BoxFit.cover,
+                        width: 34,
+                        height: 34,
+                        errorBuilder: (_, __, ___) => _buildInitialsAvatar(senderName, senderColor),
+                      )
+                    : _buildInitialsAvatar(senderName, senderColor)))
+            : _buildInitialsAvatar(senderName, senderColor),
+      ),
+    );
+  }
+
+  Widget _buildInitialsAvatar(String senderName, Color senderColor) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [senderColor, senderColor.withValues(alpha: 0.5)],
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        senderName.isNotEmpty ? senderName[0].toUpperCase() : '?',
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+      ),
+    );
+  }
+
+  Widget _buildMessageImage(String mediaUrl) {
+    final trimmed = mediaUrl.trim();
+    Widget imgWidget;
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      imgWidget = CachedNetworkImage(
+        imageUrl: trimmed,
+        width: 220,
+        height: 220,
+        fit: BoxFit.cover,
+        placeholder: (_, __) => Container(
+          width: 220,
+          height: 220,
+          color: const Color(0xFF1E2235),
+          child: const Center(
+            child: SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)),
+            ),
+          ),
+        ),
+        errorWidget: (_, __, ___) => Container(
+          width: 220,
+          height: 220,
+          color: const Color(0xFF1E2235),
+          child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
+        ),
+      );
+    } else {
+      final f = File(trimmed);
+      if (f.existsSync()) {
+        imgWidget = Image.file(
+          f,
+          width: 220,
+          height: 220,
+          fit: BoxFit.cover,
+        );
+      } else {
+        imgWidget = Container(
+          width: 220,
+          height: 220,
+          color: const Color(0xFF1E2235),
+          child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
+        );
+      }
+    }
+
+    return GestureDetector(
+      onTap: () => _openFullScreenImage(trimmed),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            imgWidget,
+            Positioned(
+              right: 6,
+              bottom: 6,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Clean empty state placeholder (without "Canlı Yayın Sohbeti Başladı! ⚡")
   Widget _buildEmptyStreamPlaceholder() {
     return Center(
       child: Column(
@@ -1082,20 +1377,15 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
               color: AppColors.primary.withValues(alpha: 0.1),
               border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
             ),
-            child: const Icon(Icons.forum_outlined, size: 48, color: Color(0xFF00E5FF)),
+            child: const Icon(Icons.forum_outlined, size: 44, color: Color(0xFF00E5FF)),
           ),
-          const SizedBox(height: 16),
-          const Text(
-            'Canlı Yayın Sohbeti Başladı! ⚡',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17),
-          ),
-          const SizedBox(height: 6),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 40),
-            child: Text(
-              'Mekandaki diğer katılımcılara ilk canlı mesajı sen gönder!',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.3),
-              textAlign: TextAlign.center,
+          const SizedBox(height: 14),
+          Text(
+            'Henüz mesaj gönderilmedi',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -1103,70 +1393,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     );
   }
 
-  // Quick prompt chips
-  Widget _buildQuickPromptsBar() {
-    return Consumer<MockEventService>(
-      builder: (context, service, _) {
-        final isCheckedIn = service.isUserCheckedIn(widget.event.id);
-        if (!isCheckedIn) return const SizedBox.shrink();
-
-        return Container(
-          height: 36,
-          margin: const EdgeInsets.only(bottom: 6),
-          child: ListView.separated(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            itemCount: _quickPrompts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final prompt = _quickPrompts[index];
-              return ActionChip(
-                label: Text(
-                  prompt,
-                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
-                ),
-                backgroundColor: const Color(0xFF161928).withValues(alpha: 0.9),
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                onPressed: () => _sendMessage(prompt),
-              );
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  // Quick Reactions Pill Bar
-  Widget _buildQuickReactionsPillBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: _quickEmojis.map((emoji) {
-          return GestureDetector(
-            onTap: () => _onReactionTapped(emoji),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: Text(
-                emoji,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // Bottom Input area OR Check-in Lock Action
+  // Bottom Input area OR Check-in Lock Action with Camera & Voice Note support
   Widget _buildStreamerBottomArea() {
     return Consumer<MockEventService>(
       builder: (context, service, child) {
@@ -1242,104 +1469,124 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
           );
         }
 
-        // Active Glass Text Input Bar
+        // 1. Audio Recording Bar
+        if (_isRecording) {
+          return Container(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, MediaQuery.of(context).padding.bottom + 10),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0F121E),
+              border: Border(top: BorderSide(color: Colors.white10)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.redAccent,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  'Ses Kaydediliyor... ${_formatRecordSeconds(_recordSeconds)}',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 24),
+                  onPressed: _cancelRecording,
+                  tooltip: 'İptal Et',
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Color(0xFF10B981),
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
+                    onPressed: _stopAndSendRecording,
+                    tooltip: 'Gönder',
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        // 2. Active Text, Photo & Voice Input Bar
         return Container(
-          padding: EdgeInsets.fromLTRB(12, 8, 12, MediaQuery.of(context).padding.bottom + 8),
+          padding: EdgeInsets.fromLTRB(10, 8, 12, MediaQuery.of(context).padding.bottom + 8),
           decoration: BoxDecoration(
             color: const Color(0xFF0F121E),
             border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1))),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+          child: Row(
             children: [
-              if (_showEmojiTray) _buildEmojiTray(),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      _showEmojiTray ? Icons.keyboard_rounded : Icons.emoji_emotions_outlined,
-                      color: _showEmojiTray ? const Color(0xFF00E5FF) : Colors.white60,
-                      size: 24,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _showEmojiTray = !_showEmojiTray;
-                      });
-                    },
+              // Photo attachment button (Kamera / Galeri)
+              IconButton(
+                icon: const Icon(Icons.camera_alt_outlined, color: Color(0xFF00E5FF), size: 24),
+                tooltip: 'Fotoğraf Paylaş',
+                onPressed: _showImagePickerSheet,
+              ),
+
+              // Voice recording button
+              IconButton(
+                icon: const Icon(Icons.mic_none_rounded, color: Colors.amberAccent, size: 24),
+                tooltip: 'Sesli Mesaj Gönder',
+                onPressed: _startRecording,
+              ),
+
+              // Text input field
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF181C2E),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                   ),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF181C2E),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                      ),
-                      child: TextField(
-                        controller: _controller,
-                        focusNode: _focusNode,
-                        style: const TextStyle(color: Colors.white, fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: 'Mekandakilere canlı mesaj yaz...',
-                          hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                        ),
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Mekandakilere canlı mesaj yaz...',
+                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
+                    onSubmitted: (_) => _sendMessage(),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [AppColors.primary, const Color(0xFF7928CA)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.4),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                      onPressed: () => _sendMessage(),
-                    ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Send text button
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [AppColors.primary, const Color(0xFF7928CA)],
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                  onPressed: () => _sendMessage(),
+                ),
               ),
             ],
           ),
         );
       },
-    );
-  }
-
-  Widget _buildEmojiTray() {
-    final emojis = ['😍', '🔥', '🥳', '😎', '💃', '🕺', '🥂', '🎉', '🎸', '🌟', '🤘', '❤️', '👏', '⚡', '💯', '✨'];
-    return Container(
-      height: 48,
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: emojis.length,
-        itemBuilder: (context, index) {
-          final e = emojis[index];
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.lightImpact();
-              _controller.text = '${_controller.text}$e';
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Text(e, style: const TextStyle(fontSize: 22)),
-            ),
-          );
-        },
-      ),
     );
   }
 
@@ -1393,6 +1640,178 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+/// Sleek Audio Voice Note Player for Venue Chat
+class _VenueVoiceMessageBubble extends StatefulWidget {
+  final String audioUrl;
+  final int durationSeconds;
+  final bool isMe;
+
+  const _VenueVoiceMessageBubble({
+    required this.audioUrl,
+    required this.durationSeconds,
+    required this.isMe,
+  });
+
+  @override
+  State<_VenueVoiceMessageBubble> createState() => _VenueVoiceMessageBubbleState();
+}
+
+class _VenueVoiceMessageBubbleState extends State<_VenueVoiceMessageBubble> {
+  late final AudioPlayer _player;
+  bool _isPlaying = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+  StreamSubscription? _posSub;
+  StreamSubscription? _stateSub;
+  StreamSubscription? _durSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = AudioPlayer();
+    _duration = Duration(seconds: widget.durationSeconds);
+
+    _posSub = _player.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _position = p);
+    });
+
+    _stateSub = _player.onPlayerStateChanged.listen((s) {
+      if (mounted) setState(() => _isPlaying = s == PlayerState.playing);
+    });
+
+    _durSub = _player.onDurationChanged.listen((d) {
+      if (mounted && d.inSeconds > 0) setState(() => _duration = d);
+    });
+
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _position = Duration.zero;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _posSub?.cancel();
+    _stateSub?.cancel();
+    _durSub?.cancel();
+    _player.dispose();
+    super.dispose();
+  }
+
+  Future<void> _togglePlay() async {
+    final url = widget.audioUrl.trim();
+    if (url.isEmpty) return;
+
+    HapticFeedback.selectionClick();
+    if (_isPlaying) {
+      await _player.pause();
+    } else {
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        await _player.stop();
+        await _player.play(UrlSource(url));
+      } else if (File(url).existsSync()) {
+        await _player.stop();
+        await _player.play(DeviceFileSource(url));
+      }
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxSec = _duration.inSeconds > 0 ? _duration.inSeconds.toDouble() : 1.0;
+    final currentSec = _position.inSeconds.toDouble().clamp(0.0, maxSec);
+
+    return Container(
+      width: 220,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: widget.isMe
+            ? AppColors.primary.withValues(alpha: 0.25)
+            : const Color(0xFF1E2235),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: widget.isMe
+              ? AppColors.primary.withValues(alpha: 0.4)
+              : Colors.white.withValues(alpha: 0.1),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: _togglePlay,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.isMe ? AppColors.primary : const Color(0xFF00E5FF),
+              ),
+              child: Icon(
+                _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 3,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+                    activeTrackColor: widget.isMe ? AppColors.primary : const Color(0xFF00E5FF),
+                    inactiveTrackColor: Colors.white24,
+                    thumbColor: Colors.white,
+                  ),
+                  child: Slider(
+                    value: currentSec,
+                    min: 0,
+                    max: maxSec,
+                    onChanged: (val) {
+                      _player.seek(Duration(seconds: val.toInt()));
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _formatDuration(_position),
+                        style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.w600),
+                      ),
+                      Text(
+                        _formatDuration(_duration),
+                        style: const TextStyle(color: Colors.white38, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

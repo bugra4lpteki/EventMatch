@@ -1765,7 +1765,11 @@ class MockEventService extends ChangeNotifier {
           list.add({
             'userId': item['userId'],
             'userName': item['userName'],
-            'message': item['message'],
+            'userAvatar': item['userAvatar'],
+            'message': item['message'] ?? '',
+            'imageUrl': item['imageUrl'],
+            'audioUrl': item['audioUrl'],
+            'audioDuration': item['audioDuration'],
             'time': item['time'] != null ? DateTime.tryParse(item['time'].toString()) ?? DateTime.now() : DateTime.now(),
           });
         }
@@ -1782,7 +1786,11 @@ class MockEventService extends ChangeNotifier {
       final encoded = list.map((m) => {
         'userId': m['userId'],
         'userName': m['userName'],
+        'userAvatar': m['userAvatar'],
         'message': m['message'],
+        'imageUrl': m['imageUrl'],
+        'audioUrl': m['audioUrl'],
+        'audioDuration': m['audioDuration'],
         'time': m['time'] is DateTime ? (m['time'] as DateTime).toIso8601String() : DateTime.now().toIso8601String(),
       }).toList();
       await prefs.setString('eventmatch_venue_chat_$eventId', jsonEncode(encoded));
@@ -1805,17 +1813,27 @@ class MockEventService extends ChangeNotifier {
         final list = <Map<String, dynamic>>[];
         final senderIds = res
             .map((m) => m['sender_id']?.toString())
-            .where((id) => id != null && _isValidUuid(id!))
+            .where((id) => id != null && _isValidUuid(id))
             .cast<String>()
             .toSet()
             .toList();
 
         Map<String, String> senderNames = {};
+        Map<String, String> senderAvatars = {};
         if (senderIds.isNotEmpty) {
           try {
             final uRes = await _supabase.from('users').select('id, name').inFilter('id', senderIds);
             for (var u in uRes) {
               senderNames[u['id'].toString().toLowerCase()] = u['name']?.toString() ?? 'Kullanıcı';
+            }
+          } catch (_) {}
+          try {
+            final pRes = await _supabase.from('user_photos').select('user_id, storage_url').inFilter('user_id', senderIds).eq('is_active', true).order('sort_order');
+            for (var p in pRes) {
+              final uid = p['user_id'].toString().toLowerCase();
+              if (!senderAvatars.containsKey(uid) && p['storage_url'] != null) {
+                senderAvatars[uid] = p['storage_url'].toString();
+              }
             }
           } catch (_) {}
         }
@@ -1824,10 +1842,16 @@ class MockEventService extends ChangeNotifier {
           final sId = row['sender_id']?.toString() ?? '';
           final lowerSId = sId.toLowerCase();
           final isMe = lowerSId == currentUserId.toLowerCase();
+          final mediaUrl = row['media_url']?.toString();
+          final mediaType = row['media_type']?.toString();
           list.add({
             'userId': sId,
             'userName': isMe ? currentUser.name : (senderNames[lowerSId] ?? 'Kullanıcı'),
+            'userAvatar': isMe ? currentUser.avatarUrl : (senderAvatars[lowerSId] ?? ''),
             'message': row['content']?.toString() ?? row['message']?.toString() ?? '',
+            'imageUrl': mediaType == 'image' ? mediaUrl : null,
+            'audioUrl': mediaType == 'audio' ? mediaUrl : null,
+            'audioDuration': row['audio_duration_seconds'] != null ? int.tryParse(row['audio_duration_seconds'].toString()) : null,
             'time': row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now(),
           });
         }
@@ -1854,15 +1878,23 @@ class MockEventService extends ChangeNotifier {
             callback: (payload) {
               final sId = payload['userId']?.toString() ?? '';
               final sName = payload['userName']?.toString() ?? 'Kullanıcı';
+              final sAvatar = payload['userAvatar']?.toString() ?? '';
               final msg = payload['message']?.toString() ?? '';
-              if (msg.trim().isEmpty) return;
+              final imgUrl = payload['imageUrl']?.toString();
+              final audUrl = payload['audioUrl']?.toString();
+              final audDur = payload['audioDuration'] != null ? int.tryParse(payload['audioDuration'].toString()) : null;
+              if (msg.trim().isEmpty && (imgUrl == null || imgUrl.isEmpty) && (audUrl == null || audUrl.isEmpty)) return;
 
               _venueChats.putIfAbsent(eventId, () => []);
-              if (!_venueChats[eventId]!.any((m) => m['message'] == msg && m['userId'] == sId)) {
+              if (!_venueChats[eventId]!.any((m) => m['message'] == msg && m['userId'] == sId && m['imageUrl'] == imgUrl && m['audioUrl'] == audUrl)) {
                 _venueChats[eventId]!.add({
                   'userId': sId,
                   'userName': sId.toLowerCase() == currentUserId.toLowerCase() ? currentUser.name : sName,
+                  'userAvatar': sId.toLowerCase() == currentUserId.toLowerCase() ? currentUser.avatarUrl : sAvatar,
                   'message': msg,
+                  'imageUrl': imgUrl,
+                  'audioUrl': audUrl,
+                  'audioDuration': audDur,
                   'time': DateTime.now(),
                 });
                 _saveVenueMessagesToStorage(eventId);
@@ -1896,19 +1928,63 @@ class MockEventService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> sendVenueMessage(String eventId, String message) async {
+  Future<String?> uploadVenueMedia(String localFilePath, {required String folder, required String extension}) async {
+    try {
+      final file = File(localFilePath);
+      if (!await file.exists()) return null;
+
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final userId = currentUserId.isNotEmpty ? currentUserId : 'anonymous';
+      final fileName = 'venue_$folder/${userId}_$timestamp.$extension';
+
+      await _supabase.storage
+          .from('chat-media')
+          .uploadBinary(
+            fileName,
+            bytes,
+            fileOptions: FileOptions(
+              contentType: extension == 'm4a' ? 'audio/mp4' : 'image/$extension',
+              upsert: true,
+            ),
+          );
+
+      final publicUrl = _supabase.storage.from('chat-media').getPublicUrl(fileName);
+      debugPrint('[VenueStorage] ✅ Medya yüklendi: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      debugPrint('[VenueStorage] ❌ Medya yükleme hatası: $e');
+      return null;
+    }
+  }
+
+  Future<void> sendVenueMessage(
+    String eventId,
+    String message, {
+    String? imageUrl,
+    String? audioUrl,
+    int? audioDuration,
+    String? userAvatar,
+  }) async {
     final text = message.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty && (imageUrl == null || imageUrl.isEmpty) && (audioUrl == null || audioUrl.isEmpty)) return;
 
     final uid = currentUserId;
     final uName = currentUser.name;
+    final uAvatar = (userAvatar != null && userAvatar.isNotEmpty) ? userAvatar : currentUser.avatarUrl;
     final now = DateTime.now();
 
     _venueChats.putIfAbsent(eventId, () => []);
     _venueChats[eventId]!.add({
       'userId': uid,
       'userName': uName,
+      'userAvatar': uAvatar,
       'message': text,
+      'imageUrl': imageUrl,
+      'audioUrl': audioUrl,
+      'audioDuration': audioDuration,
       'time': now,
     });
     await _saveVenueMessagesToStorage(eventId);
@@ -1921,7 +1997,11 @@ class MockEventService extends ChangeNotifier {
         payload: {
           'userId': uid,
           'userName': uName,
+          'userAvatar': uAvatar,
           'message': text,
+          'imageUrl': imageUrl,
+          'audioUrl': audioUrl,
+          'audioDuration': audioDuration,
           'time': now.toIso8601String(),
         },
       );
@@ -1929,10 +2009,15 @@ class MockEventService extends ChangeNotifier {
 
     // 2. Supabase messages tablosuna kalıcı olarak yaz
     try {
+      final mediaType = imageUrl != null ? 'image' : (audioUrl != null ? 'audio' : null);
+      final mediaUrl = imageUrl ?? audioUrl;
       await _supabase.from('messages').insert({
         'sender_id': uid,
         'receiver_id': 'venue_$eventId',
-        'content': text,
+        'content': text.isNotEmpty ? text : (imageUrl != null ? '📷 Fotoğraf' : '🎤 Sesli Mesaj'),
+        'media_url': mediaUrl,
+        'media_type': mediaType,
+        'audio_duration_seconds': audioDuration,
         'created_at': now.toUtc().toIso8601String(),
       });
     } catch (e) {
