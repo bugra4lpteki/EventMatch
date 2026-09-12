@@ -52,8 +52,15 @@ class AuthService extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('[Auth] Google Sign-In error: $e');
-      if (e.toString().contains('sign_in_canceled') || e.toString().contains('canceled')) {
+      final str = e.toString().toLowerCase();
+      if (str.contains('sign_in_canceled') || str.contains('canceled')) {
         return false;
+      }
+      if (str.contains('10') || str.contains('developer error') || str.contains('develop_error')) {
+        throw Exception('Google Giriş Yapılandırma Hatası (10: DEVELOPER_ERROR): Android SHA-1 parmak izi Google Cloud Console\'a tanımlanmalıdır veya webClientId uyuşmamaktadır.');
+      }
+      if (str.contains('network_error') || str.contains('socketexception') || str.contains('connection failed')) {
+        throw Exception('İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin.');
       }
       throw Exception('Google ile giriş sırasında hata oluştu: $e');
     }
@@ -70,9 +77,20 @@ class AuthService extends ChangeNotifier {
       return res;
     } on AuthException catch (e) {
       debugPrint('Apple OAuth AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('provider is not enabled') || msg.contains('unsupported provider')) {
+        throw Exception('Apple ile Giriş henüz Supabase üzerinde etkinleştirilmedi. (Supabase -> Authentication -> Providers -> Apple)');
+      }
       throw Exception(e.message);
     } catch (e) {
       debugPrint('Apple OAuth Error: $e');
+      final str = e.toString().toLowerCase();
+      if (str.contains('canceled') || str.contains('cancelled')) {
+        return false;
+      }
+      if (str.contains('provider is not enabled') || str.contains('apple')) {
+        throw Exception('Apple ile Giriş için Supabase Apple OAuth ve Apple Developer hesap yapılandırması gereklidir.');
+      }
       throw Exception('Apple ile giriş sırasında hata oluştu: $e');
     }
   }
