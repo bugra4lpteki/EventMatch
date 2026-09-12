@@ -377,13 +377,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           !url.contains('photo-1470225620780') &&
           !url.contains('photo-1514525253161')));
 
-    final spotifyBannerUrl = _spotifyArtistDataList.isNotEmpty
-        ? _spotifyArtistDataList.first.artist.imageUrl
-        : '';
     final resolvedBannerUrl = _ticketmasterHdBanner ??
-        (hasDirectPoster
+        (event.imageUrl.isNotEmpty
             ? event.imageUrl
-            : (spotifyBannerUrl.isNotEmpty ? spotifyBannerUrl : event.imageUrl));
+            : (_spotifyArtistDataList.isNotEmpty ? _spotifyArtistDataList.first.artist.imageUrl : ''));
 
     return Scaffold(
       backgroundColor: AppColors.background,

@@ -70,7 +70,7 @@ class MockEventService extends ChangeNotifier {
     super.dispose();
   }
 
-  static const String _eventsCacheKey = 'eventmatch_cached_events_v1';
+  static const String _eventsCacheKey = 'eventmatch_cached_events_v5_ticketmaster_clean';
 
   Future<void> _saveEventsToCache() async {
     try {
@@ -105,18 +105,12 @@ class MockEventService extends ChangeNotifier {
   Future<void> fetchEvents() async {
     // A. Anında render: Önbellekteki etkinlikleri veya popüler vitrin etkinliklerini anında yükle
     await _loadEventsFromCache();
-    // Biletinial API tamamen kaldırıldığı için kalan etkinlikleri önbellekten temizle
-    final hadBiletinial = _events.any((e) =>
-        e.id.toLowerCase().contains('biletinial') ||
-        (e.ticketProvider?.toLowerCase().contains('biletinial') ?? false) ||
-        (e.ticketUrl?.toLowerCase().contains('biletinial') ?? false));
-    if (hadBiletinial) {
-      _events.removeWhere((e) =>
-          e.id.toLowerCase().contains('biletinial') ||
-          (e.ticketProvider?.toLowerCase().contains('biletinial') ?? false) ||
-          (e.ticketUrl?.toLowerCase().contains('biletinial') ?? false));
-      await _saveEventsToCache();
-    }
+    // Eski harici API ve mock görsellerini temizle (Yalnızca Ticketmaster fotoğrafları)
+    _events.removeWhere((e) =>
+        e.imageUrl.contains('dzcdn.net') ||
+        e.imageUrl.contains('spotifycdn.com') ||
+        e.id.toLowerCase().contains('biletinial'));
+
     if (_events.isEmpty) {
       _populateFallbackEvents();
     }
@@ -176,92 +170,10 @@ class MockEventService extends ChangeNotifier {
         debugPrint('[EventService] Canlı Biletix & Spor API çekme hatası: $e');
       }
 
-      // 3. Konser etkinliklerini Spotify sanatçı görselleriyle zenginleştir
-      await _enrichEventsWithSpotifyArtistImages();
       await _saveEventsToCache();
       notifyListeners();
     } catch (e) {
       debugPrint('[EventService] Arka plan etkinlik yenileme hatası: $e');
-    }
-  }
-
-  /// Konser ve müzik etkinliklerini Spotify/Deezer sanatçı görselleriyle hızlıca paralel güncelleme
-  Future<void> _enrichEventsWithSpotifyArtistImages() async {
-    final spotifyService = SpotifyService();
-    bool updated = false;
-
-    final musicIndices = <int>[];
-    for (int i = 0; i < _events.length; i++) {
-      final event = _events[i];
-      final catLower = event.category.toLowerCase().trim();
-      final titleLower = event.title.toLowerCase().trim();
-
-      // Tiyatro, Stand-up, Gösteri ve Komedi etkinlikleri Spotify'dan hariç tutulur
-      if (catLower.contains('tiyatro') ||
-          catLower.contains('theatre') ||
-          catLower.contains('arts') ||
-          catLower.contains('stand-up') ||
-          catLower.contains('standup') ||
-          catLower.contains('komedi') ||
-          catLower.contains('comedy') ||
-          catLower.contains('sahne') ||
-          catLower.contains('spor') ||
-          catLower.contains('sport') ||
-          catLower.contains('sergi') ||
-          catLower.contains('atölye') ||
-          catLower.contains('sinema') ||
-          titleLower.contains('stand-up') ||
-          titleLower.contains('stand up') ||
-          titleLower.contains('tiyatro') ||
-          titleLower.contains('gösteri') ||
-          titleLower.contains('oyun') ||
-          titleLower.contains('tek kişilik')) {
-        continue;
-      }
-
-      // Biletix veya harici resmi afişi olan etkinliklerin orijinal afişlerini KORU!
-      final url = event.imageUrl.trim();
-      final hasOfficialPoster = url.contains('ticketm.net') ||
-          url.contains('biletix.com') ||
-          url.contains('biletinial.com') ||
-          url.contains('bubilet.com') ||
-          url.contains('bursadabugun.com') ||
-          url.contains('merlincdn.net') ||
-          url.contains('supabase.co');
-      if (hasOfficialPoster) {
-        continue;
-      }
-
-      final isMusicEvent = catLower.contains('konser') ||
-                           catLower.contains('müzik') ||
-                           catLower.contains('music') ||
-                           catLower.contains('rock') ||
-                           catLower.contains('pop') ||
-                           catLower.contains('rap') ||
-                           catLower.contains('akustik') ||
-                           catLower.contains('festival');
-
-      if (isMusicEvent) {
-        musicIndices.add(i);
-      }
-    }
-
-    if (musicIndices.isEmpty) return;
-
-    // Yalnızca afişi bulunmayan etkinlikler için Spotify sanatçı görseli çek
-    await Future.wait(musicIndices.map((idx) async {
-      final event = _events[idx];
-      try {
-        final artistImg = await spotifyService.getArtistImageUrl(event.title, category: event.category);
-        if (artistImg != null && artistImg.isNotEmpty && artistImg != event.imageUrl) {
-          _events[idx] = event.copyWith(imageUrl: artistImg);
-          updated = true;
-        }
-      } catch (_) {}
-    }));
-
-    if (updated) {
-      notifyListeners();
     }
   }
 
@@ -584,123 +496,153 @@ class MockEventService extends ChangeNotifier {
     final now = DateTime.now();
     final mockList = [
       EventModel(
-        id: 'blok3_today_1',
-        title: 'Blok3 - Canlı Performans & Gece',
-        category: 'Konser',
-        location: 'Dorock XL Kadıköy, İstanbul',
-        dateTime: now.add(const Duration(hours: 4, minutes: 30)),
-        description: 'Blok3 en popüler hit şarkıları ve dinamik sahnesiyle Dorock XL sahnesinde bu akşam sahnede!',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/bcd7669bc107dd4b066deb45a31b1f9d/1000x1000-000000-80-0-0.jpg',
-        latitude: 40.9902,
-        longitude: 29.0289,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=blok3',
-        ticketProvider: 'Biletix',
-        atmosphere: '🔥 Canlı & Aktif',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'sila_bursa_1',
-        title: 'Sıla Konseri',
-        category: 'Konser',
-        location: 'Bursa Kültürpark Açıkhava Tiyatrosu, Bursa',
-        dateTime: now.add(const Duration(days: 2, hours: 21)),
-        description: 'Sıla güçlü sesi ve hit şarkılarıyla Bursa Açıkhava Sahnesi’nde sevenleriyle buluşuyor.',
-        imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',
-        latitude: 40.1932,
-        longitude: 29.0492,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=s%C4%B1la',
-        ticketProvider: 'Biletix',
-        atmosphere: '✨ Unutulmaz',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'duman_1',
-        title: 'Duman Konseri',
-        category: 'Konser',
-        location: 'KüçükÇiftlik Park, İstanbul',
-        dateTime: now.add(const Duration(days: 4, hours: 20)),
-        description: 'Duman efsaneleşmiş şarkılarıyla İstanbul KüçükÇiftlik Park sahnesinde sevenleriyle buluşuyor.',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/420bd789cacec4d562f981f6eae6c76e/1000x1000-000000-80-0-0.jpg',
-        latitude: 41.0422,
-        longitude: 28.9897,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=duman',
-        ticketProvider: 'Biletix',
-        atmosphere: '🔥 Coşkulu',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'mabel_1',
-        title: 'Mabel Matiz Canlı',
-        category: 'Konser',
-        location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
-        dateTime: now.add(const Duration(days: 6, hours: 21)),
-        description: 'Mabel Matiz büyüleyici sahne performansı ve Fatih albümü şarkılarıyla Harbiye sahnesinde.',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/200a518f2a5b6e5c3f215111275bac10/1000x1000-000000-80-0-0.jpg',
-        latitude: 41.0468,
-        longitude: 28.9882,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mabel+matiz',
-        ticketProvider: 'Biletix',
-        atmosphere: '💖 Duygusal',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'morveotesi_1',
-        title: 'Mor ve Ötesi Senfonik',
-        category: 'Konser',
-        location: 'Zorlu PSM - Turkcell Sahnesi, İstanbul',
-        dateTime: now.add(const Duration(days: 8, hours: 20)),
-        description: 'Mor ve Ötesi dev senfoni orkestrası eşliğinde unutulmaz bir rock gecesi sunuyor.',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aee2502f3565318f12a5b90e9fb3d67c/1000x1000-000000-80-0-0.jpg',
-        latitude: 41.0664,
-        longitude: 29.0172,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mor+ve+%C3%B6tesi',
-        ticketProvider: 'Biletix',
-        atmosphere: '🎸 Efsane',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'teoman_1',
-        title: 'Teoman - Koyu Antoloji',
-        category: 'Konser',
-        location: 'Bostancı Gösteri Merkezi, İstanbul',
-        dateTime: now.add(const Duration(days: 10, hours: 21)),
-        description: 'Teoman en sevilen şarkıları ve özel akustik düzenlemeleriyle sahnede.',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/24cc2215cde1d249385ea6d466487a35/1000x1000-000000-80-0-0.jpg',
-        latitude: 40.9634,
-        longitude: 29.0945,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=teoman',
-        ticketProvider: 'Biletix',
-        atmosphere: '🍷 Büyüleyici',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'zeynep_1',
-        title: 'Zeynep Bastık',
+        id: 'biletix_Z1HyzZyMZk2Qaely',
+        title: 'The Black Keys',
         category: 'Konser',
         location: 'Maximum UNIQ Açıkhava, İstanbul',
-        dateTime: now.add(const Duration(days: 12, hours: 21)),
-        description: 'Zeynep Bastık hit akustik ve pop parçalarıyla yaz akşamını renklendiriyor.',
-        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/641b9164594081e14059fdf87404eb8d/1000x1000-000000-80-0-0.jpg',
+        dateTime: now.add(const Duration(days: 3, hours: 21)),
+        description: 'Grammy ödüllü rock devi The Black Keys, dünya turnesi kapsamında İstanbul sahnesinde canlı performansıyla dinleyicilerle buluşuyor!',
+        imageUrl: 'https://s1.ticketm.net/dam/a/1a5/c5f563b8-baf5-4342-97e6-b4a9147c51a5_SOURCE',
         latitude: 41.1114,
         longitude: 29.0233,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=zeynep+bast%C4%B1k',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=the+black+keys',
         ticketProvider: 'Biletix',
-        atmosphere: '🌟 Enerjik',
+        atmosphere: '🔥 Efsane Rock',
         isPopular: true,
       ),
       EventModel(
-        id: 'baturay_1',
-        title: 'Baturay Özdemir - Stand Up',
-        category: 'Stand-up',
-        location: 'DasDas, İstanbul',
-        dateTime: now.add(const Duration(days: 5, hours: 20)),
-        description: 'Baturay Özdemir tek kişilik yeni komedi gösterisiyle DasDas sahnesinde kahkaha dolu bir gece sunuyor.',
-        imageUrl: 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg',
-        latitude: 41.0082,
-        longitude: 29.0494,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=baturay',
+        id: 'biletix_Z1HyzZyMZkQjaGjy',
+        title: 'The Sisters of Mercy',
+        category: 'Konser',
+        location: 'Paribu Art - Ana Sahne, İstanbul',
+        dateTime: now.add(const Duration(days: 5, hours: 21)),
+        description: 'Post-punk ve gotik rock efsanesi The Sisters of Mercy, unutulmaz hitleri ve büyüleyici sahne ışıklarıyla İstanbul\'da sahnede.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/b8b/f33dd002-8a40-49f5-a9cd-9e1e4edd1b8b_SOURCE',
+        latitude: 40.9914,
+        longitude: 29.0364,
+        ticketUrl: 'https://www.biletix.com/performance/5PR51/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
-        atmosphere: '😂 Eğlenceli',
+        atmosphere: '✨ Kült Gece',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z2HyzZyMZkQ_qqvve',
+        title: 'Saint Levant - Afandi World Tour',
+        category: 'Konser',
+        location: 'Zorlu PSM - Turkcell Sahnesi, İstanbul',
+        dateTime: now.add(const Duration(days: 7, hours: 20)),
+        description: 'Global müzik sahnesinin yükselen yıldızı Saint Levant, Afandi World Tour turnesiyle İstanbul Zorlu PSM\'de sevenleriyle buluşuyor.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/130/06ba4e22-a1ba-4046-b822-f55c0e34f130_SOURCE',
+        latitude: 41.0664,
+        longitude: 29.0172,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=saint+levant',
+        ticketProvider: 'Biletix',
+        atmosphere: '🔥 Dünya Turnesi',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z1HyzZyMZkxva60_',
+        title: 'Black Veil Brides',
+        category: 'Konser',
+        location: 'KüçükÇiftlik Park, İstanbul',
+        dateTime: now.add(const Duration(days: 9, hours: 20)),
+        description: 'Hard rock ve glam metal grubu Black Veil Brides, enerjik ve dinamik sahne şovuyla İstanbul KüçükÇiftlik Park sahnesinde.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/f7d/82a26e44-b08e-45d4-8b4a-99afa558ff7d_SOURCE',
+        latitude: 41.0422,
+        longitude: 28.9897,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=black+veil+brides',
+        ticketProvider: 'Biletix',
+        atmosphere: '⚡ Metal Coşkusu',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z2HyzZyMZkQ_qQvve',
+        title: 'Snarky Puppy',
+        category: 'Konser',
+        location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
+        dateTime: now.add(const Duration(days: 11, hours: 21)),
+        description: 'Grammy ödüllü caz-füzyon kolektifi Snarky Puppy, muhteşem enstrümantal ziyafetiyle Harbiye Açıkhava sahnesinde.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/472/a218a4e5-3abf-463a-9bd6-7e59366ec472_SOURCE',
+        latitude: 41.0468,
+        longitude: 28.9882,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=snarky+puppy',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎷 Caz & Füzyon',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z1HyzZyMZ62Qk7vve',
+        title: 'Black Label Society',
+        category: 'Konser',
+        location: 'Dorock XL Kadıköy, İstanbul',
+        dateTime: now.add(const Duration(days: 13, hours: 21, minutes: 30)),
+        description: 'Zakk Wylde önderliğindeki efsanevi heavy metal grubu Black Label Society canlı ve sert riffleriyle sahnede.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/197/5f1295dd-f818-41ce-83b4-50db41750197_SOURCE',
+        latitude: 40.9902,
+        longitude: 29.0289,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=black+label+society',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎸 Ağır Metal',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z1HyzZyMZkK3aCt-',
+        title: 'Mavi Teneffüs Konseri',
+        category: 'Konser',
+        location: 'Bostancı Gösteri Merkezi, İstanbul',
+        dateTime: now.add(const Duration(days: 15, hours: 21)),
+        description: 'Mavi en sevilen şarkıları ve özel akustik repertuvarıyla Bostancı Gösteri Merkezi sahnesinde.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/f7c/8603c0fb-e2f9-4bb2-b1cf-54a66a3f8f7c_SOURCE',
+        latitude: 40.9634,
+        longitude: 29.0945,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mavi',
+        ticketProvider: 'Biletix',
+        atmosphere: '💖 Canlı Akustik',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z2HyzZyMZkQ_3kvve',
+        title: 'Bilal - Celebrating 25 Years',
+        category: 'Konser',
+        location: 'Babylon Bomonti, İstanbul',
+        dateTime: now.add(const Duration(days: 17, hours: 21, minutes: 30)),
+        description: 'Neo-soul ve R&B ikonu Bilal, efsanevi 1st Born Second albümünün 25. yıl dönümü turnesiyle Babylon sahnesinde.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/a44/5664b090-6e0f-4987-856f-ff1ca406aa44_SOURCE',
+        latitude: 41.0582,
+        longitude: 28.9803,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=bilal',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎤 Neo-Soul',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z6HyzZyMZGkvQSHZv',
+        title: 'Arturo Sandoval Canlı',
+        category: 'Konser',
+        location: 'Zorlu PSM - Turkcell Platinum Sahnesi, İstanbul',
+        dateTime: now.add(const Duration(days: 19, hours: 20, minutes: 30)),
+        description: '10 Grammy ve Emmy ödüllü caz efsanesi Arturo Sandoval, Latin caz fırtınası estirmek üzere Zorlu PSM\'de!',
+        imageUrl: 'https://s1.ticketm.net/dam/a/ce9/02bef084-80d2-4392-be0b-de92e8d52ce9_SOURCE',
+        latitude: 41.0664,
+        longitude: 29.0172,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=arturo+sandoval',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎺 Efsane Caz',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_Z2HyzZyMZk54bvvve',
+        title: 'Swallow The Sun - Ocean Of Grief',
+        category: 'Konser',
+        location: 'IF Performance Hall Beşiktaş, İstanbul',
+        dateTime: now.add(const Duration(days: 21, hours: 20)),
+        description: 'Kuzeyin melankolik doom metal devleri Swallow The Sun, Ocean Of Grief ile birlikte IF Beşiktaş sahnesinde.',
+        imageUrl: 'https://s1.ticketm.net/dam/a/737/d0a621e9-d41e-46c0-bd8d-9589c46ac737_SOURCE',
+        latitude: 41.0428,
+        longitude: 29.0069,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=swallow+the+sun',
+        ticketProvider: 'Biletix',
+        atmosphere: '⚡ Doom Metal',
         isPopular: true,
       ),
       EventModel(

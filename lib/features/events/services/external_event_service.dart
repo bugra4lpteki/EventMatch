@@ -99,34 +99,28 @@ class ExternalEventService {
               }
             }
 
-            // Görsel tespiti: Ticketmaster / Biletix Resmi 16:9 HD Afişini Çekme
+            // Görsel tespiti: Ticketmaster Resmi HD Afişini Çekme
             String imageUrl = '';
             if (item['images'] != null && item['images'] is List) {
               final rawList = (item['images'] as List).whereType<Map>().toList();
               if (rawList.isNotEmpty) {
-                final banners169 = rawList.where((img) {
-                  final ratio = img['ratio']?.toString() ?? '';
-                  final u = img['url']?.toString() ?? '';
-                  return ratio == '16_9' || u.contains('16_9') || u.contains('TABLET_LANDSCAPE');
-                }).toList();
+                // Çözünürlüğe göre en yüksekten en küçüğe sırala
+                rawList.sort((a, b) {
+                  final wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+                  final wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+                  return wB.compareTo(wA);
+                });
 
-                if (banners169.isNotEmpty) {
-                  banners169.sort((a, b) {
-                    final wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                    final wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                    return wB.compareTo(wA);
-                  });
-                  imageUrl = banners169.first['url']?.toString() ?? '';
-                }
-
-                if (imageUrl.isEmpty) {
-                  rawList.sort((a, b) {
-                    final wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
-                    final wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
-                    return wB.compareTo(wA);
-                  });
-                  imageUrl = rawList.first['url']?.toString() ?? '';
-                }
+                // Önce 16:9 / SOURCE / LANDSCAPE olan en yüksek kaliteli görseli seç
+                final bestMatch = rawList.firstWhere(
+                  (img) {
+                    final u = img['url']?.toString() ?? '';
+                    final r = img['ratio']?.toString() ?? '';
+                    return u.contains('_SOURCE') || u.contains('LARGE_16_9') || r == '16_9' || u.contains('16_9');
+                  },
+                  orElse: () => rawList.first,
+                );
+                imageUrl = bestMatch['url']?.toString() ?? '';
               }
             }
 
