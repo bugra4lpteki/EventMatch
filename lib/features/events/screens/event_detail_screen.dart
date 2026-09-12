@@ -1020,7 +1020,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                         children: [
                                           Text(
                                             !isRoomActive
-                                                ? 'Check-in & Canlı Sohbet 🔒'
+                                                ? 'Check-in & Mekan Sohbeti 🔒'
                                                 : (isCheckedIn ? 'Mekandasın! 📍' : 'Mekanda mısın?'),
                                             style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15.5),
                                           ),
@@ -1030,7 +1030,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                                 ? (timeUntil.inDays > 0
                                                     ? 'Etkinliğe 24 saat kala açılır (${timeUntil.inDays} gün kaldı).'
                                                     : 'Etkinliğe 24 saat kala açılır (${timeUntil.inHours} saat kaldı).')
-                                                : (isCheckedIn ? 'Canlı yayında diğerleriyle sohbettesin.' : 'Check-in yap, rozetini kap!'),
+                                                : (isCheckedIn ? 'Mekan sohbetinde diğer katılımcılarla tanışabilirsin.' : 'Check-in yap, rozetini kap!'),
                                             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                           ),
                                         ],
@@ -1084,8 +1084,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                               MaterialPageRoute(builder: (context) => VenueChatScreen(event: event)),
                                             );
                                           },
-                                          icon: const Icon(Icons.stream_rounded, color: Colors.white, size: 18),
-                                          label: const Text('CANLI YAYIN CHAT\'E KATIL 🔴', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                          icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 18),
+                                          label: const Text('MEKAN SOHBETİNE KATIL', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor: AppColors.primary,
                                             foregroundColor: Colors.white,
