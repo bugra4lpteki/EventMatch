@@ -611,6 +611,58 @@ class ExternalEventService {
     return null;
   }
 
+  /// 🖼️ Ticketmaster / Biletix Canlı Etkinlik Afişleri ve Görselleri Çekme (API: /events/{id}/images.json)
+  static Future<List<String>> fetchLiveTicketmasterEventImages(String rawEventId) async {
+    final apiKey = ApiKeys.ticketmasterApiKey;
+    final cleanId = rawEventId.replaceFirst('biletix_', '').trim();
+    if (cleanId.isEmpty) return [];
+
+    final url = Uri.parse('https://app.ticketmaster.com/discovery/v2/events/$cleanId/images.json?apikey=$apiKey');
+
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 4));
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final rawImages = data['images'] as List? ?? [];
+        if (rawImages.isEmpty) return [];
+
+        final imageList = rawImages.whereType<Map>().toList();
+        // Çözünürlüğe göre (genişlik) büyükten küçüğe sırala
+        imageList.sort((a, b) {
+          final wA = int.tryParse(a['width']?.toString() ?? '0') ?? 0;
+          final wB = int.tryParse(b['width']?.toString() ?? '0') ?? 0;
+          return wB.compareTo(wA);
+        });
+
+        final List<String> urls = [];
+        for (var img in imageList) {
+          final u = img['url']?.toString();
+          if (u != null && u.startsWith('http') && !urls.contains(u)) {
+            urls.add(u);
+          }
+        }
+        debugPrint('✅ [TicketmasterImages] $cleanId için ${urls.length} adet resmi afiş bulundu.');
+        return urls;
+      }
+    } catch (e) {
+      debugPrint('❌ [TicketmasterImages] Görsel getirme hatası ($cleanId): $e');
+    }
+    return [];
+  }
+
+  /// 🎯 Ticketmaster / Biletix Etkinliğinin En Yüksek Çözünürlüklü 16:9 HD Afişini Getir
+  static Future<String?> fetchBestEventImage(String rawEventId) async {
+    final images = await fetchLiveTicketmasterEventImages(rawEventId);
+    if (images.isNotEmpty) {
+      final landscape = images.firstWhere(
+        (u) => u.contains('16_9') || u.contains('LANDSCAPE') || u.contains('SOURCE'),
+        orElse: () => images.first,
+      );
+      return landscape;
+    }
+    return null;
+  }
+
   /// Katategoriye Göre Akıllı Görsel Belirleyici (Stand Up, Tiyatro, Konser, Spor vb.)
   static String _getCategoryFallbackImage(String category, String title) {
     final catLower = category.toLowerCase();

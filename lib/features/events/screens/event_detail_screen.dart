@@ -15,6 +15,7 @@ import '../services/mock_event_service.dart';
 import '../services/mock_match_service.dart';
 import '../services/notification_service.dart';
 import '../services/spotify_service.dart';
+import '../services/external_event_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
 
@@ -42,6 +43,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   String? _playingTrackId;
   bool _isPlaying = false;
   Duration _currentPosition = Duration.zero;
+
+  // Ticketmaster / Biletix Canlı Afiş & Galeri State
+  List<String> _ticketmasterGalleryImages = [];
+  String? _ticketmasterHdBanner;
 
   bool get _isMusicEvent {
     final cat = widget.event.category.toLowerCase().trim();
@@ -88,6 +93,28 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _loadSpotifyData();
     } else {
       _isLoadingSpotify = false;
+    }
+    _loadTicketmasterImages();
+  }
+
+  Future<void> _loadTicketmasterImages() async {
+    final eventId = widget.event.id;
+    if (eventId.startsWith('biletix_')) {
+      try {
+        final images = await ExternalEventService.fetchLiveTicketmasterEventImages(eventId);
+        if (mounted && images.isNotEmpty) {
+          setState(() {
+            _ticketmasterGalleryImages = images;
+            final hd = images.firstWhere(
+              (u) => u.contains('16_9') || u.contains('LANDSCAPE') || u.contains('SOURCE'),
+              orElse: () => images.first,
+            );
+            _ticketmasterHdBanner = hd;
+          });
+        }
+      } catch (e) {
+        debugPrint('Ticketmaster gallery load error: $e');
+      }
     }
   }
 
@@ -353,9 +380,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final spotifyBannerUrl = _spotifyArtistDataList.isNotEmpty
         ? _spotifyArtistDataList.first.artist.imageUrl
         : '';
-    final resolvedBannerUrl = hasDirectPoster
-        ? event.imageUrl
-        : (spotifyBannerUrl.isNotEmpty ? spotifyBannerUrl : event.imageUrl);
+    final resolvedBannerUrl = _ticketmasterHdBanner ??
+        (hasDirectPoster
+            ? event.imageUrl
+            : (spotifyBannerUrl.isNotEmpty ? spotifyBannerUrl : event.imageUrl));
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -915,6 +943,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ],
                     ),
                   ),
+
+                  // Ticketmaster / Biletix Resmi Afiş & Görsel Galerisi
+                  _buildEventGallerySection(),
 
                   const SizedBox(height: 32),
 
@@ -1767,6 +1798,138 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// 🖼️ Ticketmaster / Biletix Resmi Afiş ve Fotoğraf Galerisi Bölümü
+  Widget _buildEventGallerySection() {
+    if (_ticketmasterGalleryImages.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.photo_library_rounded, color: AppColors.secondary, size: 20),
+            const SizedBox(width: 8),
+            const Text(
+              "Resmi Afişler & Görseller",
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+            ),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Text(
+                '${_ticketmasterGalleryImages.length} Görsel',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 150,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: _ticketmasterGalleryImages.length,
+            itemBuilder: (context, index) {
+              final imgUrl = _ticketmasterGalleryImages[index];
+              return Padding(
+                padding: EdgeInsets.only(right: index == _ticketmasterGalleryImages.length - 1 ? 0 : 14),
+                child: GestureDetector(
+                  onTap: () => _openFullScreenImage(imgUrl),
+                  child: Container(
+                    width: 220,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: Colors.white.withOpacity(0.12)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.35),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AppImageWidget(
+                            imageUrl: imgUrl,
+                            fit: BoxFit.cover,
+                          ),
+                          Positioned(
+                            right: 8,
+                            bottom: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.65),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 18),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openFullScreenImage(String imageUrl) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.92),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            InteractiveViewer(
+              minScale: 0.5,
+              maxScale: 4.0,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AppImageWidget(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              right: 10,
+              child: GestureDetector(
+                onTap: () => Navigator.pop(ctx),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.65),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 22),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
