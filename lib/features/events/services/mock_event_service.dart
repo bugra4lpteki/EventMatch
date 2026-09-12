@@ -127,10 +127,12 @@ class MockEventService extends ChangeNotifier {
     _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     await _loadLocalAttendeesCache();
     _syncPlannedEventsWithAttendees();
-    notifyListeners(); // Kullanıcı anasayfayı 0.05 saniyede dolu olarak görür!
-
-    // B. Arka planda sessizce Canlı Biletix API'lerini güncelle
-    _fetchLiveEventsInBackground();
+    // B. Arka planda sessizce Canlı Biletix API'lerini güncelle (Test ortamında timer/network sızıntısını önler)
+    final bool isTestMode = const bool.fromEnvironment('flutter.test') ||
+        (WidgetsBinding.instance.runtimeType.toString().contains('Test'));
+    if (!isTestMode) {
+      _fetchLiveEventsInBackground();
+    }
   }
 
   Future<void> _fetchLiveEventsInBackground() async {
@@ -143,18 +145,29 @@ class MockEventService extends ChangeNotifier {
       // 2. Canlı Biletix (Ticketmaster) API'sini arka planda çek
       try {
         final service = ExternalEventService();
-        final results = await Future.wait([
-          service.fetchLiveTicketmasterEvents(page: 0, size: 100),
-          service.fetchLiveTicketmasterEvents(page: 1, size: 100),
-          service.fetchLiveTicketmasterEvents(keyword: 'baturay'),
-          service.fetchLiveTicketmasterEvents(keyword: 'duman'),
-          service.fetchLiveTicketmasterEvents(keyword: 'levent'),
-          service.fetchLiveTicketmasterEvents(keyword: 'teoman'),
-          service.fetchLiveTicketmasterEvents(keyword: 'tiyatro'),
-          service.fetchLiveTicketmasterEvents(keyword: 'stand up'),
-          service.fetchLiveTicketmasterEvents(keyword: 'konser'),
-          service.fetchLiveSportsEvents(),
-        ]);
+        // Ticketmaster API limitlerine (rate limit 5 req/sec) takılmamak için sorguları sıralı ve gecikmeli çekiyoruz
+        final List<List<EventModel>> results = [];
+        
+        // 1. Genel Türkiye etkinlikleri (Sayfa 0 ve 1)
+        final p0 = await service.fetchLiveTicketmasterEvents(page: 0, size: 100);
+        results.add(p0);
+        await Future.delayed(const Duration(milliseconds: 250));
+
+        final p1 = await service.fetchLiveTicketmasterEvents(page: 1, size: 100);
+        results.add(p1);
+        await Future.delayed(const Duration(milliseconds: 250));
+
+        // 2. Canlı Spor müsabakaları (Passo)
+        final sports = await service.fetchLiveSportsEvents();
+        results.add(sports);
+
+        // 3. Öne çıkan popüler aramalar (kademeli)
+        final keywords = ['duman', 'teoman', 'tiyatro', 'stand up'];
+        for (final kw in keywords) {
+          await Future.delayed(const Duration(milliseconds: 250));
+          final kwResults = await service.fetchLiveTicketmasterEvents(keyword: kw, size: 20);
+          if (kwResults.isNotEmpty) results.add(kwResults);
+        }
 
         bool addedAny = false;
         for (var list in results) {
@@ -270,6 +283,8 @@ class MockEventService extends ChangeNotifier {
       }
       _savePlannedEvents();
       notifyListeners();
+    } on PostgrestException catch (e) {
+      debugPrint('[EventService] Supabase attendees tablosuna erişilemedi (Yerel önbellek devrede): ${e.message}');
     } catch (e) {
       debugPrint('[EventService] Supabase attendees çekme hatası: $e');
     }

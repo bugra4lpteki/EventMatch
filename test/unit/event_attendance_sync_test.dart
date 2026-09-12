@@ -24,8 +24,9 @@ void main() {
 
   group('Etkinlik Katılımı ve Katılımcı Senkronizasyon Testleri', () {
     test('Kullanıcı etkinliğe katıldığında plannedEvents ve attendees güncellenmelidir', () async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues({'eventmatch_cache_version_num': 7});
       final service = MockEventService();
+      await service.fetchEvents();
       
       final testEvent = EventModel(
         id: 'the_black_keys_test_1',

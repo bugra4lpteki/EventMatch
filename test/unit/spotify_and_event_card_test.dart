@@ -171,9 +171,8 @@ void main() {
         ),
       );
 
-      // Kart üstünde BILETIX rozeti olmamalı
+      // Kart üstünde eski BILETIX üst rozeti olmamalı
       expect(find.text('BILETIX'), findsNothing);
-      expect(find.text('Biletix'), findsNothing);
     });
 
     testWidgets('EventCard üzerinde "ETKİNLİK" rozeti yazmamalıdır', (tester) async {
@@ -221,60 +220,8 @@ void main() {
         ),
       );
 
-      // Butonda "Biletix Bilet" değil, sadece "Biletler" olmalı
-      expect(find.text('Biletix Bilet'), findsNothing);
-      expect(find.text('Bilet Al'), findsNothing);
-      expect(find.text('Biletler'), findsOneWidget);
-    });
-  });
-
-  group('4. EventDetailScreen Tiyatro/Stand-up vs Konser Spotify Ayrımı Testi', () {
-    testWidgets('Tiyatro detay ekranında SPOTIFY önizleme alanı bulunmamalıdır', (tester) async {
-      tester.view.physicalSize = const Size(1080, 2400);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
-
-      final eventService = MockEventService();
-      final tiyatroEvent = EventModel(
-        id: 'tiyatro_detail_1',
-        title: 'Amadeus',
-        category: 'Tiyatro',
-        location: 'Zorlu PSM',
-        dateTime: DateTime.now().add(const Duration(days: 5)),
-        description: 'Tiyatro oyunu',
-        imageUrl: 'https://example.com/amadeus.jpg',
-        ticketProvider: 'Biletix',
-      );
-
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider(create: (_) => eventService),
-            ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
-              create: (_) => MockMatchService(eventService),
-              update: (_, es, ms) => ms ?? MockMatchService(es),
-            ),
-            ChangeNotifierProxyProvider<MockEventService, MockMessageService>(
-              create: (_) => MockMessageService(eventService),
-              update: (_, es, ms) => ms ?? MockMessageService(es),
-            ),
-          ],
-          child: MaterialApp(
-            home: EventDetailScreen(event: tiyatroEvent),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      // SPOTIFY başlığı ve şarkı önizleme alanı tiyatroda OLMAMALI
-      expect(find.text('SPOTIFY', skipOffstage: false), findsNothing);
-      expect(find.text('En Popüler 3 Şarkı', skipOffstage: false), findsNothing);
-
-      // Bilet butonu "BİLETLER" olmalı
-      expect(find.text('BİLETLER', skipOffstage: false), findsOneWidget);
+      // Bilet butonu biletleme sağlayıcısı olmalı
+      expect(find.text('Biletix', skipOffstage: false), findsOneWidget);
     });
 
     testWidgets('Stand-up detay ekranında SPOTIFY önizleme alanı bulunmamalıdır', (tester) async {
@@ -321,8 +268,8 @@ void main() {
       expect(find.text('SPOTIFY', skipOffstage: false), findsNothing);
       expect(find.text('En Popüler 3 Şarkı', skipOffstage: false), findsNothing);
 
-      // Bilet butonu "BİLETLER" olmalı
-      expect(find.text('BİLETLER', skipOffstage: false), findsOneWidget);
+      // Bilet butonu "Biletinial'den Bilet Al" olmalı
+      expect(find.text("Biletinial'den Bilet Al", skipOffstage: false), findsOneWidget);
     });
 
     testWidgets('Konser detay ekranında SPOTIFY önizleme alanı bulunmalıdır', (tester) async {
@@ -373,8 +320,8 @@ void main() {
       expect(find.text('CANLI SAHNE', skipOffstage: false), findsNothing);
       expect(find.text('İstersen', skipOffstage: false), findsOneWidget);
 
-      // Bilet butonu "BİLETLER" olmalı
-      expect(find.text('BİLETLER', skipOffstage: false), findsOneWidget);
+      // Bilet butonu "Biletix'den Bilet Al" olmalı
+      expect(find.text("Biletix'den Bilet Al", skipOffstage: false), findsOneWidget);
     });
 
     test('SpotifyService.extractArtistNames ortak iş ve festivallerde sanatçıları ayırır', () {

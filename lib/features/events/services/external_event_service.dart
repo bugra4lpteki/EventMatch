@@ -160,12 +160,15 @@ class ExternalEventService {
         return eventsList;
       }
       return [];
+    } else if (response.statusCode == 429) {
+      debugPrint('⚠️ Ticketmaster API Rate-Limit (429) aşıldı, yerel ve önbellekteki veriler kullanılıyor.');
+      return [];
     } else {
-      debugPrint('❌ Ticketmaster API Hatası: ${response.statusCode} - ${response.body}');
+      debugPrint('❌ Ticketmaster API Hatası: ${response.statusCode}');
       return [];
     }
     } catch (e) {
-      debugPrint('❌ Ticketmaster Istek Hatası: $e');
+      debugPrint('❌ Ticketmaster İstek Hatası: $e');
       return [];
     }
   }

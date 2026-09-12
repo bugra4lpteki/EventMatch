@@ -84,15 +84,23 @@ class AuthService extends ChangeNotifier {
       // E-posta formatında değilse kullanıcı adından e-postayı çekmeyi dene
       if (!email.contains('@')) {
         try {
+          final cleanUser = email.replaceAll('@', '').toLowerCase();
           final res = await _supabase
               .from('users')
-              .select('id')
-              .eq('username', email)
+              .select('id, email')
+              .ilike('username', cleanUser)
               .maybeSingle();
-          if (res != null) {
-            // Eğer username bulunduysa auth tablosundan deneyebiliriz veya kullanıcı doğrudan email girsin
+
+          if (res != null && res['email'] != null && res['email'].toString().isNotEmpty) {
+            email = res['email'].toString().trim();
+          } else {
+            // Eğer users tablosunda email kolonu yoksa veya boşsa, kullanıcıya açık mesaj ver
+            // Ancak yine de doğrudan username ile denenmesin çünkü auth.signInWithPassword e-posta bekler
+            return '@$cleanUser kullanıcı adına ait hesap bulunamadı veya e-posta eşleşmesi yok. Lütfen e-posta adresinizle giriş yapın.';
           }
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('Username to email resolve hatası: $e');
+        }
       }
 
       final response = await _supabase.auth.signInWithPassword(

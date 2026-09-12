@@ -126,7 +126,7 @@ class SpotifyService {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: {'grant_type': 'client_credentials'},
-      ).timeout(const Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -134,13 +134,15 @@ class SpotifyService {
         final expiresIn = data['expires_in'] ?? 3600;
         _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn - 60));
         return _accessToken;
-      } else {
+      } else if (response.statusCode == 400 || response.statusCode == 401 || response.statusCode == 403) {
+        // Geçersiz API anahtarları veya yetki hatası durumunda tekrar tekrar sormamak için kalıcı devre dışı bırak
         _tokenFailedPermanently = true;
-        debugPrint('[SpotifyService] Spotify token kullanılamıyor, doğrudan Universal Deezer motoruna geçiliyor.');
+        debugPrint('[SpotifyService] Spotify API anahtarı geçersiz (${response.statusCode}), Universal Deezer motoruna geçiliyor.');
+      } else {
+        debugPrint('[SpotifyService] Spotify token geçici yanıt (${response.statusCode}), Deezer yedek motoru devrede.');
       }
     } catch (e) {
-      _tokenFailedPermanently = true;
-      debugPrint('[SpotifyService] Token exception: $e, Deezer motoru devrede.');
+      debugPrint('[SpotifyService] Token ağ/zaman aşımı istisnası: $e, Deezer motoru devrede.');
     }
     return null;
   }

@@ -7,6 +7,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 2. USERS TABLE
 CREATE TABLE IF NOT EXISTS public.users (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT,
   name TEXT,
   username TEXT UNIQUE,
   city TEXT,
@@ -101,9 +102,10 @@ CREATE TABLE IF NOT EXISTS public.messages (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, name, username, birth_date)
+  INSERT INTO public.users (id, email, name, username, birth_date)
   VALUES (
     NEW.id,
+    NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', 'Yeni Kullanıcı'),
     COALESCE(NEW.raw_user_meta_data->>'username', SPLIT_PART(NEW.email, '@', 1)),
     CASE 
@@ -113,13 +115,15 @@ BEGIN
     END
   )
   ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
     name = EXCLUDED.name,
     username = EXCLUDED.username;
   RETURN NEW;
 EXCEPTION WHEN OTHERS THEN
-  INSERT INTO public.users (id, name, username)
+  INSERT INTO public.users (id, email, name, username)
   VALUES (
     NEW.id,
+    NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', 'Yeni Kullanıcı'),
     COALESCE(NEW.raw_user_meta_data->>'username', SPLIT_PART(NEW.email, '@', 1))
   )
