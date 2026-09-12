@@ -464,49 +464,34 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   Text(
                     event.title,
                     style: const TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
                       color: Colors.white,
                       height: 1.15,
                       letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
 
-                  // Ultra-Premium Glassmorphic Glowing Date & Time Card
+                  // Modern Sleek Glass Date & Time Card
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(18),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.surface.withOpacity(0.65),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: AppColors.primary.withOpacity(0.25), width: 1.2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withOpacity(0.12),
-                          blurRadius: 20,
-                          spreadRadius: 1,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
                     ),
                     child: Row(
                       children: [
-                        // Left: Gradient Glowing Calendar Date Stub
+                        // Left: Minimal clean calendar badge
                         Container(
-                          width: 58,
-                          height: 62,
+                          width: 48,
+                          height: 52,
                           decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.primary.withOpacity(0.35),
-                                AppColors.secondary.withOpacity(0.25),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: AppColors.primary.withOpacity(0.5), width: 1.5),
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.primary.withOpacity(0.2), width: 1),
                           ),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -516,8 +501,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 style: TextStyle(
                                   color: AppColors.primaryVariant,
                                   fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.0,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                               const SizedBox(height: 1),
@@ -525,16 +510,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 '${event.dateTime.day}',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w900,
-                                  height: 1.0,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  height: 1.1,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        // Middle: Date & Time info text
+                        const SizedBox(width: 14),
+                        // Middle: Date & Time info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -543,22 +528,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 '${event.dateTime.day} ${_getTurkishMonthName(event.dateTime.month)} ${event.dateTime.year}',
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
                                   letterSpacing: -0.2,
                                 ),
                               ),
-                              const SizedBox(height: 5),
+                              const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  Icon(Icons.schedule_rounded, color: AppColors.secondary, size: 16),
-                                  const SizedBox(width: 6),
+                                  Icon(
+                                    Icons.schedule_rounded,
+                                    color: AppColors.textSecondary,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 5),
                                   Text(
                                     '${_getTurkishDayName(event.dateTime.weekday)} • ${event.dateTime.hour.toString().padLeft(2, '0')}:${event.dateTime.minute.toString().padLeft(2, '0')}',
                                     style: TextStyle(
                                       color: AppColors.textSecondary,
-                                      fontSize: 13.5,
-                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -566,163 +555,212 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ],
                           ),
                         ),
-                        // Right: Quick Reminder Action Chip
-                        InkWell(
-                          onTap: () async {
-                            HapticFeedback.mediumImpact();
-                            await NotificationService.scheduleEventReminders(event);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: const Row(
-                                    children: [
-                                      Icon(Icons.check_circle, color: Colors.white),
-                                      SizedBox(width: 10),
-                                      Expanded(child: Text('Hatırlatıcı takvime eklendi!')),
-                                    ],
+                        // Right: Minimal reminder button
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              HapticFeedback.mediumImpact();
+                              await NotificationService.scheduleEventReminders(event);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Row(
+                                      children: [
+                                        Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+                                        SizedBox(width: 10),
+                                        Text('Hatırlatıcı takvime eklendi!'),
+                                      ],
+                                    ),
+                                    backgroundColor: const Color(0xFF1E1E2E),
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
-                                  backgroundColor: AppColors.primary,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                ),
-                              );
-                            }
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                                );
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(9),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white.withOpacity(0.08)),
+                              ),
+                              child: Icon(
+                                Icons.notifications_none_rounded,
+                                color: Colors.white.withOpacity(0.8),
+                                size: 20,
+                              ),
                             ),
-                            child: Icon(Icons.add_alert_rounded, color: AppColors.primaryVariant, size: 20),
                           ),
                         ),
                       ],
                     ),
                   ),
 
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 16),
 
-                  // Actions Section ("BEN DE GELİYORUM!" & Toggle Attendance / Leave)
+                  // Actions Section ("Ben de Geliyorum" & "Bilet Al")
                   Consumer<MockEventService>(
                     builder: (context, eventService, child) {
                       final isAttending = eventService.isUserAttending(event.id);
+                      final providerName = event.effectiveTicketProvider;
+                      final ticketLabel = providerName.isNotEmpty
+                          ? '$providerName\'den Bilet Al'
+                          : 'Bilet Satın Al';
+
                       return Column(
                         children: [
-                          // Primary Button: BEN DE GELİYORUM!
-                          AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
+                          // Primary Button: Ben de Geliyorum / Katıldın
+                          SizedBox(
                             width: double.infinity,
-                            height: 58,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(30),
-                              gradient: isAttending
-                                  ? LinearGradient(
-                                      colors: [AppColors.surfaceLight, AppColors.surface],
-                                    )
-                                  : AppColors.primaryGradient,
-                              border: isAttending ? Border.all(color: Colors.white.withOpacity(0.15)) : null,
-                              boxShadow: isAttending
-                                  ? []
-                                  : [
-                                      BoxShadow(
-                                        color: AppColors.primary.withOpacity(0.45),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 8),
+                            height: 48,
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 250),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                gradient: isAttending
+                                    ? null
+                                    : const LinearGradient(
+                                        colors: [Color(0xFF8B5CF6), Color(0xFF6D28D9)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
-                                    ],
-                            ),
-                            child: ElevatedButton(
-                              onPressed: () {
-                                HapticFeedback.mediumImpact();
-                                if (isAttending) {
-                                  eventService.leaveEvent(event.id);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Row(
-                                        children: [
-                                          Icon(Icons.remove_circle_outline, color: Colors.white),
-                                          SizedBox(width: 10),
-                                          Text('Etkinlik katılımın iptal edildi.'),
-                                        ],
-                                      ),
-                                      backgroundColor: AppColors.surfaceLight,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    ),
-                                  );
-                                } else {
-                                  eventService.joinEvent(event.id, event);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Row(
-                                        children: [
-                                          Icon(Icons.stars_rounded, color: Colors.white),
-                                          SizedBox(width: 10),
-                                          Text('Etkinliğe katıldın! Artık listedesin.'),
-                                        ],
-                                      ),
-                                      backgroundColor: AppColors.primary,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                    ),
-                                  );
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.transparent,
-                                shadowColor: Colors.transparent,
-                                disabledBackgroundColor: Colors.transparent,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                                color: isAttending ? const Color(0xFF10B981).withOpacity(0.12) : null,
+                                border: Border.all(
+                                  color: isAttending
+                                      ? const Color(0xFF10B981).withOpacity(0.35)
+                                      : Colors.white.withOpacity(0.15),
+                                  width: 1,
+                                ),
+                                boxShadow: isAttending
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color: const Color(0xFF8B5CF6).withOpacity(0.25),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    isAttending ? Icons.check_circle_rounded : Icons.bolt_rounded,
-                                    color: isAttending ? AppColors.success : Colors.white,
-                                    size: 24,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    isAttending ? 'KATILDIN (Vazgeç)' : 'BEN DE GELİYORUM!',
-                                    style: const TextStyle(
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w900,
-                                      color: Colors.white,
-                                      letterSpacing: 1.2,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    HapticFeedback.mediumImpact();
+                                    if (isAttending) {
+                                      eventService.leaveEvent(event.id);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Row(
+                                            children: [
+                                              Icon(Icons.info_outline_rounded, color: Colors.white, size: 20),
+                                              SizedBox(width: 10),
+                                              Text('Etkinlik katılımın iptal edildi.'),
+                                            ],
+                                          ),
+                                          backgroundColor: const Color(0xFF1E1E2E),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                      );
+                                    } else {
+                                      eventService.joinEvent(event.id, event);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Row(
+                                            children: [
+                                              Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                                              SizedBox(width: 10),
+                                              Text('Etkinliğe katıldın! Artık listedesin.'),
+                                            ],
+                                          ),
+                                          backgroundColor: const Color(0xFF1E1E2E),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Center(
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          isAttending ? Icons.check_circle_rounded : Icons.bolt_rounded,
+                                          color: isAttending ? const Color(0xFF10B981) : Colors.white,
+                                          size: 19,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          isAttending ? 'Katıldın (Ayrılmak için dokun)' : 'Ben de Geliyorum',
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w600,
+                                            color: isAttending ? const Color(0xFF34D399) : Colors.white,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          // Secondary Button: BİLET AL
+
+                          const SizedBox(height: 10),
+
+                          // Secondary Button: Bilet Al (Sleek Glass Card)
                           SizedBox(
                             width: double.infinity,
-                            height: 52,
-                            child: OutlinedButton.icon(
-                              onPressed: () async {
-                                final targetUrl = event.effectiveTicketUrl;
-                                await UrlLauncherHelper.launchURL(targetUrl);
-                              },
-                              icon: const Icon(Icons.confirmation_number_outlined, color: Colors.white, size: 20),
-                              label: Text(
-                                '${event.effectiveTicketProvider.toUpperCase()}\'DEN BİLET AL',
-                                style: const TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  letterSpacing: 1.0,
+                            height: 48,
+                            child: Material(
+                              color: Colors.white.withOpacity(0.04),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                                side: BorderSide(
+                                  color: Colors.white.withOpacity(0.1),
+                                  width: 1,
                                 ),
                               ),
-                              style: OutlinedButton.styleFrom(
-                                side: BorderSide(color: AppColors.secondary.withOpacity(0.8), width: 1.5),
-                                backgroundColor: AppColors.secondary.withOpacity(0.12),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                              child: InkWell(
+                                onTap: () async {
+                                  final targetUrl = event.effectiveTicketUrl;
+                                  await UrlLauncherHelper.launchURL(targetUrl);
+                                },
+                                borderRadius: BorderRadius.circular(14),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.confirmation_number_outlined,
+                                        color: Colors.white.withOpacity(0.85),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        ticketLabel,
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white.withOpacity(0.9),
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        Icons.arrow_outward_rounded,
+                                        color: Colors.white.withOpacity(0.4),
+                                        size: 15,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ),
