@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -20,54 +19,27 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
-    const webClientId = '1089492303271-usnrteug9r9o2j8cge5t6b7ctk0acvik.apps.googleusercontent.com';
-    
     try {
-      if (kIsWeb) {
-        // Web ortamında origin_mismatch ve port çakışmalarını önlemek için doğrudan Supabase OAuth kullanılır
-        final res = await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
-          authScreenLaunchMode: LaunchMode.platformDefault,
-        );
-        notifyListeners();
-        return res;
-      }
-
-      final googleSignIn = GoogleSignIn(
-        serverClientId: webClientId,
-        scopes: ['email', 'profile'],
-      );
-
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        // Kullanıcı seçimi iptal etti
-        return false;
-      }
-
-      final googleAuth = await googleUser.authentication;
-      final idToken = googleAuth.idToken;
-      final accessToken = googleAuth.accessToken;
-
-      if (idToken == null) {
-        throw Exception('Google idToken alınamadı.');
-      }
-
-      await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: accessToken,
+      final res = await _supabase.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+        authScreenLaunchMode:
+            kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
       );
       notifyListeners();
-      return true;
+      return res;
+    } on AuthException catch (e) {
+      debugPrint('[Auth] Google OAuth AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('provider is not enabled') || msg.contains('unsupported provider')) {
+        throw Exception('Google ile Giriş henüz Supabase üzerinde etkinleştirilmedi.');
+      }
+      throw Exception(e.message);
     } catch (e) {
       debugPrint('[Auth] Google Sign-In error: $e');
       final str = e.toString().toLowerCase();
-      if (str.contains('sign_in_canceled') || str.contains('canceled')) {
+      if (str.contains('sign_in_canceled') || str.contains('canceled') || str.contains('cancelled')) {
         return false;
-      }
-      if (str.contains('10') || str.contains('developer error') || str.contains('develop_error')) {
-        throw Exception('Google Giriş Yapılandırma Hatası (10: DEVELOPER_ERROR): Android SHA-1 parmak izi Google Cloud Console\'a tanımlanmalıdır veya webClientId uyuşmamaktadır.');
       }
       if (str.contains('network_error') || str.contains('socketexception') || str.contains('connection failed')) {
         throw Exception('İnternet bağlantısı kurulamadı. Lütfen bağlantınızı kontrol edin.');
@@ -81,7 +53,8 @@ class AuthService extends ChangeNotifier {
       final res = await _supabase.auth.signInWithOAuth(
         OAuthProvider.apple,
         redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
-        authScreenLaunchMode: LaunchMode.platformDefault,
+        authScreenLaunchMode:
+            kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
       );
       notifyListeners();
       return res;
@@ -287,9 +260,6 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
-    try {
-      await GoogleSignIn().signOut();
-    } catch (_) {}
     await _supabase.auth.signOut();
     notifyListeners();
   }

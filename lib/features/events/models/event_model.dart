@@ -423,8 +423,47 @@ class EventModel {
     return clean;
   }
 
+  /// Etkinliğin spor müsabakası olup olmadığını belirler
+  bool get isSportsEvent {
+    final cat = category.toLowerCase().trim();
+    final tid = id.toLowerCase();
+
+    // Kesinlikle spor müsabakası olmayan kategorileri doğrudan ele
+    if (cat.contains('konser') ||
+        cat.contains('müzik') ||
+        cat.contains('music') ||
+        cat.contains('tiyatro') ||
+        cat.contains('theatre') ||
+        cat.contains('stand-up') ||
+        cat.contains('standup') ||
+        cat.contains('sergi') ||
+        cat.contains('müze') ||
+        cat.contains('museum') ||
+        cat.contains('miscellaneous') ||
+        cat.contains('festival') ||
+        cat.contains('parti')) {
+      return false;
+    }
+
+    return cat.contains('spor') ||
+        cat.contains('sport') ||
+        cat.contains('futbol') ||
+        cat.contains('football') ||
+        cat.contains('soccer') ||
+        tid.startsWith('spor_') ||
+        tid.startsWith('footballdata_') ||
+        tid.startsWith('apisports_') ||
+        tid.startsWith('sports_');
+  }
+
+  /// Etkinliğin bilet satış/yönlendirme linki olup olmadığını belirtir (Spor müsabakalarında daima false'tur)
+  bool get hasTicket => !isSportsEvent && effectiveTicketUrl.isNotEmpty;
+
   /// Etkinliğin bilet sağlayıcısını akıllıca tespit eder (Biletinial, Biletix, Bubilet, Passo vb.)
   String get effectiveTicketProvider {
+    // Spor müsabakalarında bilet yönlendirmesi kesinlikle yapılmaz
+    if (isSportsEvent) return '';
+
     final explicit = ticketProvider?.trim();
     if (explicit != null && explicit.isNotEmpty) {
       final el = explicit.toLowerCase();
@@ -456,6 +495,9 @@ class EventModel {
   }
 
   String get effectiveTicketUrl {
+    // Spor müsabakalarında bilet yönlendirmesi kesinlikle yapılmaz
+    if (isSportsEvent) return '';
+
     // 1. Doğrudan ticketUrl tanımlıysa ve geçerliyse
     if (ticketUrl != null && ticketUrl!.trim().isNotEmpty) {
       String clean = _cleanUrl(ticketUrl!);

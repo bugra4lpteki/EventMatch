@@ -157,9 +157,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     try {
       await context.read<AuthService>().signInWithGoogle();
-      if (mounted) {
-        Navigator.pop(context);
-      }
     } catch (e) {
       if (mounted) {
         _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);
@@ -175,9 +172,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _isLoading = true);
     try {
       await context.read<AuthService>().signInWithApple();
-      if (mounted) {
-        Navigator.pop(context);
-      }
     } catch (e) {
       if (mounted) {
         _showSnackBar(e.toString().replaceAll('Exception: ', ''), isError: true);

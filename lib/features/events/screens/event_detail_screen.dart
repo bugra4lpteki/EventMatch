@@ -806,73 +806,101 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
 
-                          const SizedBox(height: 10),
-
-                          // Secondary Button: Bilet Al (Firmaya Özel Renk: Biletix=Mavi, Passo=Kırmızı, Biletinial=Sarı, Bubilet=Yeşil)
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
+                          if (event.isSportsEvent) ...[
+                            const SizedBox(height: 10),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                               decoration: BoxDecoration(
+                                color: const Color(0xFF0F172A).withOpacity(0.5),
                                 borderRadius: BorderRadius.circular(14),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    providerColor,
-                                    providerColor.withOpacity(0.85),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: providerColor.withOpacity(0.35),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 4),
+                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.sports_rounded, size: 18, color: Color(0xFF38BDF8)),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'Bu müsabaka için bilet yönlendirmesi yapılmamaktadır. Maça birlikte gidecek arkadaşlar bulmak için yukarıdan katılım sağlayabilirsiniz.',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.8),
+                                        height: 1.35,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () async {
-                                    final targetUrl = event.effectiveTicketUrl;
-                                    await UrlLauncherHelper.launchURL(targetUrl);
-                                  },
+                            ),
+                          ] else if (event.effectiveTicketUrl.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            // Secondary Button: Bilet Al (Firmaya Özel Renk: Biletix=Mavi, Passo=Kırmızı, Biletinial=Sarı, Bubilet=Yeşil)
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(14),
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.confirmation_number_outlined,
-                                          color: ticketContentColor,
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          ticketLabel,
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      providerColor,
+                                      providerColor.withOpacity(0.85),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: providerColor.withOpacity(0.35),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      final targetUrl = event.effectiveTicketUrl;
+                                      await UrlLauncherHelper.launchURL(targetUrl);
+                                    },
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.confirmation_number_outlined,
                                             color: ticketContentColor,
-                                            letterSpacing: 0.2,
+                                            size: 18,
                                           ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Icon(
-                                          Icons.arrow_outward_rounded,
-                                          color: ticketContentColor.withOpacity(0.8),
-                                          size: 15,
-                                        ),
-                                      ],
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            ticketLabel,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: ticketContentColor,
+                                              letterSpacing: 0.2,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Icon(
+                                            Icons.arrow_outward_rounded,
+                                            color: ticketContentColor.withOpacity(0.8),
+                                            size: 15,
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       );
                     },

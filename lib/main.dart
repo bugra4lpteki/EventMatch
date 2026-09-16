@@ -7,6 +7,7 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_service.dart';
 import 'features/auth/services/auth_service.dart';
 import 'features/home/screens/splash_screen.dart';
+import 'features/home/screens/home_screen.dart';
 import 'features/auth/screens/forgot_password_screen.dart';
 import 'features/events/services/mock_event_service.dart';
 import 'features/events/services/mock_match_service.dart';
@@ -147,6 +148,10 @@ class _EventMatchAppState extends State<EventMatchApp> {
 
       if (event == AuthChangeEvent.signedIn) {
         ctx.read<MockEventService>().loadUserProfile();
+        navigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (route) => false,
+        );
       } else if (event == AuthChangeEvent.passwordRecovery) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),

@@ -145,8 +145,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
       return cat.contains('tiyatro') || cat.contains('arts') || cat.contains('theatre') || cat.contains('sahne');
     } else if (f == 'stand-up') {
       return cat.contains('stand-up') || cat.contains('comedy') || cat.contains('komedi');
-    } else if (f == 'spor') {
-      return cat.contains('spor') || cat.contains('sports');
+    } else if (f == 'spor' || f.contains('spor') || f.contains('musabaka') || f.contains('müsabaka')) {
+      return cat.contains('spor') || cat.contains('sports') || cat.contains('futbol') || cat.contains('basketbol') || cat.contains('voleybol') || cat.contains('derbi');
     } else if (f == 'festival') {
       return cat.contains('festival') || cat.contains('parti');
     }
@@ -443,7 +443,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
                   child: Row(
-                    children: ['Tümü', 'Konser', 'Tiyatro', 'Stand-up', 'Spor', 'Festival'].map((category) {
+                    children: ['Tümü', 'Konser', 'Tiyatro', 'Spor', 'Stand-up', 'Festival'].map((category) {
                       final isSelected = _selectedCategoryFilter == category;
                       return GestureDetector(
                         onTap: () {
@@ -713,7 +713,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                       ),
                                     ),
                                   ),
-                                  if (_selectedEvent!.effectiveTicketUrl.isNotEmpty) ...[
+                                  if (!_selectedEvent!.isSportsEvent && _selectedEvent!.effectiveTicketUrl.isNotEmpty) ...[
                                     const SizedBox(width: 6),
                                     GestureDetector(
                                       onTap: () async {

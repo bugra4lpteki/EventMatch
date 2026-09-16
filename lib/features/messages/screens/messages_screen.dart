@@ -65,39 +65,92 @@ class _MessagesScreenState extends State<MessagesScreen> {
   }
 
   Widget _buildSearchBar() {
+    final bool hasText = _searchQuery.isNotEmpty;
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+      height: 50,
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: TextField(
-        controller: _searchController,
-        style: TextStyle(color: AppColors.textPrimary, fontSize: 14),
-        onChanged: (val) {
-          setState(() {
-            _searchQuery = val.trim();
-          });
-        },
-        decoration: InputDecoration(
-          hintText: 'Sohbetlerde veya kişilerde ara...',
-          hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13.5),
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.textSecondary, size: 20),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.close_rounded, size: 18, color: Colors.white60),
-                  onPressed: () {
-                    _searchController.clear();
-                    setState(() {
-                      _searchQuery = '';
-                    });
-                  },
-                )
-              : null,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        color: AppColors.surface.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasText
+              ? AppColors.primary.withValues(alpha: 0.6)
+              : Colors.white.withValues(alpha: 0.1),
+          width: 1.2,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: hasText
+                ? AppColors.primary.withValues(alpha: 0.2)
+                : Colors.black.withValues(alpha: 0.15),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.only(left: 8, right: 6),
+            decoration: BoxDecoration(
+              gradient: hasText
+                  ? AppColors.primaryGradient
+                  : LinearGradient(
+                      colors: [
+                        AppColors.primary.withValues(alpha: 0.2),
+                        AppColors.secondary.withValues(alpha: 0.1),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              Icons.search_rounded,
+              color: hasText ? Colors.white : AppColors.primary,
+              size: 18,
+            ),
+          ),
+          Expanded(
+            child: TextField(
+              controller: _searchController,
+              style: TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w500),
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val.trim();
+                });
+              },
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Sohbetlerde veya kişilerde ara...',
+                hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.65), fontSize: 13.5),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+              ),
+            ),
+          ),
+          if (hasText)
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _searchController.clear();
+                setState(() {
+                  _searchQuery = '';
+                });
+              },
+              child: Container(
+                padding: const EdgeInsets.all(5),
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 14),
+              ),
+            ),
+        ],
       ),
     );
   }
