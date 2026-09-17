@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:event_match/features/events/models/event_model.dart';
-import 'package:event_match/features/events/models/user_model.dart';
 import 'package:event_match/features/events/services/mock_event_service.dart';
 import 'package:event_match/features/events/services/mock_match_service.dart';
 import 'package:event_match/features/events/widgets/event_card.dart';

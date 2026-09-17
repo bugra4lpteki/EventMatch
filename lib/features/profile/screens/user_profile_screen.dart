@@ -361,13 +361,25 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              user.name,
-                              style: TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textPrimary,
-                              ),
+                            Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    user.name,
+                                    style: TextStyle(
+                                      fontSize: 28,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (user.isVerified) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.verified_rounded, size: 24, color: Color(0xFF38BDF8)),
+                                ],
+                              ],
                             ),
                             if (user.username != null && user.username!.trim().isNotEmpty) ...[
                               const SizedBox(height: 2),

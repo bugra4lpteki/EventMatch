@@ -22,6 +22,7 @@ class UserModel {
   bool isPrivateProfile;
   bool hideEvents;
   bool enableLocationSharing;
+  bool isVerified;
 
   UserModel({
     required this.id,
@@ -42,6 +43,7 @@ class UserModel {
     this.isPrivateProfile = false,
     this.hideEvents = false,
     this.enableLocationSharing = true,
+    this.isVerified = false,
     List<String>? badges,
     List<String>? tags,
     List<String>? avatarUrls,
@@ -80,6 +82,8 @@ class UserModel {
       'isPrivateProfile': isPrivateProfile,
       'hideEvents': hideEvents,
       'enableLocationSharing': enableLocationSharing,
+      'is_verified': isVerified,
+      'isVerified': isVerified,
       'badges': badges,
       'tags': tags,
       'plannedEvents': plannedEvents,
@@ -108,6 +112,9 @@ class UserModel {
       isPrivateProfile: map['isPrivateProfile'] == true,
       hideEvents: map['hideEvents'] == true,
       enableLocationSharing: map['enableLocationSharing'] != false,
+      isVerified: map['is_verified'] == true ||
+          map['isVerified'] == true ||
+          (map['badges'] is List && (map['badges'] as List).contains('verified')),
       badges: List<String>.from(map['badges'] ?? []),
       tags: List<String>.from(map['tags'] ?? []),
       plannedEvents: List<String>.from(map['plannedEvents'] ?? []),

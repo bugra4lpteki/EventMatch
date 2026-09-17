@@ -119,18 +119,42 @@ class RequestsScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            req.fromUser.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textPrimary,
-                              fontSize: 18,
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  req.fromUser.name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.textPrimary,
+                                    fontSize: 18,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (req.fromUser.isVerified) ...[
+                                const SizedBox(width: 5),
+                                const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF38BDF8)),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "Seninle tanışmak istiyor!",
-                            style: TextStyle(color: AppColors.textSecondary),
+                            req.message != null && req.message!.trim().isNotEmpty
+                                ? '💬 "${req.message!.trim()}"'
+                                : "Seninle eşleşmek istiyor!",
+                            style: TextStyle(
+                              color: req.message != null && req.message!.trim().isNotEmpty
+                                  ? Colors.white70
+                                  : AppColors.textSecondary,
+                              fontStyle: req.message != null && req.message!.trim().isNotEmpty
+                                  ? FontStyle.italic
+                                  : FontStyle.normal,
+                              fontSize: 13,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -159,7 +183,10 @@ class RequestsScreen extends StatelessWidget {
                               );
 
                               final msgService = context.read<MockMessageService>();
-                              final chat = msgService.createOrGetChatForUser(req.fromUser);
+                              final chat = msgService.createOrGetChatForUser(
+                                req.fromUser,
+                                initialMessage: req.message,
+                              );
                               await msgService.reloadChats();
 
                               MatchDialog.show(

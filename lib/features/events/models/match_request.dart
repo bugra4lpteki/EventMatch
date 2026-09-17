@@ -7,6 +7,7 @@ class MatchRequest {
   final UserModel fromUser;
   final UserModel toUser;
   final String eventId;
+  final String? message;
   MatchRequestStatus status;
 
   MatchRequest({
@@ -14,6 +15,7 @@ class MatchRequest {
     required this.fromUser,
     required this.toUser,
     required this.eventId,
+    this.message,
     this.status = MatchRequestStatus.pending,
   });
 
@@ -23,6 +25,7 @@ class MatchRequest {
       'from_user': fromUser.toMap(),
       'to_user': toUser.toMap(),
       'event_id': eventId,
+      'message': message,
       'status': status.name,
     };
   }
@@ -33,6 +36,7 @@ class MatchRequest {
       fromUser: UserModel.fromMap(Map<String, dynamic>.from(map['from_user'] ?? {})),
       toUser: UserModel.fromMap(Map<String, dynamic>.from(map['to_user'] ?? {})),
       eventId: map['event_id']?.toString() ?? '',
+      message: map['message']?.toString(),
       status: MatchRequestStatus.values.firstWhere(
         (s) => s.name == map['status'],
         orElse: () => MatchRequestStatus.pending,

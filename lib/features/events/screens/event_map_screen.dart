@@ -5,10 +5,23 @@ import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/widgets/app_image_widget.dart';
 import '../../../core/widgets/location_permission_dialog.dart';
 import '../services/mock_event_service.dart';
+import '../services/location_radar_service.dart';
+import '../services/mock_match_service.dart';
 import '../models/event_model.dart';
+import '../models/user_model.dart';
+import '../widgets/match_dialog.dart';
 import 'event_detail_screen.dart';
+import '../../profile/screens/user_profile_screen.dart';
+import '../../messages/screens/chat_detail_screen.dart';
+import '../../messages/services/mock_message_service.dart';
+
+enum MapMode {
+  events,
+  matchMap,
+}
 
 class EventMapScreen extends StatefulWidget {
   const EventMapScreen({super.key});
@@ -21,10 +34,16 @@ class _EventMapScreenState extends State<EventMapScreen> {
   late final MapController _mapController;
   Position? _currentPosition;
   EventModel? _selectedEvent;
+  UserModel? _selectedUser;
+  MapMode _currentMapMode = MapMode.events;
   String _selectedCategoryFilter = 'Tümü';
   String _selectedDateFilter = '🌐 Tüm Tarihler';
-  String _selectedMapStyle = 'google'; // 'google', 'dark', 'light', 'osm'
+  String _selectedMapStyle = 'google'; // 'google', 'satellite', 'dark', 'osm'
   bool _hasAutoFittedBounds = false;
+
+  // Eşleşme isteği için mesaj kontrolcüsü
+  final TextEditingController _matchNoteController = TextEditingController();
+  bool _isWritingMatchMessage = false;
 
   bool _isSameDay(DateTime dt1, DateTime dt2) {
     return dt1.year == dt2.year && dt1.month == dt2.month && dt1.day == dt2.day;
@@ -41,6 +60,12 @@ class _EventMapScreenState extends State<EventMapScreen> {
     super.initState();
     _mapController = MapController();
     _checkPermissionAndGetLocation();
+  }
+
+  @override
+  void dispose() {
+    _matchNoteController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkPermissionAndGetLocation() async {
@@ -126,8 +151,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
       return const Color(0xFFEC4899); // Pembe
     } else if (lower.contains('stand-up') || lower.contains('komedi')) {
       return const Color(0xFFF59E0B); // Kehribar
-    } else if (lower.contains('spor')) {
-      return const Color(0xFF10B981); // Yeşil
     } else if (lower.contains('festival')) {
       return const Color(0xFF8B5CF6); // Mor
     }
@@ -145,8 +168,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
       return cat.contains('tiyatro') || cat.contains('arts') || cat.contains('theatre') || cat.contains('sahne');
     } else if (f == 'stand-up') {
       return cat.contains('stand-up') || cat.contains('comedy') || cat.contains('komedi');
-    } else if (f == 'spor' || f.contains('spor') || f.contains('musabaka') || f.contains('müsabaka')) {
-      return cat.contains('spor') || cat.contains('sports') || cat.contains('futbol') || cat.contains('basketbol') || cat.contains('voleybol') || cat.contains('derbi');
     } else if (f == 'festival') {
       return cat.contains('festival') || cat.contains('parti');
     }
@@ -169,6 +190,42 @@ class _EventMapScreenState extends State<EventMapScreen> {
         // Sade, temiz Google Harita Yol Katmanı
         return 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}';
     }
+  }
+
+  // YALNIZCA GERÇEK KULLANICILAR: Radarını açan ve konum paylaşımına izin veren kullanıcılar
+  List<UserModel> _getActiveMatchUsers(LocationRadarService radarService, UserModel currentUser) {
+    final Map<String, UserModel> usersMap = {};
+    final myId = currentUser.id.toLowerCase().trim();
+    final myName = currentUser.name.toLowerCase().trim();
+
+    for (var u in radarService.nearbyUsers) {
+      final uId = u.id.toLowerCase().trim();
+      final uName = u.name.toLowerCase().trim();
+      if (uId.isNotEmpty &&
+          uId != myId &&
+          uName != myName &&
+          u.enableLocationSharing &&
+          u.latitude != null &&
+          u.longitude != null) {
+        usersMap[uId] = u;
+      }
+    }
+
+    return usersMap.values.toList();
+  }
+
+  String _getDistanceString(double targetLat, double targetLng) {
+    if (_currentPosition == null) return 'İstanbul';
+    final distanceMeters = Geolocator.distanceBetween(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+      targetLat,
+      targetLng,
+    );
+    if (distanceMeters < 1000) {
+      return '${distanceMeters.round()} m uzakta';
+    }
+    return '${(distanceMeters / 1000).toStringAsFixed(1)} km uzakta';
   }
 
   PopupMenuItem<String> _buildStyleMenuItem(String value, String label, IconData icon) {
@@ -200,11 +257,72 @@ class _EventMapScreenState extends State<EventMapScreen> {
     );
   }
 
+  Future<void> _sendMatchRequestFromMap(UserModel targetUser) async {
+    final matchService = context.read<MockMatchService>();
+    final msgService = context.read<MockMessageService>();
+    final note = _matchNoteController.text.trim();
+    final initialMessage = note.isNotEmpty ? note : null;
+
+    setState(() {
+      _isWritingMatchMessage = false;
+    });
+    _matchNoteController.clear();
+
+    final isMutualMatch = await matchService.swipeRight(targetUser, initialMessage: initialMessage);
+
+    if (mounted) {
+      if (isMutualMatch) {
+        final chat = msgService.createOrGetChatForUser(targetUser, initialMessage: initialMessage);
+        await msgService.reloadChats();
+
+        MatchDialog.show(
+          context,
+          matchedUser: targetUser,
+          onSendMessage: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => ChatDetailScreen(chat: chat),
+              ),
+            );
+          },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${targetUser.name} kişisine eşleşme isteğiniz iletildi. Kabul ettiğinde sohbet başlayacak.',
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.surface,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            margin: const EdgeInsets.all(16),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final eventService = context.watch<MockEventService>();
+    final radarService = context.watch<LocationRadarService>();
+    final matchService = context.watch<MockMatchService>();
+    final msgService = context.watch<MockMessageService>();
+    final currentUser = eventService.currentUser;
     final allEvents = eventService.allEvents;
     final now = DateTime.now();
+
+    final activeMatchUsers = _getActiveMatchUsers(radarService, currentUser);
 
     // Koordinatları olan tüm etkinlikler
     List<EventModel> mapEvents = allEvents.where((e) => e.latitude != null && e.longitude != null).toList();
@@ -218,7 +336,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
       });
     }
 
-    // Tarih & Canlı Konum Filtreleme (Varsayılan: 🔥 Bugün)
+    // Tarih & Canlı Konum Filtreleme (Varsayılan: 🌐 Tüm Tarihler)
     if (_selectedDateFilter == '🔥 Bugün') {
       final todayEvents = mapEvents.where((e) => _isSameDay(e.dateTime, now) || _isWithinDays(e.dateTime, 1)).toList();
       if (todayEvents.isNotEmpty) {
@@ -249,7 +367,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
       });
     }
 
-    // Varsayılan Merkez: İstanbul (41.0082, 28.9784)
+    // Varsayılan Merkez: Kullanıcı Konumu veya İstanbul (41.0082, 28.9784)
     final initialCenter = _currentPosition != null
         ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
         : (mapEvents.isNotEmpty
@@ -259,9 +377,95 @@ class _EventMapScreenState extends State<EventMapScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text(
-          'Etkinlik Haritası',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        // Üst Segmented Kontrolcü: Etkinlikler vs Match Haritası
+        title: Container(
+          height: 38,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: AppColors.background.withOpacity(0.85),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Etkinlikler Modu
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _currentMapMode = MapMode.events;
+                    _selectedUser = null;
+                    _isWritingMatchMessage = false;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    gradient: _currentMapMode == MapMode.events ? AppColors.primaryGradient : null,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.confirmation_number_rounded,
+                        size: 15,
+                        color: _currentMapMode == MapMode.events ? Colors.white : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Etkinlikler',
+                        style: TextStyle(
+                          color: _currentMapMode == MapMode.events ? Colors.white : AppColors.textSecondary,
+                          fontWeight: _currentMapMode == MapMode.events ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // 2. Match Haritası Modu (Gerçek Kullanıcı PP'leri & Canlı Konum)
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _currentMapMode = MapMode.matchMap;
+                    _selectedEvent = null;
+                    _isWritingMatchMessage = false;
+                  });
+                  try {
+                    context.read<LocationRadarService>().toggleRadar(true);
+                  } catch (_) {}
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    gradient: _currentMapMode == MapMode.matchMap
+                        ? const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFF0055)])
+                        : null,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.people_alt_rounded,
+                        size: 15,
+                        color: _currentMapMode == MapMode.matchMap ? Colors.white : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Match Haritası',
+                        style: TextStyle(
+                          color: _currentMapMode == MapMode.matchMap ? Colors.white : AppColors.textSecondary,
+                          fontWeight: _currentMapMode == MapMode.matchMap ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
         backgroundColor: AppColors.surface,
         elevation: 0,
@@ -287,7 +491,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
       ),
       body: Stack(
         children: [
-          // 1. Seçilen Harita Katmanı
+          // 1. Harita Katmanı & Pinler
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -298,6 +502,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
               onTap: (tapPosition, point) {
                 setState(() {
                   _selectedEvent = null;
+                  _selectedUser = null;
+                  _isWritingMatchMessage = false;
                 });
               },
             ),
@@ -311,232 +517,456 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 keepBuffer: 3,
                 maxNativeZoom: 19,
               ),
-              // Kullanıcı Konumu İkonu
-              if (_currentPosition != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                      width: 28,
-                      height: 28,
-                      child: Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.blueAccent,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
+
+              // =================== ETKİNLİKLER MODU PINLERI ===================
+              if (_currentMapMode == MapMode.events) ...[
+                if (_currentPosition != null)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+                        width: 28,
+                        height: 28,
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.blueAccent,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              // Kompakt Şık Etkinlik İkonları
-              MarkerLayer(
-                markers: mapEvents.map((event) {
-                  final isSelected = _selectedEvent?.id == event.id;
-                  final pinColor = _getCategoryColor(event.category);
-                  return Marker(
-                    point: LatLng(event.latitude!, event.longitude!),
-                    width: isSelected ? 38 : 30,
-                    height: isSelected ? 38 : 30,
-                    child: GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _selectedEvent = event;
-                        });
-                        _mapController.move(
-                          LatLng(event.latitude!, event.longitude!),
-                          14,
-                        );
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isSelected ? AppColors.primary : pinColor,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: isSelected ? 2.5 : 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: (isSelected ? AppColors.primary : pinColor).withOpacity(0.4),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          _getCategoryIcon(event.category),
-                          color: Colors.white,
-                          size: isSelected ? 19 : 15,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-
-          // 2. Üst Tarih & Kategori Filtreleme Barı
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Tarih Filtresi
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: ['🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta', '🌐 Tüm Tarihler'].map((dateFilter) {
-                      final isSelected = _selectedDateFilter == dateFilter;
-                      return GestureDetector(
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: mapEvents.map((event) {
+                    final isSelected = _selectedEvent?.id == event.id;
+                    final pinColor = _getCategoryColor(event.category);
+                    return Marker(
+                      point: LatLng(event.latitude!, event.longitude!),
+                      width: isSelected ? 38 : 30,
+                      height: isSelected ? 38 : 30,
+                      child: GestureDetector(
                         onTap: () {
                           setState(() {
-                            _selectedDateFilter = dateFilter;
-                            _selectedEvent = null;
+                            _selectedEvent = event;
+                            _selectedUser = null;
+                            _isWritingMatchMessage = false;
                           });
+                          _mapController.move(
+                            LatLng(event.latitude!, event.longitude!),
+                            14,
+                          );
                         },
                         child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            gradient: isSelected ? AppColors.primaryGradient : null,
-                            color: isSelected ? null : AppColors.surface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected ? Colors.transparent : Colors.white12,
-                            ),
+                            color: isSelected ? AppColors.primary : pinColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: isSelected ? 2.5 : 1.5),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
-                                blurRadius: 8,
+                                color: (isSelected ? AppColors.primary : pinColor).withOpacity(0.4),
+                                blurRadius: 6,
                                 offset: const Offset(0, 2),
                               ),
                             ],
                           ),
-                          child: Text(
-                            dateFilter,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12.5,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                            ),
+                          child: Icon(
+                            _getCategoryIcon(event.category),
+                            color: Colors.white,
+                            size: isSelected ? 19 : 15,
                           ),
                         ),
-                      );
-                    }).toList(),
-                  ),
+                      ),
+                    );
+                  }).toList(),
                 ),
-                const SizedBox(height: 8),
-                // Kategori Filtresi
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  child: Row(
-                    children: ['Tümü', 'Konser', 'Tiyatro', 'Spor', 'Stand-up', 'Festival'].map((category) {
-                      final isSelected = _selectedCategoryFilter == category;
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedCategoryFilter = category;
-                            _selectedEvent = null;
-                          });
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? AppColors.primary.withOpacity(0.2) : AppColors.surface.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: isSelected ? AppColors.primary : Colors.white10,
-                              width: 1,
+              ] else ...[
+                // =================== MATCH HARİTASI MODU (GERÇEK KULLANICI PP PINLERI) ===================
+                MarkerLayer(
+                  markers: [
+                    // Kendi Canlı Konumun (Konum Paylaşımı Açık ise)
+                    if (currentUser.enableLocationSharing)
+                      Marker(
+                        point: LatLng(
+                          _currentPosition?.latitude ?? currentUser.latitude ?? 41.0082,
+                          _currentPosition?.longitude ?? currentUser.longitude ?? 28.9784,
+                        ),
+                        width: 56,
+                        height: 72,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: 44,
+                                  height: 44,
+                                  padding: const EdgeInsets.all(2.5),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(colors: [Color(0xFF00F2FE), Color(0xFF4FACFE)]),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF00F2FE).withOpacity(0.6),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: currentUser.avatarUrl.isNotEmpty
+                                        ? AppImageWidget(imageUrl: currentUser.avatarUrl, fit: BoxFit.cover)
+                                        : const Icon(Icons.person, color: Colors.white),
+                                  ),
+                                ),
+                                Positioned(
+                                  right: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 12,
+                                    height: 12,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(color: Colors.black, width: 2),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          child: Text(
-                            category,
-                            style: TextStyle(
-                              color: isSelected ? AppColors.primaryVariant : AppColors.textSecondary,
-                              fontSize: 12,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            const SizedBox(height: 3),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                'Sen 📍',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
+                          ],
+                        ),
+                      ),
+
+                    // Canlı Radardaki Gerçek Kullanıcıların Profil Fotoğraflı (PP) Pinleri
+                    ...activeMatchUsers.map((user) {
+                      final isSelected = _selectedUser?.id == user.id;
+                      return Marker(
+                        point: LatLng(user.latitude!, user.longitude!),
+                        width: isSelected ? 56 : 48,
+                        height: isSelected ? 72 : 64,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedUser = user;
+                              _selectedEvent = null;
+                              _isWritingMatchMessage = false;
+                            });
+                            _mapController.move(
+                              LatLng(user.latitude!, user.longitude!),
+                              14.5,
+                            );
+                          },
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: isSelected ? 46 : 40,
+                                    height: isSelected ? 46 : 40,
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: isSelected
+                                          ? const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFF0055)])
+                                          : const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: (isSelected ? const Color(0xFFFF0055) : const Color(0xFF8B5CF6)).withOpacity(0.55),
+                                          blurRadius: isSelected ? 12 : 6,
+                                          spreadRadius: isSelected ? 2 : 0,
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipOval(
+                                      child: AppImageWidget(
+                                        imageUrl: user.avatarUrl,
+                                        fit: BoxFit.cover,
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 10,
+                                      height: 10,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF10B981),
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.black, width: 2),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected ? const Color(0xFFFFB703) : Colors.white24,
+                                    width: isSelected ? 1 : 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  user.name.split(' ').first,
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       );
-                    }).toList(),
-                  ),
+                    }),
+                  ],
                 ),
               ],
-            ),
+            ],
           ),
 
-          // 2.1 Sonuç Bulunamadı Bilgilendirme Rozeti
-          if (mapEvents.isEmpty)
+          // 2. Üst Kontrol Paneli (Etkinlik Filtresi veya Match Haritası Durum Barı)
+          if (_currentMapMode == MapMode.events)
             Positioned(
-              top: 110,
-              left: 20,
-              right: 20,
+              top: 12,
+              left: 12,
+              right: 12,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: ['🌐 Tüm Tarihler', '🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta'].map((dateFilter) {
+                        final isSelected = _selectedDateFilter == dateFilter;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedDateFilter = dateFilter;
+                              _selectedEvent = null;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: isSelected ? AppColors.primaryGradient : null,
+                              color: isSelected ? null : AppColors.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isSelected ? Colors.transparent : Colors.white12,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Text(
+                              dateFilter,
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    child: Row(
+                      children: eventService.categories.map((category) {
+                        final isSelected = _selectedCategoryFilter == category;
+                        return GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedCategoryFilter = category;
+                              _selectedEvent = null;
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isSelected ? AppColors.primary.withOpacity(0.2) : AppColors.surface.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isSelected ? AppColors.primary : Colors.white10,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              category,
+                              style: TextStyle(
+                                color: isSelected ? AppColors.primaryVariant : AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            // Match Haritası Üst Durum & Gizlilik Barı (Tamamen Sessiz Geçiş, Altta SnackBar Açılmaz!)
+            Positioned(
+              top: 12,
+              left: 14,
+              right: 14,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.surface.withOpacity(0.95),
-                  borderRadius: BorderRadius.circular(16),
+                  color: AppColors.surface.withOpacity(0.92),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
                     ),
                   ],
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 20),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        'Seçili filtreye uygun etkinlik bulunamadı. Filtreyi sıfırlayabilirsiniz.',
-                        style: TextStyle(color: Colors.white, fontSize: 12.5),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: activeMatchUsers.isNotEmpty ? const Color(0xFF10B981) : Colors.amber,
+                        shape: BoxShape.circle,
                       ),
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          _selectedCategoryFilter = 'Tümü';
-                          _selectedDateFilter = '🌐 Tüm Tarihler';
-                        });
-                      },
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    const SizedBox(width: 8),
+                    Text(
+                      activeMatchUsers.isNotEmpty
+                          ? '${activeMatchUsers.length} Kullanıcı Match Haritasında Canlı'
+                          : 'Radarın Açık (Kullanıcı Aranıyor)',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
                       ),
-                      child: const Text('Sıfırla', style: TextStyle(color: Color(0xFF38BDF8), fontWeight: FontWeight.bold, fontSize: 12)),
+                    ),
+                    const Spacer(),
+                    // Hayalet Modu & Görünürlük Butonu (SnackBar gösterimi tamamen kaldırıldı)
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          currentUser.enableLocationSharing = !currentUser.enableLocationSharing;
+                        });
+                        eventService.notifyListeners();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: currentUser.enableLocationSharing
+                              ? const Color(0xFF10B981).withOpacity(0.2)
+                              : Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: currentUser.enableLocationSharing
+                                ? const Color(0xFF10B981)
+                                : Colors.white24,
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              currentUser.enableLocationSharing
+                                  ? Icons.visibility_rounded
+                                  : Icons.visibility_off_rounded,
+                              size: 13,
+                              color: currentUser.enableLocationSharing
+                                  ? const Color(0xFF10B981)
+                                  : Colors.grey,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              currentUser.enableLocationSharing ? 'Görünürsün' : 'Hayalet Modu',
+                              style: TextStyle(
+                                color: currentUser.enableLocationSharing
+                                    ? const Color(0xFF10B981)
+                                    : Colors.grey[300],
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
 
-          // 3. Sağ Alt Butonlar (Zoom ve Konumuma Git)
+          // Sağ Alt Butonlar (Zoom ve Konumuma Git)
           Positioned(
             right: 16,
-            bottom: _selectedEvent != null ? 220 : 20,
+            bottom: (_selectedEvent != null || _selectedUser != null) ? 240 : 20,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Zoom In (+)
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -559,7 +989,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                // Zoom Out (-)
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -582,7 +1011,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Konumuma Git FAB
                 FloatingActionButton.small(
                   heroTag: 'my_location_btn',
                   backgroundColor: AppColors.surface,
@@ -602,8 +1030,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
             ),
           ),
 
-          // 4. Seçili Etkinlik Detay Paneli (Bottom Sheet)
-          if (_selectedEvent != null)
+          // 3. ETKİNLİK DETAY PANELİ
+          if (_selectedEvent != null && _currentMapMode == MapMode.events)
             Positioned(
               left: 16,
               right: 16,
@@ -675,74 +1103,391 @@ class _EventMapScreenState extends State<EventMapScreen> {
                               ],
                             ),
                             const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${_selectedEvent!.dateTime.day.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.month.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.year}',
-                                    style: TextStyle(color: AppColors.primary, fontSize: 11.5, fontWeight: FontWeight.bold),
-                                  ),
-                                  const Spacer(),
-                                  GestureDetector(
-                                    onTap: () async {
-                                      final dest = (_selectedEvent!.latitude != null && _selectedEvent!.longitude != null)
-                                          ? '${_selectedEvent!.latitude},${_selectedEvent!.longitude}'
-                                          : Uri.encodeComponent(_selectedEvent!.location);
-                                      final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=$dest';
-                                      await UrlLauncherHelper.launchURL(mapsUrl);
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF0284C7),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.near_me_rounded, color: Colors.white, size: 12),
-                                          SizedBox(width: 3),
-                                          Text(
-                                            'Yol Tarifi Al',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 10.5,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                            Row(
+                              children: [
+                                Text(
+                                  '${_selectedEvent!.dateTime.day.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.month.toString().padLeft(2, '0')}.${_selectedEvent!.dateTime.year}',
+                                  style: TextStyle(color: AppColors.primary, fontSize: 11.5, fontWeight: FontWeight.bold),
+                                ),
+                                const Spacer(),
+                                GestureDetector(
+                                  onTap: () async {
+                                    final dest = (_selectedEvent!.latitude != null && _selectedEvent!.longitude != null)
+                                        ? '${_selectedEvent!.latitude},${_selectedEvent!.longitude}'
+                                        : Uri.encodeComponent(_selectedEvent!.location);
+                                    final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=$dest';
+                                    await UrlLauncherHelper.launchURL(mapsUrl);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                  ),
-                                  if (!_selectedEvent!.isSportsEvent && _selectedEvent!.effectiveTicketUrl.isNotEmpty) ...[
-                                    const SizedBox(width: 6),
-                                    GestureDetector(
-                                      onTap: () async {
-                                        await UrlLauncherHelper.launchURL(_selectedEvent!.effectiveTicketUrl);
-                                      },
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF2563EB),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          _selectedEvent!.effectiveTicketProvider.toUpperCase(),
-                                          style: const TextStyle(
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.near_me_rounded, color: Colors.white, size: 12),
+                                        SizedBox(width: 3),
+                                        Text(
+                                          'Yol Tarifi Al',
+                                          style: TextStyle(
                                             color: Colors.white,
                                             fontSize: 10.5,
                                             fontWeight: FontWeight.bold,
                                           ),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                  ],
-                                ],
-                              ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ],
                         ),
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+
+          // 4. MATCH HARİTASI KULLANICI PROFİL KARTI
+          if (_selectedUser != null && _currentMapMode == MapMode.matchMap)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 20,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.35), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.45),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Kullanıcı Başlık Bilgisi
+                    Row(
+                      children: [
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 54,
+                              height: 54,
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+                              ),
+                              child: ClipOval(
+                                child: AppImageWidget(
+                                  imageUrl: _selectedUser!.avatarUrl,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 13,
+                                height: 13,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.surface, width: 2),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(width: 14),
+                        // İsim, Doğrulama Rozeti ve Mesafe
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      _selectedUser!.name,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  // Doğrulanmış Profil Rozeti: SADECE mail doğrulaması olanlarda gözükür!
+                                  if (_selectedUser!.isVerified) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                  ],
+                                ],
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                '@${_selectedUser!.username ?? _selectedUser!.name.toLowerCase().replaceAll(' ', '')}',
+                                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                              ),
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  const Icon(Icons.location_on_rounded, size: 13, color: Color(0xFFEC4899)),
+                                  const SizedBox(width: 3),
+                                  Expanded(
+                                    child: Text(
+                                      '${_selectedUser!.city ?? "İstanbul"} • ${_getDistanceString(_selectedUser!.latitude!, _selectedUser!.longitude!)}',
+                                      style: const TextStyle(color: Color(0xFFEC4899), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        // Kapat Butonu
+                        IconButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedUser = null;
+                              _isWritingMatchMessage = false;
+                            });
+                          },
+                          icon: const Icon(Icons.close_rounded, color: Colors.white60, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
+                    ),
+
+                    // Biyografi (Varsa)
+                    if (_selectedUser!.aboutMe != null && _selectedUser!.aboutMe!.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.chat_bubble_outline_rounded, size: 14, color: Color(0xFF8B5CF6)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _selectedUser!.aboutMe!,
+                                style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Eşleşme Mesaj Yazma Alanı (İsteğe bağlı not ekleme)
+                    if (_isWritingMatchMessage) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.primary.withOpacity(0.5)),
+                        ),
+                        child: TextField(
+                          controller: _matchNoteController,
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          maxLines: 2,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                            hintText: '${_selectedUser!.name} kişisine bir tanışma mesajı yaz...',
+                            hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 14),
+
+                    // Aksiyon Butonları
+                    Builder(
+                      builder: (context) {
+                        final isAlreadyMatched = msgService.individualChats.any(
+                          (c) => c.participant.id.toLowerCase() == _selectedUser!.id.toLowerCase(),
+                        );
+                        final hasSentReq = matchService.hasSentRequest('map', _selectedUser!.id);
+
+                        return Row(
+                          children: [
+                            // 1. Eşleşme İsteği / Sohbet Butonu
+                            Expanded(
+                              flex: 3,
+                              child: isAlreadyMatched
+                                  ? ElevatedButton.icon(
+                                      onPressed: () {
+                                        final chat = msgService.createOrGetChatForUser(_selectedUser!);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => ChatDetailScreen(chat: chat)),
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF10B981),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+                                      ),
+                                      icon: const Icon(Icons.chat_bubble_rounded, size: 16, color: Colors.white),
+                                      label: const Text(
+                                        'Sohbete Git',
+                                        style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+                                      ),
+                                    )
+                                  : hasSentReq
+                                      ? Container(
+                                          height: 42,
+                                          alignment: Alignment.center,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.08),
+                                            borderRadius: BorderRadius.circular(14),
+                                            border: Border.all(color: Colors.white24),
+                                          ),
+                                          child: const Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.done_all_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'İstek Gönderildi',
+                                                style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12.5, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : _isWritingMatchMessage
+                                          ? Row(
+                                              children: [
+                                                Expanded(
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () => _sendMatchRequestFromMap(_selectedUser!),
+                                                    style: ElevatedButton.styleFrom(
+                                                      backgroundColor: AppColors.primary,
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                                                    ),
+                                                    icon: const Icon(Icons.send_rounded, size: 15, color: Colors.white),
+                                                    label: const Text(
+                                                      'İsteği Gönder',
+                                                      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                IconButton(
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      _isWritingMatchMessage = false;
+                                                    });
+                                                  },
+                                                  icon: const Icon(Icons.close, color: Colors.white60, size: 18),
+                                                ),
+                                              ],
+                                            )
+                                          : Container(
+                                              height: 42,
+                                              decoration: BoxDecoration(
+                                                gradient: AppColors.primaryGradient,
+                                                borderRadius: BorderRadius.circular(14),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: AppColors.primary.withOpacity(0.35),
+                                                    blurRadius: 8,
+                                                    offset: const Offset(0, 3),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: ElevatedButton.icon(
+                                                onPressed: () {
+                                                  setState(() {
+                                                    _isWritingMatchMessage = true;
+                                                  });
+                                                },
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.transparent,
+                                                  shadowColor: Colors.transparent,
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                                ),
+                                                icon: const Icon(Icons.favorite_rounded, size: 16, color: Colors.white),
+                                                label: const Text(
+                                                  'Eşleşme İsteği Gönder',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                            ),
+                            const SizedBox(width: 10),
+                            // 2. Profili Gör Butonu
+                            Expanded(
+                              flex: 2,
+                              child: SizedBox(
+                                height: 42,
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => UserProfileScreen(user: _selectedUser!),
+                                      ),
+                                    );
+                                  },
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                                  ),
+                                  icon: const Icon(Icons.person_outline_rounded, size: 16, color: Colors.white70),
+                                  label: const Text(
+                                    'Profili Gör',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),

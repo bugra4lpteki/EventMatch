@@ -258,8 +258,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           Consumer<MockEventService>(
                             builder: (context, eventService, child) {
                               final bool hasActiveFilter = eventService.selectedCity != 'Tümü' ||
-                                  eventService.selectedCategory != 'Tümü' ||
-                                  eventService.selectedSportsSubFilter != 'Tümü';
+                                  eventService.selectedCategory != 'Tümü';
 
                               return GestureDetector(
                                 onTap: () {
@@ -331,62 +330,91 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                // Filter Chips
+                // Filter Chips (Tarih ve Kategori Filtreleri)
                 RepaintBoundary(
                   child: SizedBox(
                     height: 60,
                     child: Consumer<MockEventService>(
                       builder: (context, eventService, child) {
+                        final filterItems = [
+                          'Tümü',
+                          'Bugün',
+                          'Bu Hafta',
+                          'Bu Ay',
+                          'Konser',
+                          'Tiyatro',
+                          'Stand-up',
+                          'Festival',
+                        ];
+
                         return ListView.builder(
                           scrollDirection: Axis.horizontal,
                           cacheExtent: 250,
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          itemCount: eventService.categories.length,
+                          itemCount: filterItems.length,
                           itemBuilder: (context, index) {
-                            final category = eventService.categories[index];
-                            final isSelected = eventService.selectedCategory == category;
-                            final isSportsCategory = category.toLowerCase().contains('spor') || category.toLowerCase().contains('musabaka');
+                            final item = filterItems[index];
+
+                            bool isSelected = false;
+                            if (item == 'Tümü') {
+                              isSelected = eventService.selectedDateFilter == 'Tümü' &&
+                                  eventService.selectedCategory == 'Tümü';
+                            } else if (item == 'Bugün' || item == 'Bu Hafta' || item == 'Bu Ay') {
+                              isSelected = eventService.selectedDateFilter == item;
+                            } else {
+                              isSelected = eventService.selectedCategory == item;
+                            }
 
                             Widget? avatarWidget;
-                            if (isSportsCategory) {
-                              avatarWidget = const Icon(Icons.sports_soccer_rounded, size: 16, color: Colors.white);
-                            } else if (category == 'Konser') {
-                              avatarWidget = const Icon(Icons.music_note_rounded, size: 16, color: Colors.white);
-                            } else if (category == 'Tiyatro') {
-                              avatarWidget = const Icon(Icons.theater_comedy_rounded, size: 16, color: Colors.white);
-                            } else if (category == 'Stand-up') {
-                              avatarWidget = const Icon(Icons.sentiment_very_satisfied_rounded, size: 16, color: Colors.white);
-                            } else if (category == 'Festival') {
-                              avatarWidget = const Icon(Icons.festival_rounded, size: 16, color: Colors.white);
+                            if (item == 'Tümü') {
+                              avatarWidget = const Icon(Icons.explore_rounded, size: 15, color: Colors.white);
+                            } else if (item == 'Bugün') {
+                              avatarWidget = const Icon(Icons.local_fire_department_rounded, size: 15, color: Colors.orangeAccent);
+                            } else if (item == 'Bu Hafta') {
+                              avatarWidget = const Icon(Icons.flash_on_rounded, size: 15, color: Colors.amberAccent);
+                            } else if (item == 'Bu Ay') {
+                              avatarWidget = const Icon(Icons.calendar_month_rounded, size: 15, color: Colors.cyanAccent);
+                            } else if (item == 'Konser') {
+                              avatarWidget = const Icon(Icons.music_note_rounded, size: 15, color: Colors.white);
+                            } else if (item == 'Tiyatro') {
+                              avatarWidget = const Icon(Icons.theater_comedy_rounded, size: 15, color: Colors.white);
+                            } else if (item == 'Stand-up') {
+                              avatarWidget = const Icon(Icons.sentiment_very_satisfied_rounded, size: 15, color: Colors.white);
+                            } else if (item == 'Festival') {
+                              avatarWidget = const Icon(Icons.festival_rounded, size: 15, color: Colors.white);
                             }
 
                             return Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: ChoiceChip(
                                 avatar: avatarWidget,
-                                label: Text(category),
+                                label: Text(item),
                                 selected: isSelected,
                                 onSelected: (selected) {
-                                  if (selected) eventService.setCategory(category);
+                                  if (selected) {
+                                    HapticFeedback.selectionClick();
+                                    if (item == 'Tümü') {
+                                      eventService.setDateFilter('Tümü');
+                                      eventService.setCategory('Tümü');
+                                    } else if (item == 'Bugün' || item == 'Bu Hafta' || item == 'Bu Ay') {
+                                      eventService.setDateFilter(item);
+                                    } else {
+                                      eventService.setCategory(item);
+                                    }
+                                  }
                                 },
-                                selectedColor: isSportsCategory
-                                    ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                                    : AppColors.primary.withValues(alpha: 0.2),
+                                selectedColor: AppColors.primary.withValues(alpha: 0.25),
                                 backgroundColor: AppColors.surface,
                                 labelStyle: TextStyle(
-                                  color: isSelected
-                                      ? (isSportsCategory ? const Color(0xFF34D399) : AppColors.primary)
-                                      : AppColors.textSecondary,
+                                  color: isSelected ? AppColors.primary : AppColors.textSecondary,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                                 ),
                                 side: BorderSide(
-                                  color: isSelected
-                                      ? (isSportsCategory ? const Color(0xFF10B981) : AppColors.primary)
-                                      : (isSportsCategory ? const Color(0xFF10B981).withValues(alpha: 0.3) : Colors.transparent),
+                                  color: isSelected ? AppColors.primary : Colors.transparent,
                                   width: 1.5,
                                 ),
                                 elevation: isSelected ? 4 : 0,
-                                shadowColor: (isSportsCategory ? const Color(0xFF10B981) : AppColors.primary).withValues(alpha: 0.3),
+                                shadowColor: AppColors.primary.withValues(alpha: 0.3),
                               ),
                             );
                           },
@@ -394,54 +422,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       },
                     ),
                   ),
-                ),
-                // ⚽ Spor Müsabakaları Branş Alt Filtresi (Futbol, Basketbol, Voleybol)
-                Consumer<MockEventService>(
-                  builder: (context, eventService, child) {
-                    final isSports = eventService.selectedCategory.toLowerCase().contains('spor') ||
-                        eventService.selectedCategory.toLowerCase().contains('musabaka');
-                    if (!isSports) return const SizedBox.shrink();
-
-                    return Container(
-                      height: 46,
-                      margin: const EdgeInsets.only(bottom: 6),
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: MockEventService.sportsSubFilters.length,
-                        itemBuilder: (context, index) {
-                          final sub = MockEventService.sportsSubFilters[index];
-                          final isSubSelected = eventService.selectedSportsSubFilter == sub;
-
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: FilterChip(
-                              avatar: isSubSelected
-                                  ? const Icon(Icons.check_rounded, size: 14, color: Colors.white)
-                                  : null,
-                              label: Text(sub == 'Tümü' ? '⚽ Tüm Müsabakalar' : sub),
-                              selected: isSubSelected,
-                              onSelected: (_) {
-                                eventService.setSportsSubFilter(sub);
-                              },
-                              selectedColor: const Color(0xFF10B981).withValues(alpha: 0.25),
-                              backgroundColor: AppColors.surface.withValues(alpha: 0.8),
-                              labelStyle: TextStyle(
-                                color: isSubSelected ? const Color(0xFF34D399) : AppColors.textSecondary,
-                                fontWeight: isSubSelected ? FontWeight.bold : FontWeight.w500,
-                                fontSize: 13,
-                              ),
-                              side: BorderSide(
-                                color: isSubSelected ? const Color(0xFF10B981) : Colors.white10,
-                                width: 1.2,
-                              ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  },
                 ),
               ] else ...[
                 Consumer<MockEventService>(
@@ -515,68 +495,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ],
           ),
         ),
-        // ⚽ Spor Müsabakaları Başlık Bilgisi
-        Consumer<MockEventService>(
-          builder: (context, eventService, child) {
-            final isSports = eventService.selectedCategory.toLowerCase().contains('spor') ||
-                eventService.selectedCategory.toLowerCase().contains('musabaka');
-            if (!isSports || _searchController.text.trim().isNotEmpty) {
-              return const SliverToBoxAdapter(child: SizedBox.shrink());
-            }
-
-            final count = eventService.filteredEvents.length;
-            final subName = eventService.selectedSportsSubFilter == 'Tümü'
-                ? 'Tüm Karşılaşmalar'
-                : eventService.selectedSportsSubFilter;
-
-            return SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 2, 20, 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.sports_soccer_rounded, color: Color(0xFF10B981), size: 16),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '$subName • $count Canlı Karşılaşma',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    if (eventService.selectedSportsSubFilter != 'Tümü')
-                      GestureDetector(
-                        onTap: () => eventService.setSportsSubFilter('Tümü'),
-                        child: Text(
-                          'Tümü',
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
         // Lazy-loaded Event List (Zero-lag rendering with RepaintBoundary & automatic keep-alives)
         Consumer<MockEventService>(
           builder: (context, eventService, child) {
             final events = eventService.filteredEvents;
-            final isSports = eventService.selectedCategory.toLowerCase().contains('spor') ||
-                eventService.selectedCategory.toLowerCase().contains('musabaka');
 
             if (events.isEmpty) {
               return SliverToBoxAdapter(
@@ -587,27 +509,16 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          isSports ? Icons.sports_soccer_rounded : Icons.event_busy_rounded,
+                          Icons.event_busy_rounded,
                           size: 48,
                           color: AppColors.textSecondary.withValues(alpha: 0.5),
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          isSports
-                              ? 'Seçilen kriterlere uygun spor müsabakası bulunamadı.'
-                              : "Bu kategoride etkinlik bulunamadı.",
+                          "Bu kategoride etkinlik bulunamadı.",
                           textAlign: TextAlign.center,
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
                         ),
-                        if (isSports && eventService.selectedSportsSubFilter != 'Tümü') ...[
-                          const SizedBox(height: 12),
-                          TextButton.icon(
-                            onPressed: () => eventService.setSportsSubFilter('Tümü'),
-                            icon: const Icon(Icons.refresh_rounded, size: 16),
-                            label: const Text('Tüm Müsabakaları Göster'),
-                            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -769,7 +680,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       TextButton(
                         onPressed: () {
                           eventService.setCategory('Tümü');
-                          eventService.setSportsSubFilter('Tümü');
                           eventService.setCity('Tüm Şehirler');
                           Navigator.pop(context);
                         },
@@ -838,9 +748,54 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Kategoriler',
-                    style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Tarih Filtresi',
+                        style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: eventService.dateFilters.map((df) {
+                      final isSelected = eventService.selectedDateFilter == df;
+                      return ChoiceChip(
+                        label: Text(df),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            eventService.setDateFilter(df);
+                            setModalState(() {});
+                          }
+                        },
+                        selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                        backgroundColor: AppColors.surface,
+                        labelStyle: TextStyle(
+                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                        side: BorderSide(
+                          color: isSelected ? AppColors.primary : Colors.transparent,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Icon(Icons.category_rounded, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Kategoriler',
+                        style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   Wrap(
@@ -848,7 +803,6 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     runSpacing: 8,
                     children: eventService.categories.map((cat) {
                       final isSelected = eventService.selectedCategory == cat;
-                      final isSportsCat = cat.toLowerCase().contains('spor') || cat.toLowerCase().contains('musabaka');
 
                       return ChoiceChip(
                         label: Text(cat),
@@ -859,61 +813,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                             setModalState(() {});
                           }
                         },
-                        selectedColor: isSportsCat
-                            ? const Color(0xFF10B981).withValues(alpha: 0.25)
-                            : AppColors.primary.withOpacity(0.2),
+                        selectedColor: AppColors.primary.withOpacity(0.2),
                         backgroundColor: AppColors.surface,
                         labelStyle: TextStyle(
-                          color: isSelected
-                              ? (isSportsCat ? const Color(0xFF34D399) : AppColors.primary)
-                              : AppColors.textSecondary,
+                          color: isSelected ? AppColors.primary : AppColors.textSecondary,
                           fontSize: 12,
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                         ),
                         side: BorderSide(
-                          color: isSelected
-                              ? (isSportsCat ? const Color(0xFF10B981) : AppColors.primary)
-                              : (isSportsCat ? const Color(0xFF10B981).withValues(alpha: 0.3) : Colors.transparent),
+                          color: isSelected ? AppColors.primary : Colors.transparent,
                         ),
                       );
                     }).toList(),
                   ),
-                  if (eventService.selectedCategory.toLowerCase().contains('spor') ||
-                      eventService.selectedCategory.toLowerCase().contains('musabaka')) ...[
-                    const SizedBox(height: 20),
-                    Text(
-                      'Spor Branşı (Müsabaka Filtresi)',
-                      style: TextStyle(color: AppColors.textSecondary, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: MockEventService.sportsSubFilters.map((sub) {
-                        final isSubSelected = eventService.selectedSportsSubFilter == sub;
-                        return ChoiceChip(
-                          label: Text(sub == 'Tümü' ? '⚽ Tüm Müsabakalar' : sub),
-                          selected: isSubSelected,
-                          onSelected: (selected) {
-                            if (selected) {
-                              eventService.setSportsSubFilter(sub);
-                              setModalState(() {});
-                            }
-                          },
-                          selectedColor: const Color(0xFF10B981).withValues(alpha: 0.25),
-                          backgroundColor: AppColors.surface,
-                          labelStyle: TextStyle(
-                            color: isSubSelected ? const Color(0xFF34D399) : AppColors.textSecondary,
-                            fontSize: 12,
-                            fontWeight: isSubSelected ? FontWeight.bold : FontWeight.normal,
-                          ),
-                          side: BorderSide(
-                            color: isSubSelected ? const Color(0xFF10B981) : Colors.transparent,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,

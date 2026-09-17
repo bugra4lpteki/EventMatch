@@ -90,8 +90,8 @@ class MockEventService extends ChangeNotifier {
           for (var item in decoded) {
             if (item is Map<String, dynamic>) {
               final ev = EventModel.fromMap(item);
-              // Geçmiş spor müsabakaları ve eski etkinlikleri önbellekten yükleme
-              if (ev.isSportsEvent && ev.dateTime.isBefore(now.subtract(const Duration(hours: 3)))) {
+              // Spor müsabakaları uygulamadan tamamen kaldırıldı, yükleme
+              if (ev.isSportsEvent) {
                 continue;
               }
               if (!_events.any((e) => e.id == ev.id)) {
@@ -111,17 +111,18 @@ class MockEventService extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cacheVersion = prefs.getInt('eventmatch_cache_version_num') ?? 0;
-      if (cacheVersion < 12) {
+      if (cacheVersion < 13) {
         await prefs.remove(_eventsCacheKey);
-        await prefs.setInt('eventmatch_cache_version_num', 12);
+        await prefs.setInt('eventmatch_cache_version_num', 13);
         _events.clear();
       } else {
         await _loadEventsFromCache();
       }
     } catch (_) {}
 
-    // Eski harici API ve mock görsellerini temizle (Yalnızca Ticketmaster fotoğrafları)
+    // Eski harici API ve spor etkinliklerini temizle
     _events.removeWhere((e) =>
+        e.isSportsEvent ||
         e.imageUrl.contains('dzcdn.net') ||
         e.imageUrl.contains('spotifycdn.com') ||
         e.id.toLowerCase().contains('biletinial'));
@@ -162,11 +163,7 @@ class MockEventService extends ChangeNotifier {
         results.add(p1);
         await Future.delayed(const Duration(milliseconds: 250));
 
-        // 2. Canlı Spor müsabakaları (Passo)
-        final sports = await service.fetchLiveSportsEvents();
-        results.add(sports);
-
-        // 3. Öne çıkan popüler aramalar (kademeli)
+        // 2. Öne çıkan popüler aramalar (kademeli)
         final keywords = ['duman', 'teoman', 'tiyatro', 'stand up'];
         for (final kw in keywords) {
           await Future.delayed(const Duration(milliseconds: 250));
@@ -177,14 +174,13 @@ class MockEventService extends ChangeNotifier {
         bool addedAny = false;
         for (var list in results) {
           for (var live in list) {
-            final idx = _events.indexWhere((e) =>
-                e.id == live.id ||
-                (e.isSportsEvent && live.isSportsEvent && e.title.toLowerCase() == live.title.toLowerCase()));
+            if (live.isSportsEvent) continue;
+            final idx = _events.indexWhere((e) => e.id == live.id);
             if (idx < 0) {
               _events.add(live);
               addedAny = true;
             } else {
-              // Biletix/Passo/ESPN'den gelen yeni kesin tarih, saat ve bilet linkleri ile güncelle
+              // Biletix'ten gelen yeni kesin tarih, saat ve bilet linkleri ile güncelle
               _events[idx] = live;
               addedAny = true;
             }
@@ -195,9 +191,9 @@ class MockEventService extends ChangeNotifier {
           await _saveEventsToCache();
           notifyListeners();
         }
-        debugPrint('[EventService] 🎟️ Biletix & Canlı Spor (Passo) müsabakaları senkronize edildi: ${_events.length}');
+        debugPrint('[EventService] 🎟️ Biletix etkinlikleri senkronize edildi: ${_events.length}');
       } catch (e) {
-        debugPrint('[EventService] Canlı Biletix & Spor API çekme hatası: $e');
+        debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
 
       await _saveEventsToCache();
@@ -528,6 +524,36 @@ class MockEventService extends ChangeNotifier {
     final now = DateTime.now();
     final mockList = [
       EventModel(
+        id: 'biletix_aleyna_tilki_live',
+        title: 'Aleyna Tilki Konseri',
+        category: 'Konser',
+        location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
+        dateTime: DateTime(now.year, now.month, now.day, 21, 0),
+        description: 'Aleyna Tilki en sevilen hit şarkıları, büyüleyici dans şovu ve dev orkestrasıyla bu akşam Harbiye Açıkhava sahnesinde dinleyicileriyle buluşuyor!',
+        imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aa451cd32910ea3553ebaa714b7e8e9c/1000x1000-000000-80-0-0.jpg',
+        latitude: 41.0468,
+        longitude: 28.9882,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=aleyna+tilki',
+        ticketProvider: 'Biletix',
+        atmosphere: '🔥 Canlı Pop Şov',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_sila_akustik_live',
+        title: 'Sıla - KerkiSolfej Akustik Konseri',
+        category: 'Konser',
+        location: 'Maximum UNIQ Açıkhava, İstanbul',
+        dateTime: DateTime(now.year, now.month, now.day, 21, 30),
+        description: 'Türk popunun güçlü sesi Sıla, KerkiSolfej organizasyonuyla bu akşam Maximum UNIQ Açıkhava sahnesinde unutulmaz bir akustik gece sunuyor!',
+        imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',
+        latitude: 41.1114,
+        longitude: 29.0233,
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=sila',
+        ticketProvider: 'Biletix',
+        atmosphere: '✨ Unutulmaz Akustik',
+        isPopular: true,
+      ),
+      EventModel(
         id: 'biletix_Z1HyzZyMZk2Qaely',
         title: 'The Black Keys',
         category: 'Konser',
@@ -676,141 +702,6 @@ class MockEventService extends ChangeNotifier {
         ticketProvider: 'Biletix',
         atmosphere: '⚡ Doom Metal',
         isPopular: true,
-      ),
-      EventModel(
-        id: 'spor_espn_kasimpasa_konya',
-        title: 'Kasımpaşa - Konyaspor',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Recep Tayyip Erdoğan Stadyumu, İstanbul',
-        dateTime: DateTime.parse('2026-09-18T20:00:00'),
-        description: 'Trendyol Süper Lig heyecanı Kasımpaşa Recep Tayyip Erdoğan Stadyumu\'nda! Konyaspor deplasmanda puan arıyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop',
-        latitude: 41.0328,
-        longitude: 28.9719,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Süper Lig',
-        isPopular: false,
-      ),
-      EventModel(
-        id: 'spor_espn_trabzon_gs',
-        title: 'Trabzonspor - Galatasaray',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Papara Park, Trabzon',
-        dateTime: DateTime.parse('2026-09-19T20:00:00'),
-        description: 'Trendyol Süper Lig dev randevu! Papara Park Akyazı tribünlerinde bordo-mavi fırtına Galatasaray\'ı konuk ediyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1200&auto=format&fit=crop',
-        latitude: 40.9781,
-        longitude: 39.6389,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '🔥 Dev Derbi',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'spor_espn_basaksehir_gencler',
-        title: 'İstanbul Başakşehir - Gençlerbirliği',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Başakşehir Fatih Terim Stadyumu, İstanbul',
-        dateTime: DateTime.parse('2026-09-19T20:00:00'),
-        description: 'Süper Lig Başakşehir Fatih Terim Stadyumu\'nda! Başakşehir Başkent temsilcisi Gençlerbirliği ile karşılaşıyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1200&auto=format&fit=crop',
-        latitude: 41.1228,
-        longitude: 28.8094,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Süper Lig',
-        isPopular: false,
-      ),
-      EventModel(
-        id: 'spor_espn_kocaeli_gaziantep',
-        title: 'Kocaelispor - Gaziantep FK',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Yıldız Entegre Kocaeli Stadyumu, Kocaeli',
-        dateTime: DateTime.parse('2026-09-19T17:00:00'),
-        description: 'Körfez ekibi Kocaelispor sahasında Gaziantep FK\'yı konuk ediyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1200&auto=format&fit=crop',
-        latitude: 40.7656,
-        longitude: 29.9890,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Süper Lig',
-        isPopular: false,
-      ),
-      EventModel(
-        id: 'spor_espn_corum_alanya',
-        title: 'Çorum FK - Alanyaspor',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Çorum Şehir Stadyumu, Çorum',
-        dateTime: DateTime.parse('2026-09-19T17:00:00'),
-        description: 'Çorum Şehir Stadyumu tribünlerinde Süper Lig mücadelesi.',
-        imageUrl: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1200&auto=format&fit=crop',
-        latitude: 40.5506,
-        longitude: 34.9556,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Süper Lig',
-        isPopular: false,
-      ),
-      EventModel(
-        id: 'spor_espn_fb_eyup',
-        title: 'Fenerbahçe - Eyüpspor',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Ülker Stadyumu Şükrü Saracoğlu, İstanbul',
-        dateTime: DateTime.parse('2026-09-20T17:00:00'),
-        description: 'Kadıköy Ülker Stadyumu Şükrü Saracoğlu Spor Kompleksi\'nde İstanbul randevusu! Sarı-lacivertli tribünler galibiyet için kenetleniyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?q=80&w=1200&auto=format&fit=crop',
-        latitude: 40.9877,
-        longitude: 29.0369,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '🔥 Kadıköy Maç Günü',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'spor_espn_amed_bjk',
-        title: 'Amed SFK - Beşiktaş',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Diyarbakır Stadyumu, Diyarbakır',
-        dateTime: DateTime.parse('2026-09-20T20:00:00'),
-        description: 'Diyarbakır Stadyumu kapalı gişe! Amed SFK evinde Beşiktaş\'ı ağırlıyor. Nefes kesen 90 dakika için tribünde yerini al.',
-        imageUrl: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?q=80&w=1200&auto=format&fit=crop',
-        latitude: 37.9144,
-        longitude: 40.2306,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '🔥 Büyük Randevu',
-        isPopular: true,
-      ),
-      EventModel(
-        id: 'spor_espn_goztepe_rize',
-        title: 'Göztepe - Çaykur Rizespor',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Gürsel Aksel Stadyumu, İzmir',
-        dateTime: DateTime.parse('2026-09-20T20:00:00'),
-        description: 'Gürsel Aksel Stadyumu sarı-kırmızı karnavala ev sahipliği yapıyor. Ege tribün coşkusu tavan yapıyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?q=80&w=1200&auto=format&fit=crop',
-        latitude: 38.3972,
-        longitude: 27.0858,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Ege Coşkusu',
-        isPopular: false,
-      ),
-      EventModel(
-        id: 'spor_espn_erzurum_samsun',
-        title: 'Erzurumspor FK - Samsunspor',
-        category: '⚽ Spor Müsabakaları',
-        location: 'Kâzım Karabekir Stadyumu, Erzurum',
-        dateTime: DateTime.parse('2026-09-20T17:00:00'),
-        description: 'Kâzım Karabekir Stadyumu\'nda Erzurumspor Samsunspor ile karşılaşıyor.',
-        imageUrl: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1200&auto=format&fit=crop',
-        latitude: 39.9042,
-        longitude: 41.2678,
-        ticketUrl: null,
-        ticketProvider: null,
-        atmosphere: '⚽ Süper Lig',
-        isPopular: false,
       ),
     ];
 
@@ -1004,8 +895,35 @@ class MockEventService extends ChangeNotifier {
     currentUser.enableLocationSharing = prefs.getBool('${userId}_privacy_location_sharing') ??
                                          prefs.getBool('${currentUser.name}_privacy_location_sharing') ??
                                          prefs.getBool('privacy_location_sharing') ?? true;
+    currentUser.isVerified = prefs.getBool('${userId}_is_verified') ??
+                             prefs.getBool('${currentUser.name}_is_verified') ??
+                             prefs.getBool('user_email_verified') ?? false;
 
     _syncPlannedEventsWithAttendees();
+    notifyListeners();
+  }
+
+  Future<void> verifyCurrentUserEmail(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    final userId = currentUser.id;
+    currentUser.isVerified = true;
+    if (!currentUser.badges.contains('verified')) {
+      currentUser.badges.add('verified');
+    }
+    await prefs.setBool('${userId}_is_verified', true);
+    await prefs.setBool('${currentUser.name}_is_verified', true);
+    await prefs.setBool('user_email_verified', true);
+    await prefs.setString('${userId}_verified_email', email);
+
+    try {
+      final sbUser = _supabase.auth.currentUser;
+      if (sbUser != null) {
+        await _supabase.from('users').update({
+          'is_verified': true,
+        }).eq('id', sbUser.id);
+      }
+    } catch (_) {}
+
     notifyListeners();
   }
 
@@ -1280,8 +1198,8 @@ class MockEventService extends ChangeNotifier {
 
   final List<String> activityFeed = [];
 
-  List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Spor', 'Stand-up', 'Festival'];
-  static const List<String> sportsSubFilters = ['Tümü', '⚽ Futbol', '🇹🇷 Süper Lig', '🏆 Avrupa Ligleri'];
+  List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Stand-up', 'Festival'];
+  static const List<String> sportsSubFilters = <String>[];
 
   List<String> cities = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana', 'Gaziantep', 'Mersin'];
   
@@ -1303,6 +1221,15 @@ class MockEventService extends ChangeNotifier {
   String _selectedSportsSubFilter = 'Tümü';
   String _selectedCity = 'Tüm Şehirler';
   String _searchQuery = '';
+
+  final List<String> dateFilters = ['Tümü', 'Bugün', 'Bu Hafta', 'Bu Ay'];
+  String _selectedDateFilter = 'Tümü';
+  String get selectedDateFilter => _selectedDateFilter;
+
+  void setDateFilter(String filter) {
+    _selectedDateFilter = filter;
+    notifyListeners();
+  }
 
   List<String> _featuredCarouselEventIds = [];
   List<String> get featuredCarouselEventIds => [..._featuredCarouselEventIds];
@@ -1412,7 +1339,7 @@ class MockEventService extends ChangeNotifier {
   String get selectedCity => _selectedCity;
   String get searchQuery => _searchQuery;
 
-  List<EventModel> getAdminEvents() => [..._events];
+  List<EventModel> getAdminEvents() => _events.where((e) => !e.isSportsEvent).toList();
 
   void setCategory(String category) {
     _selectedCategory = category;
@@ -1421,7 +1348,7 @@ class MockEventService extends ChangeNotifier {
   }
 
   void setSportsSubFilter(String subFilter) {
-    _selectedSportsSubFilter = subFilter;
+    _selectedSportsSubFilter = 'Tümü';
     notifyListeners();
   }
 
@@ -1451,6 +1378,7 @@ class MockEventService extends ChangeNotifier {
       final liveResults = await ExternalEventService().fetchLiveTicketmasterEvents(keyword: query);
       bool addedAny = false;
       for (var live in liveResults) {
+        if (live.isSportsEvent) continue;
         if (!_events.any((e) => e.id == live.id || e.title.toLowerCase() == live.title.toLowerCase())) {
           _events.add(live);
           addedAny = true;
@@ -1465,6 +1393,10 @@ class MockEventService extends ChangeNotifier {
   }
 
   void addCategory(String category) {
+    final lower = category.toLowerCase();
+    if (lower.contains('spor') || lower.contains('musabaka') || lower.contains('müsabaka') || lower.contains('sport')) {
+      return;
+    }
     if (!categories.contains(category)) {
       categories.add(category);
       notifyListeners();
@@ -1472,11 +1404,17 @@ class MockEventService extends ChangeNotifier {
   }
 
   void addEvent(EventModel event) {
+    if (event.isSportsEvent) return;
     _events.insert(0, event);
     notifyListeners();
   }
 
   void updateEvent(EventModel event) {
+    if (event.isSportsEvent) {
+      _events.removeWhere((e) => e.id == event.id);
+      notifyListeners();
+      return;
+    }
     final index = _events.indexWhere((e) => e.id == event.id);
     if (index >= 0) {
       _events[index] = event;
@@ -1571,7 +1509,7 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> get filteredEvents {
     final now = DateTime.now();
-    List<EventModel> activeEvents = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
+    List<EventModel> activeEvents = _events.where((e) => e.isActive && !e.isSportsEvent && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
 
     // 1. Arama sorgusu varsa: Tüm şehirler ve tüm kategoriler genelinde arama yap ve doğrudan döndür!
     if (_searchQuery.trim().isNotEmpty) {
@@ -1608,6 +1546,21 @@ class MockEventService extends ChangeNotifier {
     if (_selectedCity != 'Tüm Şehirler') {
       final cityNorm = _normalizeText(_selectedCity);
       activeEvents = activeEvents.where((e) => _normalizeText(e.location).contains(cityNorm)).toList();
+    }
+
+    // 3. Tarih Filtresi ('Tümü', 'Bugün', 'Bu Hafta', 'Bu Ay')
+    if (_selectedDateFilter == 'Bugün') {
+      activeEvents = activeEvents.where((e) {
+        return e.dateTime.year == now.year &&
+               e.dateTime.month == now.month &&
+               e.dateTime.day == now.day;
+      }).toList();
+    } else if (_selectedDateFilter == 'Bu Hafta') {
+      final endOfWeek = now.add(const Duration(days: 7));
+      activeEvents = activeEvents.where((e) => e.dateTime.isBefore(endOfWeek)).toList();
+    } else if (_selectedDateFilter == 'Bu Ay') {
+      final endOfMonth = now.add(const Duration(days: 30));
+      activeEvents = activeEvents.where((e) => e.dateTime.isBefore(endOfMonth)).toList();
     }
     
     if (_selectedCategory == 'Tümü') return activeEvents;
@@ -1687,101 +1640,7 @@ class MockEventService extends ChangeNotifier {
     
     final selectedNorm = _normalizeText(_selectedCategory);
 
-    // ⚽ Spor Müsabakaları Özel Filtresi
-    if (selectedNorm == 'spor' || selectedNorm.contains('spor') || selectedNorm.contains('musabaka')) {
-      var sportsEvents = activeEvents.where((e) {
-        // Kesinlikle yalnızca spor müsabakaları kabul edilmelidir (Konser, Sergi, Müze vb. etkinlikler ASLA giremez)
-        if (!e.isSportsEvent) return false;
-
-        // KESİN KURAL: Basketbol, Voleybol ve Tenis kaldırılmıştır; sadece futbol maçları listelenir
-        final catNorm = _normalizeText(e.category);
-        final titleNorm = _normalizeText(e.title);
-        final descNorm = _normalizeText(e.description);
-        final tid = e.id.toLowerCase();
-
-        final isNonFootball = catNorm.contains('basket') ||
-            catNorm.contains('voleybol') ||
-            catNorm.contains('tenis') ||
-            titleNorm.contains('basket') ||
-            titleNorm.contains('voleybol') ||
-            titleNorm.contains('tenis') ||
-            descNorm.contains('basket') ||
-            descNorm.contains('voleybol') ||
-            descNorm.contains('tenis') ||
-            tid.contains('_bb_') ||
-            tid.contains('_vb_') ||
-            tid.contains('_tn_');
-        return !isNonFootball;
-      }).toList();
-
-      // Branş / Lig Alt Filtresi
-      if (_selectedSportsSubFilter != 'Tümü') {
-        final subNorm = _normalizeText(_selectedSportsSubFilter);
-        sportsEvents = sportsEvents.where((e) {
-          final titleNorm = _normalizeText(e.title);
-          final descNorm = _normalizeText(e.description);
-          final atmosNorm = _normalizeText(e.atmosphere);
-
-          if (subNorm.contains('süper lig') || subNorm.contains('super lig')) {
-            return atmosNorm.contains('süper lig') ||
-                descNorm.contains('süper lig') ||
-                descNorm.contains('super lig') ||
-                descNorm.contains('trendyol') ||
-                e.id.contains('sports_espn_') ||
-                titleNorm.contains('galatasaray') ||
-                titleNorm.contains('fenerbahçe') ||
-                titleNorm.contains('beşiktaş') ||
-                titleNorm.contains('trabzonspor') ||
-                titleNorm.contains('göztepe') ||
-                titleNorm.contains('başakşehir') ||
-                titleNorm.contains('samsunspor') ||
-                titleNorm.contains('kasımpaşa') ||
-                titleNorm.contains('konyaspor') ||
-                titleNorm.contains('alanyaspor') ||
-                titleNorm.contains('antalyaspor') ||
-                titleNorm.contains('sivasspor') ||
-                titleNorm.contains('kayserispor') ||
-                titleNorm.contains('rize') ||
-                titleNorm.contains('gaziantep');
-          }
-
-          if (subNorm.contains('avrupa')) {
-            return e.id.contains('footballdata_') ||
-                atmosNorm.contains('champions') ||
-                atmosNorm.contains('avrupa') ||
-                atmosNorm.contains('premier') ||
-                atmosNorm.contains('la liga') ||
-                atmosNorm.contains('serie a') ||
-                atmosNorm.contains('bundesliga') ||
-                atmosNorm.contains('ligue 1') ||
-                descNorm.contains('champions league') ||
-                descNorm.contains('premier league') ||
-                descNorm.contains('la liga') ||
-                descNorm.contains('serie a') ||
-                descNorm.contains('bundesliga') ||
-                descNorm.contains('ligue 1') ||
-                titleNorm.contains('madrid') ||
-                titleNorm.contains('barcelona') ||
-                titleNorm.contains('manchester') ||
-                titleNorm.contains('arsenal') ||
-                titleNorm.contains('liverpool') ||
-                titleNorm.contains('bayern') ||
-                titleNorm.contains('psg') ||
-                titleNorm.contains('milan') ||
-                titleNorm.contains('inter') ||
-                titleNorm.contains('juventus');
-          }
-
-          // '⚽ Futbol' veya genel seçim
-          return true;
-        }).toList();
-      }
-
-      return sportsEvents;
-    }
-
     return activeEvents.where((e) {
-      // Spor müsabakaları konser, tiyatro vb. kültürel etkinlik kategorilerinde ASLA gözükmemelidir
       if (e.isSportsEvent) return false;
 
       final catNorm = _normalizeText(e.category);
@@ -1790,6 +1649,12 @@ class MockEventService extends ChangeNotifier {
       }
       if (selectedNorm == 'tiyatro') {
         return catNorm.contains('tiyatro') || catNorm.contains('theatre') || catNorm.contains('art');
+      }
+      if (selectedNorm == 'stand-up' || selectedNorm == 'standup') {
+        return catNorm.contains('stand') || catNorm.contains('komedi') || catNorm.contains('comedy');
+      }
+      if (selectedNorm == 'festival') {
+        return catNorm.contains('festival') || catNorm.contains('fest') || catNorm.contains('parti');
       }
       return catNorm.contains(selectedNorm);
     }).toList();
@@ -1935,7 +1800,7 @@ class MockEventService extends ChangeNotifier {
     return false;
   }
 
-  List<EventModel> get allEvents => _events.where((e) => e.dateTime.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList();
+  List<EventModel> get allEvents => _events.where((e) => !e.isSportsEvent && e.dateTime.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList();
 
   bool isUserCheckedIn(String eventId) {
     return currentUser.checkedInEventId == eventId;

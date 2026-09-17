@@ -17,7 +17,7 @@ class _HelpSettingsScreenState extends State<HelpSettingsScreen> {
   final List<Map<String, String>> _faqItems = [
     {
       'question': 'EventMatch nasıl çalışır?',
-      'answer': 'EventMatch, çevrenizdeki konser, tiyatro, parti ve spor etkinliklerini keşfetmenizi ve bu etkinliklere gitmek isteyen yeni insanlarla eşleşip sosyalleşmenizi sağlar.'
+      'answer': 'EventMatch, çevrenizdeki konser, tiyatro, parti ve festival etkinliklerini keşfetmenizi ve bu etkinliklere gitmek isteyen yeni insanlarla eşleşip sosyalleşmenizi sağlar.'
     },
     {
       'question': 'Etkinliklere nasıl katılırım veya ev sahibi olurum?',

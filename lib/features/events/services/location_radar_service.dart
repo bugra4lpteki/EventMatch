@@ -222,6 +222,7 @@ class LocationRadarService extends ChangeNotifier {
         'points': user.points,
         'latitude': _lastPosition!.latitude,
         'longitude': _lastPosition!.longitude,
+        'is_verified': user.isVerified,
         'is_radar_active': true,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
       };
@@ -279,6 +280,7 @@ class LocationRadarService extends ChangeNotifier {
           longitude: remoteLng,
           tags: List<String>.from(payload['interests'] ?? []),
           enableLocationSharing: true,
+          isVerified: payload['is_verified'] == true,
         );
 
         _liveRealtimeUsers[remoteUserId.toLowerCase()] = remoteUser;
@@ -353,6 +355,7 @@ class LocationRadarService extends ChangeNotifier {
               latitude: uLat,
               longitude: uLng,
               enableLocationSharing: true,
+              isVerified: row['is_verified'] == true || (row['badges'] is List && (row['badges'] as List).contains('verified')),
               tags: row['interests'] != null ? List<String>.from(row['interests']) : ['Müzik', 'Festival'],
             );
           }

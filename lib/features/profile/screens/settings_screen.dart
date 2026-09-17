@@ -68,6 +68,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: 'Profil gizliliği, son görülme ve konum izinleri',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PrivacySettingsScreen())),
             ),
+            _buildDivider(),
+            _buildSettingsTile(
+              icon: Icons.verified_rounded,
+              iconColor: const Color(0xFF38BDF8),
+              title: 'Profil Doğrulama',
+              subtitle: context.watch<MockEventService>().currentUser.isVerified
+                  ? 'E-posta doğrulandı (Mavi Tik Rozeti Aktif)'
+                  : 'E-postanı doğrula ve Mavi Tik rozeti kazan',
+              trailing: context.watch<MockEventService>().currentUser.isVerified
+                  ? const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 20)
+                  : const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
+              onTap: () => _showVerificationDialog(context),
+            ),
           ]),
 
           const SizedBox(height: 24),
@@ -173,6 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback onTap,
     Color? titleColor,
     Color? iconColor,
+    Widget? trailing,
   }) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -196,8 +210,213 @@ class _SettingsScreenState extends State<SettingsScreen> {
         subtitle,
         style: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 12),
       ),
-      trailing: Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+      trailing: trailing ?? Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
       onTap: onTap,
+    );
+  }
+
+  void _showVerificationDialog(BuildContext context) {
+    final eventService = context.read<MockEventService>();
+    final authService = context.read<AuthService>();
+    final currentUser = eventService.currentUser;
+    final isAlreadyVerified = currentUser.isVerified;
+
+    final emailController = TextEditingController(
+      text: authService.currentUserEmail ?? '${currentUser.username ?? "kullanici"}@gmail.com',
+    );
+    final codeController = TextEditingController();
+    bool codeSent = false;
+    bool isVerifying = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.only(
+            top: 24,
+            left: 24,
+            right: 24,
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 28,
+          ),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35), width: 1.5),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF38BDF8).withOpacity(0.12),
+                  border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35)),
+                ),
+                child: const Icon(
+                  Icons.verified_rounded,
+                  size: 38,
+                  color: Color(0xFF38BDF8),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Profil Doğrulama',
+                style: GoogleFonts.outfit(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                isAlreadyVerified
+                    ? 'E-posta adresiniz doğrulandı! Profilinizde, Match Haritası\'nda ve eşleşmelerde Doğrulanmış Kullanıcı (Mavi Tik) rozetiniz aktif.'
+                    : 'E-postanı doğrula, gerçek kullanıcı olduğunu kanıtla ve profiline Doğrulanmış Kullanıcı Mavi Tik rozetini ekle!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+
+              if (isAlreadyVerified) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, color: Color(0xFF10B981), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Doğrulanmış Profil Rozeti Aktif',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFF10B981),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.surfaceLight,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: Text('Tamam', style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white)),
+                  ),
+                ),
+              ] else ...[
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                  decoration: InputDecoration(
+                    labelText: 'E-posta Adresi',
+                    labelStyle: TextStyle(color: AppColors.textSecondary),
+                    prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF38BDF8), size: 20),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+
+                if (codeSent) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: codeController,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white, fontSize: 15, letterSpacing: 4),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: '6 Haneli Doğrulama Kodu',
+                      hintStyle: TextStyle(color: AppColors.textSecondary, letterSpacing: 1, fontSize: 12),
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.05),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 18),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: isVerifying
+                        ? null
+                        : () async {
+                            if (!codeSent) {
+                              setModalState(() {
+                                codeSent = true;
+                                codeController.text = '582914';
+                              });
+                            } else {
+                              setModalState(() => isVerifying = true);
+                              await eventService.verifyCurrentUserEmail(emailController.text.trim());
+                              if (ctx.mounted) {
+                                Navigator.pop(sheetContext);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Row(
+                                      children: const [
+                                        Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 22),
+                                        SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text('Tebrikler! Profiliniz doğrulandı. Mavi Tik rozetiniz aktif edildi.'),
+                                        ),
+                                      ],
+                                    ),
+                                    backgroundColor: AppColors.surface,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                    margin: const EdgeInsets.all(16),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF38BDF8),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
+                    child: isVerifying
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                        : Text(
+                            codeSent ? 'Doğrula & Mavi Tik Al' : 'Doğrulama Kodu Gönder',
+                            style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 

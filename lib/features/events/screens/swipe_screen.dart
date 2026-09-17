@@ -333,15 +333,23 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 children: [
                   Row(
                     children: [
-                      Text(
-                        user.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                      Flexible(
+                        child: Text(
+                          user.name,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      if (user.isVerified) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.verified_rounded, size: 19, color: Color(0xFF38BDF8)),
+                      ],
                       if (user.age != null && user.age!.isNotEmpty) ...[
                         const SizedBox(width: 6),
                         Text(
@@ -359,49 +367,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
                     const SizedBox(height: 3),
                     Text(
                       user.aboutMe!,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style: const TextStyle(color: Colors.white70, fontSize: 12.5),
                     ),
                   ],
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 5,
-                    runSpacing: 4,
-                    children: user.tags
-                        .take(4)
-                        .map((tag) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 7, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.2), 
-                                    width: 0.8),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _getTagIcon(tag),
-                                    color: Colors.white,
-                                    size: 11,
-                                  ),
-                                  const SizedBox(width: 3),
-                                  Text(
-                                    tag,
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ),
                 ],
               ),
             ),
@@ -448,120 +418,59 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
     return Container(
       padding: const EdgeInsets.only(bottom: 20.0, top: 4.0, left: 16.0, right: 16.0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Modern Quick Message Chips
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                _buildQuickChip('Konsere gidelim mi?', '🎵'),
-                const SizedBox(width: 8),
-                _buildQuickChip('Kahve içelim mi?', '☕'),
-                const SizedBox(width: 8),
-                _buildQuickChip('Selam, tanışalım mı?', '✨'),
-                const SizedBox(width: 8),
-                _buildQuickChip('Etkinlikte buluşalım!', '🎭'),
+          // Message TextField
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.5),
+                  width: 1.5,
+                ),
+              ),
+              child: TextField(
+                controller: _messageController,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+                maxLines: 1,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _sendMatchMessage(currentItem),
+                decoration: InputDecoration(
+                  hintText: '$name kişisine mesaj yaz...',
+                  hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Send Match Request Button
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [AppColors.primary, AppColors.secondary],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primary.withValues(alpha: 0.4),
+                  blurRadius: 10,
+                  spreadRadius: 1,
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 10),
-          // Input & Action Row
-          Row(
-            children: [
-              // Message TextField
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.5),
-                      width: 1.5,
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _messageController,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    maxLines: 1,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMatchMessage(currentItem),
-                    decoration: InputDecoration(
-                      hintText: '$name kişisine mesaj yaz...',
-                      hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Send Match Request Button
-              Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.primary, AppColors.secondary],
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-                  tooltip: 'Mesaj Gönder & Beğen',
-                  onPressed: () => _sendMatchMessage(currentItem),
-                ),
-              ),
-            ],
+            child: IconButton(
+              icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
+              tooltip: 'Eşleşme İsteği & Mesaj Gönder',
+              onPressed: () => _sendMatchMessage(currentItem),
+            ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildQuickChip(String text, String emoji) {
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _messageController.text = text;
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.primary.withValues(alpha: 0.35), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.1),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(emoji, style: const TextStyle(fontSize: 13)),
-            const SizedBox(width: 5),
-            Text(
-              text,
-              style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
       ),
     );
   }

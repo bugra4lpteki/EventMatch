@@ -102,15 +102,8 @@ class _EventCardState extends State<EventCard> {
       return Icons.theater_comedy_rounded;
     } else if (lower.contains('stand-up') || lower.contains('komedi') || lower.contains('comedy')) {
       return Icons.emoji_emotions_rounded;
-    } else if (lower.contains('spor') || lower.contains('sports') || lower.contains('müsabaka') || lower.contains('musabaka')) {
-      final title = widget.event.title.toLowerCase();
-      if (title.contains('basketbol') || title.contains('euroleague') || lower.contains('basketbol')) {
-        return Icons.sports_basketball_rounded;
-      }
-      if (title.contains('voleybol') || title.contains('sultanlar') || lower.contains('voleybol')) {
-        return Icons.sports_volleyball_rounded;
-      }
-      return Icons.sports_soccer_rounded;
+    } else if (lower.contains('festival') || lower.contains('parti')) {
+      return Icons.celebration_rounded;
     }
     return Icons.event_rounded;
   }
@@ -287,67 +280,22 @@ class _EventCardState extends State<EventCard> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         _LiveAttendeesRow(event: widget.event),
-                        if (widget.event.isSportsEvent)
-                          GestureDetector(
-                            onTap: () {
-                              if (widget.onTap != null) {
-                                widget.onTap!();
-                              } else {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) =>
-                                        EventDetailScreen(event: widget.event),
-                                  ),
-                                );
-                              }
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 7),
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF0284C7), Color(0xFF0EA5E9)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
+                        GestureDetector(
+                          onTap: () async {
+                            if (ticketUrlStr.isNotEmpty) {
+                              await UrlLauncherHelper.launchURL(ticketUrlStr);
+                            } else if (widget.onTap != null) {
+                              widget.onTap!();
+                            } else {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      EventDetailScreen(event: widget.event),
                                 ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF0284C7).withValues(alpha: 0.35),
-                                    blurRadius: 6,
-                                    spreadRadius: 1,
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(_getCategoryIcon(widget.event.category),
-                                      size: 14, color: Colors.white),
-                                  const SizedBox(width: 5),
-                                  const Text(
-                                    'Müsabaka',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  const Icon(Icons.chevron_right_rounded,
-                                      size: 15, color: Colors.white),
-                                ],
-                              ),
-                            ),
-                          )
-                        else
-                          GestureDetector(
-                            onTap: () async {
-                              if (ticketUrlStr.isNotEmpty) {
-                                await UrlLauncherHelper.launchURL(ticketUrlStr);
-                              }
-                            },
+                              );
+                            }
+                          },
                             child: Container(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 14, vertical: 7),

@@ -806,34 +806,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ),
 
-                          if (event.isSportsEvent) ...[
-                            const SizedBox(height: 10),
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A).withOpacity(0.5),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.2)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.sports_rounded, size: 18, color: Color(0xFF38BDF8)),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      'Bu müsabaka için bilet yönlendirmesi yapılmamaktadır. Maça birlikte gidecek arkadaşlar bulmak için yukarıdan katılım sağlayabilirsiniz.',
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.white.withOpacity(0.8),
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ] else if (event.effectiveTicketUrl.isNotEmpty) ...[
+                          if (event.effectiveTicketUrl.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             // Secondary Button: Bilet Al (Firmaya Özel Renk: Biletix=Mavi, Passo=Kırmızı, Biletinial=Sarı, Bubilet=Yeşil)
                             SizedBox(

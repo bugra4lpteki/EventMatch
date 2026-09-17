@@ -654,12 +654,12 @@ class MockMatchService extends ChangeNotifier {
               '';
 
           // Unsplash URL basma
-          final cleanAvatarUrl = photoUrl.contains('unsplash.com') ? '' : photoUrl;
-
           final fromUser = UserModel(
             id: fromUserId,
             name: name,
-            avatarUrl: cleanAvatarUrl,
+            avatarUrl: photoUrl,
+            isVerified: profile?['is_verified'] == true ||
+                (profile?['badges'] is List && (profile?['badges'] as List).contains('verified')),
           );
 
           final currentUserModel = UserModel(
@@ -668,11 +668,28 @@ class MockMatchService extends ChangeNotifier {
             avatarUrl: '',
           );
 
+          String? initialMessage;
+          try {
+            if (_isValidUuid(matchId)) {
+              final msgRes = await _supabase
+                  .from('messages')
+                  .select('content')
+                  .eq('match_id', matchId)
+                  .order('created_at', ascending: true)
+                  .limit(1)
+                  .maybeSingle();
+              if (msgRes != null && msgRes['content'] != null) {
+                initialMessage = msgRes['content'].toString();
+              }
+            }
+          } catch (_) {}
+
           _incomingRequests.add(MatchRequest(
             id: matchId,
             fromUser: fromUser,
             toUser: currentUserModel,
             eventId: eventId,
+            message: initialMessage,
           ));
         }
       }

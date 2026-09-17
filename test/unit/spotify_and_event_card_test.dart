@@ -68,6 +68,29 @@ void main() {
       expect(tracks[0].previewUrl, isNotEmpty);
     });
 
+    test('Aleyna Tilki için resmi HD sanatçı profil görseli ve hit şarkıları dönmelidir', () async {
+      final aleyna = await spotifyService.searchArtist('Aleyna Tilki', category: 'Konser');
+      expect(aleyna, isNotNull);
+      expect(aleyna!.name, equals('Aleyna Tilki'));
+      expect(aleyna.imageUrl, contains('1000x1000-000000-80-0-0.jpg'));
+
+      final tracks = await spotifyService.getArtistTopTracks(aleyna.id, artistName: 'Aleyna Tilki');
+      expect(tracks.length, greaterThanOrEqualTo(3));
+      expect(tracks[0].title, equals('Sen Olsan Bari'));
+      expect(tracks[0].previewUrl, isNotNull);
+      expect(tracks[0].previewUrl, isNotEmpty);
+    });
+
+    test('Sıla - KerkiSolfej ve Aleyna Tilki Konseri gibi etkinlik başlıkları doğru sanatçıya çözülmelidir', () async {
+      final silaArtist = await spotifyService.searchArtist('Sıla - KerkiSolfej', category: 'Konser');
+      expect(silaArtist, isNotNull);
+      expect(silaArtist!.name, equals('Sıla'));
+
+      final aleynaArtist = await spotifyService.searchArtist('Aleyna Tilki Konseri', category: 'Konser');
+      expect(aleynaArtist, isNotNull);
+      expect(aleynaArtist!.name, equals('Aleyna Tilki'));
+    });
+
     test('The Sisters of Mercy için grup profil görseli ve şarkı önizlemeleri dönmelidir', () async {
       final som = await spotifyService.searchArtist('The Sisters of Mercy', category: 'Konser');
       expect(som, isNotNull);

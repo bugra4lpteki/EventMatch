@@ -85,6 +85,10 @@ class EventModel {
       // Sıla - Spotify Resmi Sanatçı Header/Profil Kapak Fotoğrafı (Siyah-Beyaz Çatı/Teras Oturan Sanatçı)
       return 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1';
     }
+    if (titleLower.contains('aleyna tilki') || titleLower.contains('aleyna')) {
+      // Aleyna Tilki - Resmi HD Sanatçı Görseli
+      return 'https://cdn-images.dzcdn.net/images/artist/aa451cd32910ea3553ebaa714b7e8e9c/1000x1000-000000-80-0-0.jpg';
+    }
     if (titleLower.contains('saint levant')) {
       // Saint Levant - Resmi HD Sanatçı Görseli
       return 'https://cdn-images.dzcdn.net/images/artist/ece5cdbf56a3cb10203a25d304543123/1000x1000-000000-80-0-0.jpg';

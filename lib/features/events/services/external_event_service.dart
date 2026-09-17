@@ -4,7 +4,6 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/api_keys.dart';
 import '../models/event_model.dart';
-import 'sports_api_service.dart';
 
 /// Biletix (Ticketmaster), Bubilet, Biletinial ve diğer biletleme servisleri için API entegrasyonu servisi.
 class ExternalEventService {
@@ -49,6 +48,12 @@ class ExternalEventService {
               }
             }
 
+            // Spor müsabakaları uygulamadan tamamen kaldırıldı
+            final lowerTitle = title.toString().toLowerCase();
+            if (lowerTitle.contains('futbol') || lowerTitle.contains('stadyum') || lowerTitle.contains('derbi') || lowerTitle.contains('süper lig')) {
+              continue;
+            }
+
             // Kategori tespiti
             String category = 'Genel';
             if (item['classifications'] != null && (item['classifications'] as List).isNotEmpty) {
@@ -62,7 +67,8 @@ class ExternalEventService {
                 } else if (segName.contains('Comedy')) {
                   category = 'Stand-up';
                 } else if (segName.contains('Sports')) {
-                  category = 'Spor';
+                  // Spor müsabakaları tamamen kaldırıldı, atla
+                  continue;
                 } else {
                   category = segName;
                 }
@@ -286,13 +292,9 @@ class ExternalEventService {
     }
   }
 
-  /// ⚽ Canlı Futbol Müsabakalarını Football-Data.org & ESPN üzerinden Çekme
-  /// KURAL: Spor müsabakalarında bilet yönlendirmesi kesinlikle yapılmaz (ticketUrl = null, ticketProvider = null).
+  /// Spor müsabakaları uygulamadan tamamen kaldırılmıştır
   Future<List<EventModel>> fetchLiveSportsEvents() async {
-    final sportsApi = SportsApiService();
-    final list = await sportsApi.fetchAllSportsEvents();
-    debugPrint('⚽ [SportsApiService] Toplam ${list.length} canlı futbol müsabakası hazırlandı (Biletsiz yönlendirme).');
-    return list;
+    return [];
   }
 
   /// 🌐 Biletix Web Sayfasından (biletix.com/performance/...) Orijinal og:image Afiş URL'sini Canlı Çekme

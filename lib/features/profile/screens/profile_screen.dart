@@ -175,18 +175,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  GestureDetector(
-                                    onTap: _handleSecretTap,
-                                    child: Text(
-                                      user.name,
-                                      style: TextStyle(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: -0.4,
-                                      ),
-                                    ),
-                                  ),
+                                   GestureDetector(
+                                     onTap: _handleSecretTap,
+                                     child: Row(
+                                       mainAxisSize: MainAxisSize.min,
+                                       children: [
+                                         Text(
+                                           user.name,
+                                           style: TextStyle(
+                                             color: AppColors.textPrimary,
+                                             fontSize: 24,
+                                             fontWeight: FontWeight.bold,
+                                             letterSpacing: -0.4,
+                                           ),
+                                         ),
+                                         if (user.isVerified) ...[
+                                           const SizedBox(width: 6),
+                                           const Icon(Icons.verified_rounded, size: 22, color: Color(0xFF38BDF8)),
+                                         ],
+                                       ],
+                                     ),
+                                   ),
                                   Row(
                                     children: user.socialLinks.take(5).map((link) {
                                       if (link.isEmpty) return const SizedBox.shrink();
