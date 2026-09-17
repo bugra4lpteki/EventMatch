@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
@@ -27,13 +28,81 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
+  late PageController _pageController;
   int _currentPhotoIndex = 0;
   bool _targetUserHideEvents = false;
+  List<String> _fetchedPhotos = [];
 
   @override
   void initState() {
     super.initState();
+    _pageController = PageController();
     _checkTargetUserPrivacy();
+    _loadAllUserPhotos();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadAllUserPhotos() async {
+    final eventService = context.read<MockEventService>();
+    final isCurrentUser = (widget.user.id == eventService.currentUser.id ||
+        widget.user.name.toLowerCase() == eventService.currentUser.name.toLowerCase());
+
+    if (isCurrentUser && eventService.currentUser.avatarUrls.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _fetchedPhotos = List<String>.from(eventService.currentUser.avatarUrls);
+        });
+      }
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+      String targetUserId = widget.user.id;
+
+      final isUuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(targetUserId);
+      if (!isUuid) {
+        try {
+          final query = widget.user.username != null && widget.user.username!.isNotEmpty
+              ? await supabase.from('users').select('id').eq('username', widget.user.username!).maybeSingle()
+              : await supabase.from('users').select('id').ilike('name', widget.user.name).maybeSingle();
+          if (query != null && query['id'] != null) {
+            targetUserId = query['id'].toString();
+          }
+        } catch (_) {}
+      }
+
+      final photosRes = await supabase
+          .from('user_photos')
+          .select('storage_url')
+          .eq('user_id', targetUserId)
+          .eq('is_active', true)
+          .order('sort_order', ascending: true);
+
+      final List<String> loaded = [];
+      for (var row in photosRes) {
+        final u = row['storage_url']?.toString().trim() ?? '';
+        if (u.isNotEmpty && (u.startsWith('http') || u.startsWith('assets/')) && !loaded.contains(u)) {
+          loaded.add(u);
+        }
+      }
+
+      if (loaded.isNotEmpty && mounted) {
+        setState(() {
+          _fetchedPhotos = loaded;
+          widget.user.avatarUrls = loaded;
+          if (loaded.isNotEmpty) {
+            widget.user.avatarUrl = loaded.first;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[UserProfile] user_photos yukleme hatasi: $e');
+    }
   }
 
   Future<void> _checkTargetUserPrivacy() async {
@@ -200,7 +269,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final eventService = context.watch<MockEventService>();
     final matchService = context.watch<MockMatchService>();
     final user = widget.user;
-    final isCurrentUser = (user.id == eventService.currentUser.id || user.name == eventService.currentUser.name);
+    final isCurrentUser = (user.id == eventService.currentUser.id || user.name.toLowerCase() == eventService.currentUser.name.toLowerCase());
     final hideEvents = isCurrentUser ? false : (_targetUserHideEvents || user.hideEvents);
 
     final msgService = context.watch<MockMessageService>();
@@ -209,9 +278,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final isAlreadyMatched = msgService.individualChats.any((c) =>
         c.participant.id.toLowerCase() == user.id.toLowerCase());
 
-    final displayPhotos = user.avatarUrls.isNotEmpty
-        ? user.avatarUrls
-        : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
+    final List<String> currentList = isCurrentUser && eventService.currentUser.avatarUrls.isNotEmpty
+        ? eventService.currentUser.avatarUrls
+        : (user.avatarUrls.isNotEmpty ? user.avatarUrls : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]));
+
+    final displayPhotos = _fetchedPhotos.isNotEmpty ? _fetchedPhotos : currentList;
 
     final ageStr = user.age != null && user.age!.isNotEmpty ? user.age : '24';
     final cityStr = user.city != null && user.city!.isNotEmpty ? user.city! : 'İstanbul';
@@ -271,8 +342,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       // Background images (PageView)
                       if (displayPhotos.isEmpty)
                         _defaultHeroBg(context)
-                      else
+                      else ...[
                         PageView.builder(
+                          controller: _pageController,
                           scrollBehavior: ScrollConfiguration.of(context).copyWith(
                             dragDevices: {
                               PointerDeviceKind.touch,
@@ -299,46 +371,148 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                             );
                           },
                         ),
-                      // Bottom subtle gradient for indicators only
-                      IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Colors.black.withValues(alpha: 0.25), Colors.transparent],
-                              stops: const [0.0, 0.15],
+                        // Left / Right tap overlay for seamless photo navigation
+                        if (displayPhotos.length > 1) ...[
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 140,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () {
+                                if (_currentPhotoIndex > 0) {
+                                  _pageController.previousPage(
+                                    duration: const Duration(milliseconds: 260),
+                                    curve: Curves.easeInOut,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            left: 140,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () {
+                                if (_currentPhotoIndex < displayPhotos.length - 1) {
+                                  _pageController.nextPage(
+                                    duration: const Duration(milliseconds: 260),
+                                    curve: Curves.easeInOut,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                        // Top subtle gradient for story indicator bars
+                        IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.black.withValues(alpha: 0.5), Colors.transparent],
+                                stops: const [0.0, 0.22],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      // Page Indicators (-- ·)
-                      if (displayPhotos.length > 1)
-                        Positioned(
-                          bottom: 16,
-                          left: 0,
-                          right: 0,
-                          child: IgnorePointer(
+                        // Modern Story-style Top Segment Progress Bars
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            top: 14,
+                            left: 16,
+                            right: 16,
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: List.generate(displayPhotos.length, (index) {
                                 final isActive = _currentPhotoIndex == index;
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  width: isActive ? 24 : 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: isActive
-                                        ? AppColors.textPrimary
-                                        : AppColors.textPrimary.withValues(alpha: 0.3),
-                                    borderRadius: BorderRadius.circular(4),
+                                return Expanded(
+                                  child: Container(
+                                    height: 3.5,
+                                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                                    decoration: BoxDecoration(
+                                      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.3),
+                                          blurRadius: 3,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 );
                               }),
                             ),
                           ),
+                        // Photo counter badge (e.g. 1/3)
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            top: 26,
+                            right: 18,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24, width: 0.5),
+                              ),
+                              child: Text(
+                                '${_currentPhotoIndex + 1}/${displayPhotos.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Bottom subtle gradient for bottom dots
+                        IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent],
+                                stops: const [0.0, 0.15],
+                              ),
+                            ),
+                          ),
                         ),
+                        // Page Indicators (-- ·)
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            bottom: 16,
+                            left: 0,
+                            right: 0,
+                            child: IgnorePointer(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(displayPhotos.length, (index) {
+                                  final isActive = _currentPhotoIndex == index;
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                                    width: isActive ? 24 : 8,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: isActive
+                                          ? AppColors.textPrimary
+                                          : AppColors.textPrimary.withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),

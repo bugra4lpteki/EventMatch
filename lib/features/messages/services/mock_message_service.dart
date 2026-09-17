@@ -1235,7 +1235,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       final Map<String, Map<String, dynamic>> profilesMap = {};
-      final Map<String, String> photosMap = {};
+      final Map<String, List<String>> photosMap = {};
       final Map<String, List<String>> socialLinksMap = {};
 
       final validUuidList = partnerUserIds.where((id) => _isValidUuid(id)).toList();
@@ -1262,8 +1262,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
           for (var photo in photosRes) {
             final uId = photo['user_id'].toString().toLowerCase();
-            if (!photosMap.containsKey(uId)) {
-              photosMap[uId] = photo['storage_url'].toString();
+            final url = photo['storage_url']?.toString() ?? '';
+            if (url.startsWith('http')) {
+              photosMap.putIfAbsent(uId, () => []).add(url);
             }
           }
         } catch (_) {}
@@ -1409,9 +1410,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final bio = profile?['bio'] ?? existingChat?.participant.aboutMe;
         final city = profile?['city'] ?? existingChat?.participant.city;
         final gender = profile?['gender'] ?? existingChat?.participant.gender;
-        final avatarUrl = photosMap[lowerPartnerId] ??
-            existingChat?.participant.avatarUrl ??
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600';
+        final userPhotos = photosMap[lowerPartnerId] ?? existingChat?.participant.avatarUrls ?? [];
+        final avatarUrl = userPhotos.isNotEmpty
+            ? userPhotos.first
+            : (existingChat?.participant.avatarUrl ??
+                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600');
 
         final List<String> socialLinks = List<String>.from(socialLinksMap[lowerPartnerId] ?? existingChat?.participant.socialLinks ?? []);
         List<String> tags = [];
@@ -1426,6 +1429,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           name: name,
           username: username,
           avatarUrl: avatarUrl,
+          avatarUrls: userPhotos,
           aboutMe: bio,
           city: city,
           gender: gender,

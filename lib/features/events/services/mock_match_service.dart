@@ -602,7 +602,7 @@ class MockMatchService extends ChangeNotifier {
           }
         }
 
-        Map<String, String> requesterPhotos = {};
+        Map<String, List<String>> requesterPhotos = {};
         if (requesterIds.isNotEmpty) {
           try {
             final photosRes = await _supabase
@@ -615,8 +615,8 @@ class MockMatchService extends ChangeNotifier {
             for (var p in photosRes) {
               final uId = p['user_id']?.toString().toLowerCase() ?? '';
               final url = p['storage_url']?.toString() ?? '';
-              if (!requesterPhotos.containsKey(uId) && url.isNotEmpty) {
-                requesterPhotos[uId] = url;
+              if (uId.isNotEmpty && url.isNotEmpty) {
+                requesterPhotos.putIfAbsent(uId, () => []).add(url);
               }
             }
           } catch (_) {}
@@ -649,15 +649,17 @@ class MockMatchService extends ChangeNotifier {
           final eventId = row['event_id']?.toString() ?? '';
           final matchId = (row['id'] ?? row['match_id'] ?? row['m_id'] ?? row['M_ID'] ?? '').toString();
 
-          final photoUrl = requesterPhotos[lowerFromId] ??
-              profile?['avatar_url']?.toString() ??
-              '';
+          final userPhotos = requesterPhotos[lowerFromId] ?? [];
+          final photoUrl = userPhotos.isNotEmpty
+              ? userPhotos.first
+              : (profile?['avatar_url']?.toString() ?? '');
 
           // Unsplash URL basma
           final fromUser = UserModel(
             id: fromUserId,
             name: name,
             avatarUrl: photoUrl,
+            avatarUrls: userPhotos.isNotEmpty ? userPhotos : (photoUrl.isNotEmpty ? [photoUrl] : []),
             isVerified: profile?['is_verified'] == true ||
                 (profile?['badges'] is List && (profile?['badges'] as List).contains('verified')),
           );

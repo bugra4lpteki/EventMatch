@@ -179,5 +179,24 @@ void main() {
       expect(eventService.currentUser.isVerified, isTrue);
       expect(eventService.currentUser.badges, contains('verified'));
     });
+
+    test('UserModel birden fazla fotoğraf (avatarUrls) saklayabilmeli ve toMap/fromMap ile korunmalıdır', () {
+      final user = UserModel(
+        id: 'u4',
+        name: 'Fotoğraf Sever',
+        avatarUrl: 'https://example.com/p1.jpg',
+        avatarUrls: [
+          'https://example.com/p1.jpg',
+          'https://example.com/p2.jpg',
+          'https://example.com/p3.jpg',
+        ],
+      );
+
+      expect(user.avatarUrls.length, equals(3));
+      final map = user.toMap();
+      final restored = UserModel.fromMap(map);
+      expect(restored.avatarUrls.length, equals(3));
+      expect(restored.avatarUrls[1], equals('https://example.com/p2.jpg'));
+    });
   });
 }

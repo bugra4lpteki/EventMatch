@@ -20,9 +20,16 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
+  late PageController _pageController;
   int _currentPhotoIndex = 0;
   int _secretTapCount = 0;
   Timer? _secretTapTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
 
   void _handleSecretTap() {
     _secretTapCount++;
@@ -39,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   void dispose() {
+    _pageController.dispose();
     _secretTapTimer?.cancel();
     super.dispose();
   }
@@ -79,8 +87,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // Background images (PageView)
                       if (displayPhotos.isEmpty)
                         _defaultHeroBg(context)
-                      else
+                      else ...[
                         PageView.builder(
+                          controller: _pageController,
                           scrollBehavior: ScrollConfiguration.of(context).copyWith(
                             dragDevices: {
                               PointerDeviceKind.touch,
@@ -107,44 +116,146 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
-                      // Bottom subtle gradient for indicators only
-                      IgnorePointer(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.bottomCenter,
-                              end: Alignment.topCenter,
-                              colors: [Colors.black.withValues(alpha: 0.25), Colors.transparent],
-                              stops: const [0.0, 0.15],
+                        // Left / Right tap overlay for easy photo navigation
+                        if (displayPhotos.length > 1) ...[
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 140,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () {
+                                if (_currentPhotoIndex > 0) {
+                                  _pageController.previousPage(
+                                    duration: const Duration(milliseconds: 260),
+                                    curve: Curves.easeInOut,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            left: 140,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onTap: () {
+                                if (_currentPhotoIndex < displayPhotos.length - 1) {
+                                  _pageController.nextPage(
+                                    duration: const Duration(milliseconds: 260),
+                                    curve: Curves.easeInOut,
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                        // Top subtle gradient for story indicator bars
+                        IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [Colors.black.withValues(alpha: 0.5), Colors.transparent],
+                                stops: const [0.0, 0.22],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      // Page Indicators
-                      if (displayPhotos.length > 1)
-                        Positioned(
-                          bottom: 16,
-                          left: 0,
-                          right: 0,
-                          child: IgnorePointer(
+                        // Modern Story-style Top Segment Progress Bars
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            top: 14,
+                            left: 16,
+                            right: 16,
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: List.generate(displayPhotos.length, (index) {
                                 final isActive = _currentPhotoIndex == index;
-                                return AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
-                                  margin: const EdgeInsets.symmetric(horizontal: 4),
-                                  width: isActive ? 24 : 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: isActive ? AppColors.textPrimary : AppColors.textPrimary.withOpacity(0.3),
-                                    borderRadius: BorderRadius.circular(4),
+                                return Expanded(
+                                  child: Container(
+                                    height: 3.5,
+                                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
+                                    decoration: BoxDecoration(
+                                      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.35),
+                                      borderRadius: BorderRadius.circular(3),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.3),
+                                          blurRadius: 3,
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 );
                               }),
                             ),
                           ),
+                        // Photo counter badge (e.g. 1/3)
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            top: 26,
+                            right: 18,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24, width: 0.5),
+                              ),
+                              child: Text(
+                                '${_currentPhotoIndex + 1}/${displayPhotos.length}',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        // Bottom subtle gradient for indicators only
+                        IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [Colors.black.withValues(alpha: 0.25), Colors.transparent],
+                                stops: const [0.0, 0.15],
+                              ),
+                            ),
+                          ),
                         ),
+                        // Page Indicators
+                        if (displayPhotos.length > 1)
+                          Positioned(
+                            bottom: 16,
+                            left: 0,
+                            right: 0,
+                            child: IgnorePointer(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(displayPhotos.length, (index) {
+                                  final isActive = _currentPhotoIndex == index;
+                                  return AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                                    width: isActive ? 24 : 8,
+                                    height: 7,
+                                    decoration: BoxDecoration(
+                                      color: isActive ? AppColors.textPrimary : AppColors.textPrimary.withValues(alpha: 0.3),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                 ),

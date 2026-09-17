@@ -304,7 +304,7 @@ class LocationRadarService extends ChangeNotifier {
       // Supabase 'users' tablosundaki kullanıcıları çek
       final List<dynamic> rows = await _supabase.from('users').select();
 
-      final Map<String, String> userPhotosMap = {};
+      final Map<String, List<String>> userPhotosMap = {};
       try {
         final photosRes = await _supabase
             .from('user_photos')
@@ -314,8 +314,8 @@ class LocationRadarService extends ChangeNotifier {
         for (var p in photosRes) {
           final uId = p['user_id']?.toString().toLowerCase();
           final url = p['storage_url']?.toString();
-          if (uId != null && url != null && url.startsWith('http') && !userPhotosMap.containsKey(uId)) {
-            userPhotosMap[uId] = url;
+          if (uId != null && url != null && url.startsWith('http')) {
+            userPhotosMap.putIfAbsent(uId, () => []).add(url);
           }
         }
       } catch (_) {}
@@ -343,13 +343,16 @@ class LocationRadarService extends ChangeNotifier {
           }
 
           if (dist <= _radarDistanceKm * 1000 || dist == 0) {
-            final userPhoto = userPhotosMap[uid.toLowerCase()] ?? '';
+            final userPhotos = userPhotosMap[uid.toLowerCase()] ?? [];
+            final userPhoto = userPhotos.isNotEmpty
+                ? userPhotos.first
+                : (row['avatar_url']?.toString() ?? '');
             _liveRealtimeUsers[uid.toLowerCase()] = UserModel(
               id: uid,
               name: uname,
               username: row['username']?.toString(),
               avatarUrl: userPhoto,
-              avatarUrls: userPhoto.isNotEmpty ? [userPhoto] : [],
+              avatarUrls: userPhotos.isNotEmpty ? userPhotos : (userPhoto.isNotEmpty ? [userPhoto] : []),
               city: row['city']?.toString() ?? 'İstanbul',
               aboutMe: (row['bio'] ?? row['about_me'])?.toString(),
               latitude: uLat,
