@@ -128,6 +128,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<MockEventService>().currentUser;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -170,7 +171,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                                   : FileImage(File(_selectedAvatarPath!)) as ImageProvider)
                               : null,
                           child: _selectedAvatarPath == null
-                              ? Icon(Icons.person, size: 54, color: AppColors.primary)
+                              ? Icon(
+                                  Icons.person_rounded,
+                                  size: 54,
+                                  color: user.isMale
+                                      ? const Color(0xFF3B82F6)
+                                      : (user.isFemale ? const Color(0xFFEC4899) : AppColors.primary),
+                                )
                               : null,
                         ),
                       ),

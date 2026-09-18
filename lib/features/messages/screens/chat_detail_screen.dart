@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/notification_service.dart';
 import '../../../core/widgets/report_block_sheet.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../models/message_model.dart';
 import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
@@ -643,15 +644,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           },
           child: Row(
             children: [
-              CircleAvatar(
+              UserAvatar(
+                user: currentChat.participant,
                 radius: 20,
-                backgroundColor: AppColors.primary,
-                backgroundImage: currentChat.participant.avatarUrl.startsWith('http')
-                    ? NetworkImage(currentChat.participant.avatarUrl)
-                    : null,
-                child: !currentChat.participant.avatarUrl.startsWith('http')
-                    ? const Icon(Icons.person, color: Colors.white)
-                    : null,
               ),
               const SizedBox(width: 12),
               Expanded(

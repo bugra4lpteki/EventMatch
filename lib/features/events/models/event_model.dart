@@ -460,6 +460,42 @@ class EventModel {
         tid.startsWith('sports_');
   }
 
+  /// Etkinliğin başlama saatinin üzerinden 3 saat geçmişse etkinlik bitmiş (tarihi geçmiş) kabul edilir
+  bool get isExpired {
+    final now = DateTime.now();
+    return dateTime.isBefore(now.subtract(const Duration(hours: 3)));
+  }
+
+  /// Etkinliğin iptal edilmiş veya ertelenmiş olup olmadığını belirler
+  bool get isCancelled {
+    final lowerTitle = title.toLowerCase();
+    final lowerAtmosphere = atmosphere.toLowerCase();
+    return lowerTitle.contains('iptal') ||
+        lowerTitle.contains('ertelendi') ||
+        lowerTitle.contains('cancelled') ||
+        lowerTitle.contains('canceled') ||
+        lowerAtmosphere.contains('iptal');
+  }
+
+  /// Biletix üzerinde artık olmayan veya sahte arama linki içeren etkinlikleri tespit eder
+  bool get isObsoleteBiletixEvent {
+    if (!id.toLowerCase().startsWith('biletix_')) return false;
+    final url = (ticketUrl ?? '').toLowerCase();
+    if (url.contains('searchinfo=') || url == 'https://www.biletix.com' || url == 'https://biletix.com') {
+      return true;
+    }
+    return false;
+  }
+
+  /// Etkinliğin kullanıcılara gösterilmeye uygun, güncel ve geçerli olup olmadığını belirler
+  bool get isValidForDisplay {
+    if (!isActive) return false;
+    if (isSportsEvent) return false;
+    if (isExpired) return false;
+    if (isCancelled) return false;
+    return true;
+  }
+
   /// Etkinliğin bilet satış/yönlendirme linki olup olmadığını belirtir (Spor müsabakalarında daima false'tur)
   bool get hasTicket => !isSportsEvent && effectiveTicketUrl.isNotEmpty;
 

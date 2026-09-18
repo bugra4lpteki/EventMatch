@@ -61,13 +61,53 @@ class UserModel {
     return yearDiff.toString();
   }
 
+  static bool isMaleGender(String? g) {
+    if (g == null) return false;
+    final lower = g.trim().toLowerCase();
+    return lower == 'erkek' || lower == 'male' || lower == 'man' || lower == 'e' || lower == 'm';
+  }
+
+  static bool isFemaleGender(String? g) {
+    if (g == null) return false;
+    final lower = g.trim().toLowerCase();
+    return lower == 'kadın' || lower == 'kadin' || lower == 'female' || lower == 'woman' || lower == 'k' || lower == 'f';
+  }
+
+  bool get isMale => isMaleGender(gender);
+  bool get isFemale => isFemaleGender(gender);
+
+  /// Fotoğrafın kullanıcı tarafından yüklenmiş gerçek bir fotoğraf olup olmadığını doğrular.
+  /// Yapay zeka veya varsayılan Unsplash/placeholder fotoğraflarını geçersiz sayar.
+  static bool isValidPhotoUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return false;
+    final trimmed = url.trim();
+    if (!trimmed.startsWith('http') && !trimmed.startsWith('assets/')) return false;
+    if (trimmed.contains('unsplash.com')) return false;
+    if (trimmed.contains('user_avatar.jpg')) return false;
+    if (trimmed.contains('pravatar.cc')) return false;
+    if (trimmed.contains('randomuser.me')) return false;
+    return true;
+  }
+
+  bool get hasRealPhoto => isValidPhotoUrl(avatarUrl) || avatarUrls.any(isValidPhotoUrl);
+
+  String get validAvatarUrl {
+    if (isValidPhotoUrl(avatarUrl)) return avatarUrl.trim();
+    for (var u in avatarUrls) {
+      if (isValidPhotoUrl(u)) return u.trim();
+    }
+    return '';
+  }
+
+  List<String> get validAvatarUrls => avatarUrls.where(isValidPhotoUrl).toList();
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'name': name,
       'username': username,
-      'avatarUrl': avatarUrl,
-      'avatarUrls': avatarUrls,
+      'avatarUrl': validAvatarUrl,
+      'avatarUrls': validAvatarUrls,
       'city': city,
       'gender': gender,
       'aboutMe': aboutMe,
@@ -92,12 +132,19 @@ class UserModel {
   }
 
   factory UserModel.fromMap(Map<String, dynamic> map) {
+    final rawAvatar = map['avatarUrl']?.toString() ?? '';
+    final rawAvatars = List<String>.from(map['avatarUrls'] ?? []);
+    final cleanAvatars = rawAvatars.where(UserModel.isValidPhotoUrl).toList();
+    final cleanAvatar = UserModel.isValidPhotoUrl(rawAvatar)
+        ? rawAvatar
+        : (cleanAvatars.isNotEmpty ? cleanAvatars.first : '');
+
     return UserModel(
       id: map['id']?.toString() ?? '',
       name: map['name']?.toString() ?? 'Kullanıcı',
       username: map['username']?.toString(),
-      avatarUrl: map['avatarUrl']?.toString() ?? '',
-      avatarUrls: List<String>.from(map['avatarUrls'] ?? []),
+      avatarUrl: cleanAvatar,
+      avatarUrls: cleanAvatars,
       city: map['city']?.toString(),
       gender: map['gender']?.toString(),
       aboutMe: map['aboutMe']?.toString(),

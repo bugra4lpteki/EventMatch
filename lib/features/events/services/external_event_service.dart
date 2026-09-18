@@ -32,12 +32,27 @@ class ExternalEventService {
               final id = 'biletix_${item['id'] ?? UniqueKey().toString()}';
             final title = item['name'] ?? 'Biletix Etkinliği';
 
-            // İptal edilen veya ertelenen etkinlikleri atla
+            // İptal edilen, ertelenen veya satıştan kalkan etkinlikleri atla
             if (item['dates'] != null && item['dates']['status'] != null) {
               final statusCode = item['dates']['status']['code']?.toString().toLowerCase();
-              if (statusCode == 'cancelled' || statusCode == 'canceled') {
+              if (statusCode == 'cancelled' ||
+                  statusCode == 'canceled' ||
+                  statusCode == 'postponed' ||
+                  statusCode == 'rescheduled' ||
+                  statusCode == 'offsale' ||
+                  statusCode == 'inactive') {
                 continue;
               }
+            }
+
+            final mainStatus = item['status']?['code']?.toString().toLowerCase();
+            if (mainStatus == 'cancelled' || mainStatus == 'canceled' || mainStatus == 'offsale' || mainStatus == 'inactive') {
+              continue;
+            }
+
+            final lowerTitle = title.toString().toLowerCase();
+            if (lowerTitle.contains('iptal') || lowerTitle.contains('ertelendi') || lowerTitle.contains('cancelled')) {
+              continue;
             }
 
             String ticketUrl = item['url']?.toString() ?? 'https://www.biletix.com';
@@ -49,29 +64,46 @@ class ExternalEventService {
             }
 
             // Spor müsabakaları uygulamadan tamamen kaldırıldı
-            final lowerTitle = title.toString().toLowerCase();
             if (lowerTitle.contains('futbol') || lowerTitle.contains('stadyum') || lowerTitle.contains('derbi') || lowerTitle.contains('süper lig')) {
               continue;
             }
 
             // Kategori tespiti
             String category = 'Genel';
-            if (item['classifications'] != null && (item['classifications'] as List).isNotEmpty) {
-              final segment = item['classifications'][0]['segment'];
-              if (segment != null && segment['name'] != null) {
-                final segName = segment['name'].toString();
-                if (segName.contains('Music')) {
-                  category = 'Konser';
-                } else if (segName.contains('Arts') || segName.contains('Theatre')) {
-                  category = 'Tiyatro';
-                } else if (segName.contains('Comedy')) {
-                  category = 'Stand-up';
-                } else if (segName.contains('Sports')) {
-                  // Spor müsabakaları tamamen kaldırıldı, atla
-                  continue;
-                } else {
-                  category = segName;
-                }
+
+            if (lowerTitle.contains('stand-up') || lowerTitle.contains('stand up') || lowerTitle.contains('komedi') || lowerTitle.contains('comedy') || lowerTitle.contains('özdemir') || lowerTitle.contains('demirkol')) {
+              category = 'Stand-up';
+            } else if (lowerTitle.contains('festival') || lowerTitle.contains('fest')) {
+              category = 'Festival';
+            } else if (item['classifications'] != null && (item['classifications'] as List).isNotEmpty) {
+              final classification = item['classifications'][0];
+              final segment = classification['segment'];
+              final genre = classification['genre'];
+              final subGenre = classification['subGenre'];
+              final type = classification['type'];
+              final subType = classification['subType'];
+
+              final segName = segment?['name']?.toString() ?? '';
+              final genreName = genre?['name']?.toString().toLowerCase() ?? '';
+              final subGenreName = subGenre?['name']?.toString().toLowerCase() ?? '';
+              final typeName = type?['name']?.toString().toLowerCase() ?? '';
+              final subTypeName = subType?['name']?.toString().toLowerCase() ?? '';
+
+              if (genreName.contains('comedy') || subGenreName.contains('comedy') || subGenreName.contains('standup')) {
+                category = 'Stand-up';
+              } else if (genreName.contains('festival') || typeName.contains('festival') || subTypeName.contains('festival')) {
+                category = 'Festival';
+              } else if (segName.contains('Music')) {
+                category = 'Konser';
+              } else if (segName.contains('Arts') || segName.contains('Theatre')) {
+                category = 'Tiyatro';
+              } else if (segName.contains('Comedy')) {
+                category = 'Stand-up';
+              } else if (segName.contains('Sports')) {
+                // Spor müsabakaları tamamen kaldırıldı, atla
+                continue;
+              } else {
+                category = segName.isNotEmpty ? segName : 'Genel';
               }
             }
 
@@ -104,6 +136,12 @@ class ExternalEventService {
               } else if (start['dateTime'] != null) {
                 dateTime = DateTime.tryParse(start['dateTime'])?.toLocal() ?? dateTime;
               }
+            }
+
+            // TARİHİ GEÇMİŞ ETKİNLİKLERİ KESİNLİKLE ALMA!
+            // Başlama saatinin üzerinden 3 saat geçmiş olan etkinlikler bitmiştir.
+            if (dateTime.isBefore(DateTime.now().subtract(const Duration(hours: 3)))) {
+              continue;
             }
 
             // Görsel tespiti: Ticketmaster Resmi HD Afişini Çekme
@@ -184,7 +222,15 @@ class ExternalEventService {
   List<EventModel> parseBiletixEvents(String rawJson) {
     try {
       final List<dynamic> list = jsonDecode(rawJson);
+      final now = DateTime.now();
+      final expiredLimit = now.subtract(const Duration(hours: 3));
       return list.map((item) {
+        final title = item['name'] ?? item['title'] ?? 'Biletix Etkinliği';
+        final lowerTitle = title.toString().toLowerCase();
+        if (lowerTitle.contains('iptal') || lowerTitle.contains('ertelendi') || lowerTitle.contains('cancelled')) {
+          return null;
+        }
+
         final rawTicketUrl = item['url'] ?? item['ticketUrl'] ?? 'https://www.biletix.com';
         String ticketUrl = rawTicketUrl.toString();
         if (ticketUrl.contains('u=')) {
@@ -205,19 +251,23 @@ class ExternalEventService {
           imageUrl = item['imageUrl'] ?? item['image'] ?? 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745';
         }
 
-        final title = item['name'] ?? item['title'] ?? 'Biletix Etkinliği';
-        final isMajor = title.toString().toLowerCase().contains('duman') || 
-                        title.toString().toLowerCase().contains('teoman') ||
-                        title.toString().toLowerCase().contains('festival');
+        final DateTime dateTime = item['date'] != null 
+            ? DateTime.tryParse(item['date']) ?? now 
+            : now;
+        if (dateTime.isBefore(expiredLimit)) {
+          return null;
+        }
+
+        final isMajor = lowerTitle.contains('duman') || 
+                        lowerTitle.contains('teoman') ||
+                        lowerTitle.contains('festival');
 
         return EventModel(
           id: 'biletix_${item['id'] ?? item['code'] ?? UniqueKey().toString()}',
           title: title,
           category: item['categoryName'] ?? item['type'] ?? 'Konser',
           location: '${item['venueName'] ?? 'Mekan'}, ${item['cityName'] ?? 'İstanbul'}',
-          dateTime: item['date'] != null 
-              ? DateTime.tryParse(item['date']) ?? DateTime.now() 
-              : DateTime.now(),
+          dateTime: dateTime,
           description: item['summary'] ?? item['description'] ?? 'Biletix üzerinden sunulan etkinlik.',
           imageUrl: imageUrl,
           latitude: item['latitude'] != null ? double.tryParse(item['latitude'].toString()) : null,
@@ -227,7 +277,7 @@ class ExternalEventService {
           atmosphere: isMajor ? '🔥 Popüler' : '✨ Canlı',
           isPopular: isMajor,
         );
-      }).toList();
+      }).whereType<EventModel>().toList();
     } catch (e) {
       debugPrint('Biletix parse hatası: $e');
       return [];

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../../events/services/mock_match_service.dart';
 import '../services/mock_message_service.dart';
 import '../models/message_model.dart';
@@ -417,36 +417,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
           },
           child: Stack(
             children: [
-              CircleAvatar(
+              UserAvatar(
+                user: chat.participant,
                 radius: 28,
-                backgroundColor: const Color(0xFF1E2235),
-                backgroundImage: chat.participant.avatarUrl.startsWith('http') && !chat.participant.avatarUrl.contains('unsplash.com')
-                    ? CachedNetworkImageProvider(
-                        chat.participant.avatarUrl,
-                        maxHeight: 120,
-                        maxWidth: 120,
-                      )
-                    : null,
-                child: (!chat.participant.avatarUrl.startsWith('http') || chat.participant.avatarUrl.contains('unsplash.com'))
-                    ? Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: AppColors.primaryGradient,
-                        ),
-                        child: Center(
-                          child: Text(
-                            chat.participant.name.trim().isNotEmpty
-                                ? chat.participant.name.trim()[0].toUpperCase()
-                                : '?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      )
-                    : null,
               ),
               if (chat.isOnline)
                 Positioned(
@@ -653,28 +626,9 @@ class ArchivedChatsScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  leading: CircleAvatar(
+                  leading: UserAvatar(
+                    user: chat.participant,
                     radius: 26,
-                    backgroundColor: const Color(0xFF1E2235),
-                    backgroundImage: chat.participant.avatarUrl.startsWith('http') && !chat.participant.avatarUrl.contains('unsplash.com')
-                        ? CachedNetworkImageProvider(chat.participant.avatarUrl)
-                        : null,
-                    child: (!chat.participant.avatarUrl.startsWith('http') || chat.participant.avatarUrl.contains('unsplash.com'))
-                        ? Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              gradient: AppColors.primaryGradient,
-                            ),
-                            child: Center(
-                              child: Text(
-                                chat.participant.name.trim().isNotEmpty
-                                    ? chat.participant.name.trim()[0].toUpperCase()
-                                    : '?',
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          )
-                        : null,
                   ),
                   title: Text(
                     chat.participant.name,

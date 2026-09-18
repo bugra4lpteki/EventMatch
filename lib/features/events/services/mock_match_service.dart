@@ -11,7 +11,9 @@ class MockMatchService extends ChangeNotifier {
   final MockEventService eventService;
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  String get currentUserId => _supabase.auth.currentUser?.id ?? 'demo_guest_user';
+  String get currentUserId =>
+      _supabase.auth.currentUser?.id ??
+      (eventService.currentUser.id.isNotEmpty ? eventService.currentUser.id : 'demo_guest_user');
 
   List<UserModel> _potentialMatches = [];
   List<MatchRequest> _incomingRequests = [];
@@ -20,6 +22,7 @@ class MockMatchService extends ChangeNotifier {
   bool _isDoubleDateMode = false;
   bool get isDoubleDateMode => _isDoubleDateMode;
   bool _isLoadingMatches = false;
+  RealtimeChannel? _matchesChannel;
 
   MockMatchService(this.eventService) {
     _initMatchService();
@@ -30,13 +33,17 @@ class MockMatchService extends ChangeNotifier {
     await _loadCachedRequests();
     loadPotentialMatches();
     loadIncomingRequests();
+    _subscribeToRealtimeMatches();
     _supabase.auth.onAuthStateChange.listen((data) {
       if (data.session != null) {
         _ensureUserInDatabase();
         _loadCachedSeenUsers();
         loadPotentialMatches();
         loadIncomingRequests();
+        _subscribeToRealtimeMatches();
       } else {
+        _matchesChannel?.unsubscribe();
+        _matchesChannel = null;
         _potentialMatches.clear();
         _incomingRequests.clear();
         _seenUserIds.clear();
@@ -44,6 +51,49 @@ class MockMatchService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  void _subscribeToRealtimeMatches() {
+    try {
+      _matchesChannel?.unsubscribe();
+      final currentId = currentUserId.toLowerCase().trim();
+      if (currentId.isEmpty) return;
+
+      _matchesChannel = _supabase
+          .channel('public_matches_incoming_stream_${DateTime.now().millisecondsSinceEpoch}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'matches',
+            callback: (payload) {
+              final rec = payload.newRecord.isNotEmpty ? payload.newRecord : payload.oldRecord;
+              final u2 = (rec['user_id_2']?.toString() ?? '').toLowerCase().trim();
+              final u1 = (rec['user_id_1']?.toString() ?? '').toLowerCase().trim();
+              final me = currentUserId.toLowerCase().trim();
+              if (u2 == me || u1 == me) {
+                debugPrint('[MatchService] 🔔 Realtime matches değişikliği, istekler yenileniyor...');
+                loadIncomingRequests();
+                loadPotentialMatches();
+              }
+            },
+          )
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'messages',
+            callback: (payload) {
+              final rec = payload.newRecord;
+              final rId = (rec['receiver_id']?.toString() ?? '').toLowerCase().trim();
+              final me = currentUserId.toLowerCase().trim();
+              if (rId == me) {
+                loadIncomingRequests();
+              }
+            },
+          )
+          .subscribe();
+    } catch (e) {
+      debugPrint('[MatchService] ⚠️ Realtime match subscription error: $e');
+    }
   }
 
   Future<void> _loadCachedSeenUsers() async {
@@ -314,10 +364,12 @@ class MockMatchService extends ChangeNotifier {
             birthDate = DateTime.tryParse(row['birth_date'].toString());
           }
 
-          final List<String> avatarUrls = userPhotosMap[id.toLowerCase()] ?? [];
-          final String avatarUrl = avatarUrls.isNotEmpty
+          final List<String> rawAvatarUrls = userPhotosMap[id.toLowerCase()] ?? [];
+          final List<String> avatarUrls = rawAvatarUrls.where(UserModel.isValidPhotoUrl).toList();
+          final rawAvatar = avatarUrls.isNotEmpty
               ? avatarUrls.first
               : (row['avatar_url']?.toString() ?? '');
+          final String avatarUrl = UserModel.isValidPhotoUrl(rawAvatar) ? rawAvatar : '';
 
           List<String> socialLinks = List<String>.from(userSocialLinksMap[id.toLowerCase()] ?? []);
 
@@ -411,7 +463,7 @@ class MockMatchService extends ChangeNotifier {
         }
       } catch (_) {}
 
-      if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
+      if (_supabase.auth.currentUser != null && currentId.trim().isNotEmpty && targetUser.id.trim().isNotEmpty) {
         try {
           // Çift kayıt oluşmaması için mevcut kayıtları kontrol et
           final List<dynamic> existingRows = await _supabase
@@ -434,18 +486,38 @@ class MockMatchService extends ChangeNotifier {
                   .update({'status': 'matched'})
                   .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
               isMutualMatch = true;
+            } else if (existingStatus != 'matched') {
+              // Daha önce rejected veya tek yönlü ise isteği bu kullanıcıdan hedefe doğru 'liked' olarak güncelle
+              await _supabase
+                  .from('matches')
+                  .update({
+                    'status': 'liked',
+                    'user_id_1': currentId,
+                    'user_id_2': targetUser.id,
+                  })
+                  .eq('id', matchRowId);
             }
 
-            if (initialMessage != null && initialMessage.trim().isNotEmpty && matchRowId != null) {
+            if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+              final numMatchId = matchRowId != null ? int.tryParse(matchRowId.toString()) : null;
               try {
                 await _supabase.from('messages').insert({
-                  'match_id': matchRowId,
+                  if (numMatchId != null) 'match_id': numMatchId,
                   'sender_id': currentId,
                   'receiver_id': targetUser.id,
                   'content': initialMessage.trim(),
                   'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
-              } catch (_) {}
+              } catch (e) {
+                try {
+                  await _supabase.from('messages').insert({
+                    'sender_id': currentId,
+                    'receiver_id': targetUser.id,
+                    'content': initialMessage.trim(),
+                    'created_at': DateTime.now().toUtc().toIso8601String(),
+                  });
+                } catch (_) {}
+              }
             }
           } else {
             // Kayıt yoksa yeni 'liked' isteği oluştur
@@ -459,16 +531,26 @@ class MockMatchService extends ChangeNotifier {
             final inserted = await _supabase.from('matches').insert(matchData).select().maybeSingle();
             final matchRowId = inserted?['id'];
 
-            if (initialMessage != null && initialMessage.trim().isNotEmpty && matchRowId != null) {
+            if (initialMessage != null && initialMessage.trim().isNotEmpty) {
+              final numMatchId = matchRowId != null ? int.tryParse(matchRowId.toString()) : null;
               try {
                 await _supabase.from('messages').insert({
-                  'match_id': matchRowId,
+                  if (numMatchId != null) 'match_id': numMatchId,
                   'sender_id': currentId,
                   'receiver_id': targetUser.id,
                   'content': initialMessage.trim(),
                   'created_at': DateTime.now().toUtc().toIso8601String(),
                 });
-              } catch (_) {}
+              } catch (e) {
+                try {
+                  await _supabase.from('messages').insert({
+                    'sender_id': currentId,
+                    'receiver_id': targetUser.id,
+                    'content': initialMessage.trim(),
+                    'created_at': DateTime.now().toUtc().toIso8601String(),
+                  });
+                } catch (_) {}
+              }
             }
           }
         } catch (e) {
@@ -558,10 +640,10 @@ class MockMatchService extends ChangeNotifier {
 
   Future<void> loadIncomingRequests() async {
     try {
-      final currentId = currentUserId;
-      _incomingRequests.clear();
+      final currentId = currentUserId.trim();
+      final lowerCurrentId = currentId.toLowerCase();
 
-      if (_supabase.auth.currentUser != null) {
+      if (_supabase.auth.currentUser != null && currentId.isNotEmpty) {
         // 1. Zaten karşılıklı eşleştiğim kişileri tespit et (onlardan gelen yeni istek olamaz)
         final alreadyMatchedIds = <String>{};
 
@@ -569,13 +651,13 @@ class MockMatchService extends ChangeNotifier {
           final existingMatches = await _supabase
               .from('matches')
               .select('user_id_1, user_id_2, status')
-              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId')
+              .or('user_id_1.eq.$currentId,user_id_2.eq.$currentId,user_id_1.eq.$lowerCurrentId,user_id_2.eq.$lowerCurrentId')
               .eq('status', 'matched');
 
           for (var m in existingMatches) {
-            final u1 = (m['user_id_1'] ?? '').toString().toLowerCase();
-            final u2 = (m['user_id_2'] ?? '').toString().toLowerCase();
-            final other = u1 == currentId.toLowerCase() ? u2 : u1;
+            final u1 = (m['user_id_1'] ?? '').toString().toLowerCase().trim();
+            final u2 = (m['user_id_2'] ?? '').toString().toLowerCase().trim();
+            final other = u1 == lowerCurrentId ? u2 : u1;
             if (other.isNotEmpty) {
               alreadyMatchedIds.add(other);
               _seenUserIds.add(other);
@@ -585,24 +667,61 @@ class MockMatchService extends ChangeNotifier {
           debugPrint('[MatchService] existingMatches query error: $e');
         }
 
-        // 2. Bana gelen 'liked' statüsündeki kayıtları çek
-        final res = await _supabase
-            .from('matches')
-            .select('*, users!user_id_1(*)')
-            .eq('user_id_2', currentId)
-            .eq('status', 'liked');
-
-        final requesterIds = <String>[];
-        for (var row in res) {
-          final fromUserId = (row['user_id_1'] ?? '').toString().toLowerCase();
-          if (fromUserId.isNotEmpty &&
-              _isValidUuid(fromUserId) &&
-              !alreadyMatchedIds.contains(fromUserId)) {
-            requesterIds.add(fromUserId);
+        // 2. Bana gelen 'liked' veya 'pending' statüsündeki kayıtları çek
+        // (FOREIGN KEY JOIN KULLANMIYORUZ: matches tablosunda users foreign key yok, doğrudan select('*'))
+        final userIdsToQuery = {currentId, lowerCurrentId}.where((s) => s.isNotEmpty).toList();
+        List<dynamic> matchRows = [];
+        try {
+          matchRows = await _supabase
+              .from('matches')
+              .select('*')
+              .inFilter('user_id_2', userIdsToQuery)
+              .inFilter('status', ['liked', 'pending']);
+        } catch (e) {
+          debugPrint('[MatchService] Incoming matches query error: $e');
+          try {
+            matchRows = await _supabase
+                .from('matches')
+                .select('*')
+                .inFilter('user_id_2', userIdsToQuery);
+            matchRows = matchRows.where((r) {
+              final st = r['status']?.toString().toLowerCase().trim();
+              return st == 'liked' || st == 'pending';
+            }).toList();
+          } catch (e2) {
+            debugPrint('[MatchService] Fallback incoming matches error: $e2');
           }
         }
 
-        Map<String, List<String>> requesterPhotos = {};
+        final requesterIds = <String>[];
+        for (var row in matchRows) {
+          final fromUserId = (row['user_id_1'] ?? '').toString().trim();
+          final lowerFromId = fromUserId.toLowerCase();
+          if (fromUserId.isNotEmpty &&
+              !alreadyMatchedIds.contains(lowerFromId) &&
+              lowerFromId != lowerCurrentId) {
+            if (!requesterIds.contains(fromUserId)) {
+              requesterIds.add(fromUserId);
+            }
+          }
+        }
+
+        final Map<String, Map<String, dynamic>> profilesMap = {};
+        if (requesterIds.isNotEmpty) {
+          try {
+            final uRes = await _supabase
+                .from('users')
+                .select('*')
+                .inFilter('id', requesterIds);
+            for (var u in uRes) {
+              profilesMap[u['id'].toString().toLowerCase()] = Map<String, dynamic>.from(u);
+            }
+          } catch (e) {
+            debugPrint('[MatchService] Requester users query error: $e');
+          }
+        }
+
+        final Map<String, List<String>> requesterPhotos = {};
         if (requesterIds.isNotEmpty) {
           try {
             final photosRes = await _supabase
@@ -622,21 +741,20 @@ class MockMatchService extends ChangeNotifier {
           } catch (_) {}
         }
 
+        final loadedRequests = <MatchRequest>[];
         final seenRequesters = <String>{};
 
-        for (var row in res) {
-          final fromUserId = (row['user_id_1'] ?? '').toString();
+        for (var row in matchRows) {
+          final fromUserId = (row['user_id_1'] ?? '').toString().trim();
           if (fromUserId.isEmpty) continue;
 
           final lowerFromId = fromUserId.toLowerCase();
-
-          // Zaten karşılıklı eşleşilmiş biriyse gelen isteklerde gösterme
-          if (alreadyMatchedIds.contains(lowerFromId)) {
+          if (alreadyMatchedIds.contains(lowerFromId) || lowerFromId == lowerCurrentId) {
             continue;
           }
 
-          final profile = row['users'];
-          final name = profile?['name']?.toString() ?? 'Kullanıcı $fromUserId';
+          final profile = profilesMap[lowerFromId];
+          final name = profile?['name']?.toString() ?? (row['sender_name']?.toString() ?? 'Kullanıcı');
 
           // ID ve isim bazlı çift istek filtreleme
           final uniqueKey = '${lowerFromId}_${name.toLowerCase()}';
@@ -647,46 +765,65 @@ class MockMatchService extends ChangeNotifier {
           seenRequesters.add(lowerFromId);
 
           final eventId = row['event_id']?.toString() ?? '';
-          final matchId = (row['id'] ?? row['match_id'] ?? row['m_id'] ?? row['M_ID'] ?? '').toString();
+          final matchId = (row['id'] ?? row['match_id'] ?? '').toString();
 
-          final userPhotos = requesterPhotos[lowerFromId] ?? [];
-          final photoUrl = userPhotos.isNotEmpty
+          final rawUserPhotos = requesterPhotos[lowerFromId] ?? [];
+          final userPhotos = rawUserPhotos.where(UserModel.isValidPhotoUrl).toList();
+          final rawPhoto = userPhotos.isNotEmpty
               ? userPhotos.first
               : (profile?['avatar_url']?.toString() ?? '');
+          final photoUrl = UserModel.isValidPhotoUrl(rawPhoto) ? rawPhoto : '';
 
-          // Unsplash URL basma
           final fromUser = UserModel(
             id: fromUserId,
             name: name,
+            username: profile?['username']?.toString() ?? (fromUserId.length > 8 ? fromUserId.substring(0, 8) : fromUserId),
             avatarUrl: photoUrl,
-            avatarUrls: userPhotos.isNotEmpty ? userPhotos : (photoUrl.isNotEmpty ? [photoUrl] : []),
+            avatarUrls: userPhotos,
+            gender: profile?['gender']?.toString(),
             isVerified: profile?['is_verified'] == true ||
                 (profile?['badges'] is List && (profile?['badges'] as List).contains('verified')),
+            city: profile?['city']?.toString() ?? '',
+            aboutMe: profile?['bio']?.toString() ?? '',
           );
 
           final currentUserModel = UserModel(
             id: currentId,
-            name: 'Ben',
-            avatarUrl: '',
+            name: eventService.currentUser.name.isNotEmpty ? eventService.currentUser.name : 'Ben',
+            avatarUrl: eventService.currentUser.avatarUrl,
           );
 
           String? initialMessage;
           try {
-            if (_isValidUuid(matchId)) {
+            final numericId = int.tryParse(matchId);
+            if (numericId != null) {
               final msgRes = await _supabase
                   .from('messages')
                   .select('content')
-                  .eq('match_id', matchId)
-                  .order('created_at', ascending: true)
+                  .eq('match_id', numericId)
+                  .order('created_at', ascending: false)
                   .limit(1)
                   .maybeSingle();
               if (msgRes != null && msgRes['content'] != null) {
                 initialMessage = msgRes['content'].toString();
               }
             }
+            if (initialMessage == null || initialMessage.isEmpty) {
+              final directMsg = await _supabase
+                  .from('messages')
+                  .select('content')
+                  .eq('sender_id', fromUserId)
+                  .eq('receiver_id', currentId)
+                  .order('created_at', ascending: false)
+                  .limit(1)
+                  .maybeSingle();
+              if (directMsg != null && directMsg['content'] != null) {
+                initialMessage = directMsg['content'].toString();
+              }
+            }
           } catch (_) {}
 
-          _incomingRequests.add(MatchRequest(
+          loadedRequests.add(MatchRequest(
             id: matchId,
             fromUser: fromUser,
             toUser: currentUserModel,
@@ -694,6 +831,8 @@ class MockMatchService extends ChangeNotifier {
             message: initialMessage,
           ));
         }
+
+        _incomingRequests = loadedRequests;
       }
 
       _saveCachedRequests();
@@ -716,10 +855,15 @@ class MockMatchService extends ChangeNotifier {
       _saveCachedRequests();
 
       if (_supabase.auth.currentUser != null) {
-        await _supabase
-            .from('matches')
-            .update({'status': 'matched'})
-            .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
+        final numericId = int.tryParse(request.id);
+        if (numericId != null) {
+          await _supabase.from('matches').update({'status': 'matched'}).eq('id', numericId);
+        } else {
+          await _supabase
+              .from('matches')
+              .update({'status': 'matched'})
+              .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
+        }
       }
 
       notifyListeners();
@@ -742,16 +886,27 @@ class MockMatchService extends ChangeNotifier {
       _saveCachedRequests();
 
       if (_supabase.auth.currentUser != null) {
-        await _supabase
-            .from('matches')
-            .update({'status': 'rejected'})
-            .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
+        final numericId = int.tryParse(request.id);
+        if (numericId != null) {
+          await _supabase.from('matches').update({'status': 'rejected'}).eq('id', numericId);
+        } else {
+          await _supabase
+              .from('matches')
+              .update({'status': 'rejected'})
+              .or('and(user_id_1.eq.$partnerId,user_id_2.eq.$currentId),and(user_id_1.eq.$currentId,user_id_2.eq.$partnerId)');
+        }
       }
 
       notifyListeners();
     } catch (e) {
       debugPrint('Reject Request Error: $e');
     }
+  }
+
+  @override
+  void dispose() {
+    _matchesChannel?.unsubscribe();
+    super.dispose();
   }
 
   List<UserModel> getPotentialMatches() {

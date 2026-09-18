@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_image_widget.dart';
+import '../../../core/widgets/user_avatar.dart';
+import '../../profile/screens/user_profile_screen.dart';
 import '../models/match_request.dart';
 import '../services/mock_match_service.dart';
 import '../widgets/match_dialog.dart';
@@ -10,8 +12,23 @@ import '../../messages/screens/chat_detail_screen.dart';
 import '../../../services/notification_service.dart';
 import '../services/mock_event_service.dart';
 
-class RequestsScreen extends StatelessWidget {
+class RequestsScreen extends StatefulWidget {
   const RequestsScreen({super.key});
+
+  @override
+  State<RequestsScreen> createState() => _RequestsScreenState();
+}
+
+class _RequestsScreenState extends State<RequestsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<MockMatchService>().loadIncomingRequests();
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -89,30 +106,17 @@ class RequestsScreen extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      ClipOval(
-                        child: hasRealPhoto
-                            ? AppImageWidget(
-                                imageUrl: req.fromUser.avatarUrl,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                                memCacheWidth: 120,
-                                memCacheHeight: 120,
-                              )
-                            : Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  gradient: AppColors.primaryGradient,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    req.fromUser.name.isNotEmpty ? req.fromUser.name[0].toUpperCase() : '?',
-                                    style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                              ),
+                      UserAvatar(
+                        user: req.fromUser,
+                        radius: 30,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => UserProfileScreen(user: req.fromUser),
+                            ),
+                          );
+                        },
                       ),
                       const SizedBox(width: 16),
                     Expanded(
@@ -188,6 +192,7 @@ class RequestsScreen extends StatelessWidget {
                                 initialMessage: req.message,
                               );
                               await msgService.reloadChats();
+                              if (!context.mounted) return;
 
                               MatchDialog.show(
                                 context,

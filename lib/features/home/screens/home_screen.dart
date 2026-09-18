@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/screens/explore_screen.dart';
@@ -242,20 +243,9 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                         children: [
                                           Row(
                                             children: [
-                                              Container(
-                                                padding: const EdgeInsets.all(2),
-                                                decoration: BoxDecoration(
-                                                  shape: BoxShape.circle,
-                                                  gradient: AppColors.primaryGradient,
-                                                ),
-                                                child: CircleAvatar(
-                                                  radius: 26,
-                                                  backgroundColor: AppColors.background,
-                                                  backgroundImage: u.avatarUrl.startsWith('http') ? NetworkImage(u.avatarUrl) : null,
-                                                  child: !u.avatarUrl.startsWith('http')
-                                                      ? const Icon(Icons.person, color: Colors.white)
-                                                      : null,
-                                                ),
+                                              UserAvatar(
+                                                user: u,
+                                                radius: 26,
                                               ),
                                               const SizedBox(width: 14),
                                               Expanded(
@@ -562,6 +552,11 @@ class _HomeScreenState extends State<HomeScreen> {
             setState(() {
               _currentIndex = index;
             });
+            if (index == 2) {
+              context.read<MockMatchService>().loadIncomingRequests();
+            } else if (index == 3) {
+              context.read<MockMessageService>().reloadChats();
+            }
           }
         },
         behavior: HitTestBehavior.opaque,
@@ -631,6 +626,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _currentIndex = index;
                 });
+                if (index == 2) {
+                  context.read<MockMatchService>().loadIncomingRequests();
+                } else if (index == 3) {
+                  context.read<MockMessageService>().reloadChats();
+                }
               }
             },
             behavior: HitTestBehavior.opaque,

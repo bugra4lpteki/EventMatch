@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:appinio_swiper/appinio_swiper.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_image_widget.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../services/mock_match_service.dart';
 import '../models/user_model.dart';
 import '../widgets/match_dialog.dart';
@@ -188,8 +189,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
   }
 
   Widget _buildUserCard(UserModel user) {
-    final bool hasValidPhoto = user.avatarUrl.isNotEmpty && user.avatarUrl.startsWith('http');
-    final String initialLetter = user.name.trim().isNotEmpty ? user.name.trim()[0].toUpperCase() : '?';
+    final bool hasValidPhoto = user.hasRealPhoto;
 
     return RepaintBoundary(
       child: GestureDetector(
@@ -215,70 +215,20 @@ class _SwipeScreenState extends State<SwipeScreen> {
           ),
           child: Stack(
             children: [
-              // Avatar / Profile Photo Image with memory limits or Stylish Default Avatar
+              // Avatar / Profile Photo Image or Gender-aware Hero Card
               Positioned.fill(
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(24),
                   child: hasValidPhoto
                       ? AppImageWidget(
-                          imageUrl: user.avatarUrl,
+                          imageUrl: user.validAvatarUrl,
                           fit: BoxFit.cover,
                           memCacheWidth: 600,
                           memCacheHeight: 800,
                         )
-                      : Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                const Color(0xFF1E2235),
-                                AppColors.primary.withValues(alpha: 0.35),
-                                const Color(0xFF131522),
-                              ],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                          ),
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 100,
-                                  height: 100,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: AppColors.primaryGradient,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: AppColors.primary.withValues(alpha: 0.4),
-                                        blurRadius: 20,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      initialLetter,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 44,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  user.name,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                      : UserHeroAvatarCard(
+                          gender: user.gender,
+                          name: user.name,
                         ),
                 ),
               ),

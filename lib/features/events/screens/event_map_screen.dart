@@ -17,6 +17,7 @@ import 'event_detail_screen.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../messages/services/mock_message_service.dart';
+import '../../../services/notification_service.dart';
 
 enum MapMode {
   events,
@@ -157,21 +158,25 @@ class _EventMapScreenState extends State<EventMapScreen> {
     return const Color(0xFFEF4444); // Kırmızı
   }
 
-  bool _matchesCategory(String eventCategory, String filter) {
+  bool _matchesCategory(EventModel event, String filter) {
     if (filter == 'Tümü') return true;
-    final cat = eventCategory.toLowerCase();
+    final cat = event.category.toLowerCase();
+    final title = event.title.toLowerCase();
+    final desc = event.description.toLowerCase();
     final f = filter.toLowerCase();
 
     if (f == 'konser') {
-      return cat.contains('konser') || cat.contains('müzik') || cat.contains('music');
+      return cat.contains('konser') || cat.contains('müzik') || cat.contains('music') || title.contains('konser');
     } else if (f == 'tiyatro') {
-      return cat.contains('tiyatro') || cat.contains('arts') || cat.contains('theatre') || cat.contains('sahne');
+      return cat.contains('tiyatro') || cat.contains('arts') || cat.contains('theatre') || cat.contains('sahne') || title.contains('tiyatro');
     } else if (f == 'stand-up') {
-      return cat.contains('stand-up') || cat.contains('comedy') || cat.contains('komedi');
+      return cat.contains('stand-up') || cat.contains('stand up') || cat.contains('stand') || cat.contains('comedy') || cat.contains('komedi') ||
+             title.contains('stand-up') || title.contains('stand up') || title.contains('stand') || title.contains('komedi') || title.contains('özdemir') || title.contains('demirkol') || title.contains('gösteri') || desc.contains('stand-up');
     } else if (f == 'festival') {
-      return cat.contains('festival') || cat.contains('parti');
+      return cat.contains('festival') || cat.contains('fest') || cat.contains('parti') ||
+             title.contains('festival') || title.contains('fest') || desc.contains('festival');
     }
-    return cat.contains(f);
+    return cat.contains(f) || title.contains(f);
   }
 
   String _getMapTileUrl(String style) {
@@ -274,6 +279,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
       if (isMutualMatch) {
         final chat = msgService.createOrGetChatForUser(targetUser, initialMessage: initialMessage);
         await msgService.reloadChats();
+        if (!mounted) return;
 
         MatchDialog.show(
           context,
@@ -287,6 +293,28 @@ class _EventMapScreenState extends State<EventMapScreen> {
           },
         );
       } else {
+        if (initialMessage != null && initialMessage.isNotEmpty) {
+          msgService.createOrGetChatForUser(targetUser, initialMessage: initialMessage);
+        }
+
+        final myName = context.read<MockEventService>().currentUser.name;
+        final myId = context.read<MockEventService>().currentUser.id;
+
+        NotificationService().sendMatchRequestPushNotification(
+          receiverId: targetUser.id,
+          senderName: myName.isNotEmpty ? myName : 'Biri',
+          source: 'map',
+        );
+
+        if (initialMessage != null && initialMessage.isNotEmpty) {
+          NotificationService().sendRemotePushNotification(
+            receiverId: targetUser.id,
+            senderName: myName.isNotEmpty ? myName : 'Biri',
+            content: initialMessage,
+            senderId: myId,
+          );
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -356,7 +384,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
     // Akıllı Kategori Filtreleme
     if (_selectedCategoryFilter != 'Tümü') {
-      mapEvents = mapEvents.where((e) => _matchesCategory(e.category, _selectedCategoryFilter)).toList();
+      mapEvents = mapEvents.where((e) => _matchesCategory(e, _selectedCategoryFilter)).toList();
     }
 
     // İlk açılışta etkinliklerin tamamını kapsayacak şekilde kadrajla

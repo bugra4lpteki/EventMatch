@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../models/user_model.dart';
 
 class CandyMachineAvatars extends StatefulWidget {
@@ -84,10 +85,9 @@ class _CandyMachineAvatarsState extends State<CandyMachineAvatars> with SingleTi
                           )
                         ],
                       ),
-                      child: ClipOval(
-                        child: ball.user.avatarUrl.startsWith('http')
-                            ? Image.network(ball.user.avatarUrl, fit: BoxFit.cover)
-                            : Image.asset(ball.user.avatarUrl, fit: BoxFit.cover),
+                      child: UserAvatar(
+                        user: ball.user,
+                        radius: 17,
                       ),
                     ),
                   ),

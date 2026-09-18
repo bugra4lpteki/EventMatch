@@ -86,12 +86,11 @@ class MockEventService extends ChangeNotifier {
       if (cached != null && cached.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(cached);
         if (decoded.isNotEmpty) {
-          final now = DateTime.now();
           for (var item in decoded) {
             if (item is Map<String, dynamic>) {
               final ev = EventModel.fromMap(item);
-              // Spor müsabakaları uygulamadan tamamen kaldırıldı, yükleme
-              if (ev.isSportsEvent) {
+              // Geçerli olmayan, tarihi geçmiş, iptal edilmiş veya spor müsabakası olan etkinlikleri asla yükleme
+              if (!ev.isValidForDisplay) {
                 continue;
               }
               if (!_events.any((e) => e.id == ev.id)) {
@@ -107,28 +106,26 @@ class MockEventService extends ChangeNotifier {
   }
 
   Future<void> fetchEvents() async {
-    // A. Anında render: Önbellek sürümü kontrolü (Eski önbelleği tamamen sil ve sıfırdan Ticketmaster ile başlat)
+    // A. Anında render: Önbellek sürümü kontrolü (Eski önbelleği tamamen sil ve sıfırdan temiz Biletix verisi ile başlat)
     try {
       final prefs = await SharedPreferences.getInstance();
       final cacheVersion = prefs.getInt('eventmatch_cache_version_num') ?? 0;
-      if (cacheVersion < 13) {
+      if (cacheVersion < 16) {
         await prefs.remove(_eventsCacheKey);
-        await prefs.setInt('eventmatch_cache_version_num', 13);
+        await prefs.setInt('eventmatch_cache_version_num', 16);
         _events.clear();
       } else {
         await _loadEventsFromCache();
       }
     } catch (_) {}
 
-    // Eski harici API ve spor etkinliklerini temizle
-    _events.removeWhere((e) =>
-        e.isSportsEvent ||
-        e.imageUrl.contains('dzcdn.net') ||
-        e.imageUrl.contains('spotifycdn.com') ||
-        e.id.toLowerCase().contains('biletinial'));
+    // Tarihi geçmiş, iptal edilmiş, spor veya geçersiz harici servis etkinliklerini temizle
+    _cleanObsoleteAndExpiredEvents();
 
-    // Her zaman Ticketmaster resmi vitrin etkinliklerini yükle
-    _populateFallbackEvents();
+    // Yalnızca önbellek veya liste tamamen boşsa başlangıç vitrin etkinliklerini ekle
+    if (_events.isEmpty) {
+      _populateFallbackEvents();
+    }
 
     _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     await _loadLocalAttendeesCache();
@@ -139,6 +136,10 @@ class MockEventService extends ChangeNotifier {
     if (!isTestMode) {
       _fetchLiveEventsInBackground();
     }
+  }
+
+  void _cleanObsoleteAndExpiredEvents() {
+    _events.removeWhere((e) => !e.isValidForDisplay);
   }
 
   Future<void> _fetchLiveEventsInBackground() async {
@@ -164,7 +165,7 @@ class MockEventService extends ChangeNotifier {
         await Future.delayed(const Duration(milliseconds: 250));
 
         // 2. Öne çıkan popüler aramalar (kademeli)
-        final keywords = ['duman', 'teoman', 'tiyatro', 'stand up'];
+        final keywords = ['duman', 'teoman', 'tiyatro', 'stand up', 'festival', 'komedi', 'caz festivali'];
         for (final kw in keywords) {
           await Future.delayed(const Duration(milliseconds: 250));
           final kwResults = await service.fetchLiveTicketmasterEvents(keyword: kw, size: 20);
@@ -172,9 +173,12 @@ class MockEventService extends ChangeNotifier {
         }
 
         bool addedAny = false;
+        final Set<String> liveBiletixIds = {};
+
         for (var list in results) {
           for (var live in list) {
-            if (live.isSportsEvent) continue;
+            if (!live.isValidForDisplay) continue;
+            liveBiletixIds.add(live.id);
             final idx = _events.indexWhere((e) => e.id == live.id);
             if (idx < 0) {
               _events.add(live);
@@ -186,12 +190,27 @@ class MockEventService extends ChangeNotifier {
             }
           }
         }
+
+        // Canlı Biletix API sonuçları geldiyse:
+        // 1. Canlı Biletix listesinde artık bulunmayan veya eski mock olan Biletix etkinliklerini temizle
+        // 2. Tarihi geçmiş veya iptal edilmiş tüm etkinlikleri temizle
+        if (liveBiletixIds.isNotEmpty) {
+          _events.removeWhere((e) {
+            if (!e.isValidForDisplay) return true;
+            if (e.id.startsWith('biletix_') && !liveBiletixIds.contains(e.id)) {
+              return true;
+            }
+            return false;
+          });
+          addedAny = true;
+        }
+
         if (addedAny) {
           _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
           await _saveEventsToCache();
           notifyListeners();
         }
-        debugPrint('[EventService] 🎟️ Biletix etkinlikleri senkronize edildi: ${_events.length}');
+        debugPrint('[EventService] 🎟️ Biletix canlı etkinlikleri senkronize edildi: ${_events.length}');
       } catch (e) {
         debugPrint('[EventService] Canlı Biletix API çekme hatası: $e');
       }
@@ -223,7 +242,7 @@ class MockEventService extends ChangeNotifier {
         try {
           final usersRes = await _supabase
               .from('users')
-              .select('id, name, username, city')
+              .select('id, name, username, city, gender')
               .inFilter('id', userIds);
           for (var u in usersRes) {
             final id = u['id'].toString();
@@ -232,6 +251,7 @@ class MockEventService extends ChangeNotifier {
               name: u['name']?.toString() ?? 'Kullanıcı',
               username: u['username']?.toString(),
               city: u['city']?.toString(),
+              gender: u['gender']?.toString(),
               avatarUrl: '',
             );
           }
@@ -247,7 +267,7 @@ class MockEventService extends ChangeNotifier {
           for (var p in photosRes) {
             final uid = p['user_id'].toString().toLowerCase();
             final photo = p['storage_url'].toString();
-            if (usersMap.containsKey(uid) && photo.isNotEmpty && (usersMap[uid]!.avatarUrl.isEmpty || usersMap[uid]!.avatarUrl.contains('user_avatar'))) {
+            if (usersMap.containsKey(uid) && UserModel.isValidPhotoUrl(photo) && usersMap[uid]!.avatarUrl.isEmpty) {
               usersMap[uid]!.avatarUrl = photo;
             }
           }
@@ -497,16 +517,24 @@ class MockEventService extends ChangeNotifier {
             }
           } else {
             try {
-              final uRes = await _supabase.from('users').select('name').eq('id', rawUserId).maybeSingle();
+              final uRes = await _supabase.from('users').select('name, gender').eq('id', rawUserId).maybeSingle();
               String attendeeAvatar = '';
               try {
                 final pRes = await _supabase.from('user_photos').select('storage_url').eq('user_id', rawUserId).eq('is_active', true).order('sort_order', ascending: true).limit(1).maybeSingle();
                 if (pRes != null && pRes['storage_url'] != null) {
-                  attendeeAvatar = pRes['storage_url'].toString();
+                  final rawUrl = pRes['storage_url'].toString();
+                  if (UserModel.isValidPhotoUrl(rawUrl)) {
+                    attendeeAvatar = rawUrl;
+                  }
                 }
               } catch (_) {}
               if (uRes != null) {
-                attendee = UserModel(id: rawUserId, name: uRes['name'] ?? 'Katılımcı', avatarUrl: attendeeAvatar);
+                attendee = UserModel(
+                  id: rawUserId,
+                  name: uRes['name'] ?? 'Katılımcı',
+                  gender: uRes['gender']?.toString(),
+                  avatarUrl: attendeeAvatar,
+                );
               }
             } catch (_) {}
           }
@@ -528,12 +556,12 @@ class MockEventService extends ChangeNotifier {
         title: 'Aleyna Tilki Konseri',
         category: 'Konser',
         location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
-        dateTime: DateTime(now.year, now.month, now.day, 21, 0),
+        dateTime: DateTime(now.year, now.month, now.day, 23, 59),
         description: 'Aleyna Tilki en sevilen hit şarkıları, büyüleyici dans şovu ve dev orkestrasıyla bu akşam Harbiye Açıkhava sahnesinde dinleyicileriyle buluşuyor!',
         imageUrl: 'https://cdn-images.dzcdn.net/images/artist/aa451cd32910ea3553ebaa714b7e8e9c/1000x1000-000000-80-0-0.jpg',
         latitude: 41.0468,
         longitude: 28.9882,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=aleyna+tilki',
+        ticketUrl: 'https://www.biletix.com/performance/ALEYNA/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🔥 Canlı Pop Şov',
         isPopular: true,
@@ -543,12 +571,12 @@ class MockEventService extends ChangeNotifier {
         title: 'Sıla - KerkiSolfej Akustik Konseri',
         category: 'Konser',
         location: 'Maximum UNIQ Açıkhava, İstanbul',
-        dateTime: DateTime(now.year, now.month, now.day, 21, 30),
+        dateTime: DateTime(now.year, now.month, now.day, 23, 59),
         description: 'Türk popunun güçlü sesi Sıla, KerkiSolfej organizasyonuyla bu akşam Maximum UNIQ Açıkhava sahnesinde unutulmaz bir akustik gece sunuyor!',
         imageUrl: 'https://image-cdn-fa.spotifycdn.com/image/ab6761610000e5ebc6b5e030f9a843e7338bc5f1',
         latitude: 41.1114,
         longitude: 29.0233,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=sila',
+        ticketUrl: 'https://www.biletix.com/performance/SILA/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '✨ Unutulmaz Akustik',
         isPopular: true,
@@ -563,7 +591,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/1a5/c5f563b8-baf5-4342-97e6-b4a9147c51a5_SOURCE',
         latitude: 41.1114,
         longitude: 29.0233,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=the+black+keys',
+        ticketUrl: 'https://www.biletix.com/performance/BLACKKEYS/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🔥 Efsane Rock',
         isPopular: true,
@@ -593,7 +621,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/130/06ba4e22-a1ba-4046-b822-f55c0e34f130_SOURCE',
         latitude: 41.0664,
         longitude: 29.0172,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=saint+levant',
+        ticketUrl: 'https://www.biletix.com/performance/SAINTLEVANT/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🔥 Dünya Turnesi',
         isPopular: true,
@@ -608,7 +636,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/f7d/82a26e44-b08e-45d4-8b4a-99afa558ff7d_SOURCE',
         latitude: 41.0422,
         longitude: 28.9897,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=black+veil+brides',
+        ticketUrl: 'https://www.biletix.com/performance/BVB/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '⚡ Metal Coşkusu',
         isPopular: true,
@@ -623,7 +651,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/472/a218a4e5-3abf-463a-9bd6-7e59366ec472_SOURCE',
         latitude: 41.0468,
         longitude: 28.9882,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=snarky+puppy',
+        ticketUrl: 'https://www.biletix.com/performance/SNARKY/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🎷 Caz & Füzyon',
         isPopular: true,
@@ -638,7 +666,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/197/5f1295dd-f818-41ce-83b4-50db41750197_SOURCE',
         latitude: 40.9902,
         longitude: 29.0289,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=black+label+society',
+        ticketUrl: 'https://www.biletix.com/performance/BLS/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🎸 Ağır Metal',
         isPopular: true,
@@ -653,7 +681,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/f7c/8603c0fb-e2f9-4bb2-b1cf-54a66a3f8f7c_SOURCE',
         latitude: 40.9634,
         longitude: 29.0945,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=mavi',
+        ticketUrl: 'https://www.biletix.com/performance/MAVI/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '💖 Canlı Akustik',
         isPopular: true,
@@ -668,7 +696,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/a44/5664b090-6e0f-4987-856f-ff1ca406aa44_SOURCE',
         latitude: 41.0582,
         longitude: 28.9803,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=bilal',
+        ticketUrl: 'https://www.biletix.com/performance/BILAL/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🎤 Neo-Soul',
         isPopular: true,
@@ -683,7 +711,7 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/ce9/02bef084-80d2-4392-be0b-de92e8d52ce9_SOURCE',
         latitude: 41.0664,
         longitude: 29.0172,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=arturo+sandoval',
+        ticketUrl: 'https://www.biletix.com/performance/ARTURO/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '🎺 Efsane Caz',
         isPopular: true,
@@ -698,9 +726,164 @@ class MockEventService extends ChangeNotifier {
         imageUrl: 'https://s1.ticketm.net/dam/a/737/d0a621e9-d41e-46c0-bd8d-9589c46ac737_SOURCE',
         latitude: 41.0428,
         longitude: 29.0069,
-        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=swallow+the+sun',
+        ticketUrl: 'https://www.biletix.com/performance/SWALLOW/001/TURKIYE/tr',
         ticketProvider: 'Biletix',
         atmosphere: '⚡ Doom Metal',
+        isPopular: true,
+      ),
+      // --- STAND-UP / KOMEDİ ETKİNLİKLERİ ---
+      EventModel(
+        id: 'biletix_standup_baturay',
+        title: 'Baturay Özdemir Stand-up Gösterisi',
+        category: 'Stand-up',
+        location: 'Bostancı Gösteri Merkezi, İstanbul',
+        dateTime: now.add(const Duration(days: 2, hours: 20, minutes: 30)),
+        description: 'Baturay Özdemir kapalı gişe sahnelediği yepyeni stand-up gösterisiyle Bostancı Gösteri Merkezi\'nde!',
+        imageUrl: 'https://images.bursadabugun.com/editor/haber/18022023/baturay-ozdemir-stand-up-gosterisi-ile-bursada-63f08fe717e13.jpg',
+        latitude: 40.9634,
+        longitude: 29.0945,
+        ticketUrl: 'https://www.biletix.com/performance/BATURAY/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '😂 Kahkaha Dolu Stand-up',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_standup_dogu_demirkol',
+        title: 'Doğu Demirkol - Stand Up',
+        category: 'Stand-up',
+        location: 'Zorlu PSM - Turkcell Sahnesi, İstanbul',
+        dateTime: now.add(const Duration(days: 4, hours: 21)),
+        description: 'Doğu Demirkol, kendine has mizahı ve günlük hayat gözlemlerinden derlediği stand-up gösterisiyle Zorlu PSM\'de sahnede.',
+        imageUrl: 'https://images.unsplash.com/photo-1514306191717-452ec28c7814?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.0664,
+        longitude: 29.0172,
+        ticketUrl: 'https://www.biletix.com/performance/DOGU/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎤 Stand-up Komedi',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_standup_kaan_sekban',
+        title: 'Kaan Sekban - Saçmalar',
+        category: 'Stand-up',
+        location: 'Caddebostan Kültür Merkezi, İstanbul',
+        dateTime: now.add(const Duration(days: 6, hours: 20, minutes: 30)),
+        description: 'Plaza hayatından sahnelere uzanan samimi hikayesiyle Kaan Sekban, kahkaha dolu tek kişilik gösterisi Saçmalar ile sahnede.',
+        imageUrl: 'https://images.unsplash.com/photo-1585699324551-f6c309eedeca?auto=format&fit=crop&q=80&w=1200',
+        latitude: 40.9682,
+        longitude: 29.0583,
+        ticketUrl: 'https://www.biletix.com/performance/KAAN/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎭 Tek Kişilik Şov',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_standup_tuzbiber',
+        title: 'TuzBiber 6\'lı Stand Up Gecesi',
+        category: 'Stand-up',
+        location: 'Kadıköy Boa Sahne, İstanbul',
+        dateTime: now.add(const Duration(days: 8, hours: 21)),
+        description: 'Türkiye\'nin en sevilen bağımsız stand-up kolektifi TuzBiber, 6 farklı komedyenin peş peşe performansıyla Kadıköy Boa Sahne\'de.',
+        imageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&q=80&w=1200',
+        latitude: 40.9892,
+        longitude: 29.0275,
+        ticketUrl: 'https://www.biletix.com/performance/TUZBIBER/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🔥 Stand-up Kulübü',
+        isPopular: true,
+      ),
+
+      // --- FESTİVAL ETKİNLİKLERİ ---
+      EventModel(
+        id: 'biletix_fest_istanbul_caz',
+        title: 'İstanbul Caz Festivali - Harbiye Geceleri',
+        category: 'Festival',
+        location: 'Harbiye Cemil Topuzlu Açıkhava Tiyatrosu, İstanbul',
+        dateTime: now.add(const Duration(days: 10, hours: 19, minutes: 30)),
+        description: 'Dünya caz sahnesinin dev isimleri ve yerli virtüözlerin buluştuğu İstanbul Caz Festivali, Harbiye\'nin büyüleyici atmosferinde müzikseverlerle buluşuyor.',
+        imageUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.0468,
+        longitude: 28.9882,
+        ticketUrl: 'https://www.biletix.com/performance/JAZZFEST/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎷 Uluslararası Festival',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_fest_chill_out',
+        title: 'Chill-Out Festival Istanbul',
+        category: 'Festival',
+        location: 'Kemer Country Club, İstanbul',
+        dateTime: now.add(const Duration(days: 12, hours: 12, minutes: 0)),
+        description: 'Yemyeşil doğa içinde kaliteli müzik, lezzetli atölyeler ve açık hava aktiviteleriyle Chill-Out Festival unutulmaz bir hafta sonu vadediyor.',
+        imageUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.1833,
+        longitude: 28.9333,
+        ticketUrl: 'https://www.biletix.com/performance/CHILLOUT/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🌿 Doğa & Müzik Festivali',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_fest_gezgin_salon',
+        title: 'Gezgin Salon Festivali',
+        category: 'Festival',
+        location: 'Bonus Parkorman, İstanbul',
+        dateTime: now.add(const Duration(days: 14, hours: 14, minutes: 0)),
+        description: 'İKSV organizasyonuyla Parkorman\'da indie, alternatif rock ve elektronik müziğin dünyaca ünlü yıldızlarıyla iki günlük festival coşkusu.',
+        imageUrl: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.1215,
+        longitude: 29.0278,
+        ticketUrl: 'https://www.biletix.com/performance/GEZGIN/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎪 Açıkhava Festivali',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_fest_coffee',
+        title: 'Istanbul Coffee Festival',
+        category: 'Festival',
+        location: 'Haliç Kongre Merkezi, İstanbul',
+        dateTime: now.add(const Duration(days: 16, hours: 11, minutes: 0)),
+        description: 'Nitelikli kahveler, usta baristaların şovları, konserler ve atölyelerle Avrupa\'nın en büyük kahve festivali Haliç kıyısında.',
+        imageUrl: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.0441,
+        longitude: 28.9419,
+        ticketUrl: 'https://www.biletix.com/performance/COFFEEFEST/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '☕ Şehir Festivali',
+        isPopular: true,
+      ),
+
+      // --- TİYATRO ETKİNLİKLERİ ---
+      EventModel(
+        id: 'biletix_theatre_amadeus',
+        title: 'Amadeus Tiyatro Oyunu',
+        category: 'Tiyatro',
+        location: 'Zorlu PSM - Turkcell Sahnesi, İstanbul',
+        dateTime: now.add(const Duration(days: 18, hours: 20, minutes: 30)),
+        description: 'Selçuk Yöntem ve Okan Bayülgen\'in başrollerini paylaştığı, 35 kişilik dev oyuncu ve koro kadrosuyla kapalı gişe oynayan tiyatro şaheseri.',
+        imageUrl: 'https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.0664,
+        longitude: 29.0172,
+        ticketUrl: 'https://www.biletix.com/performance/AMADEUS/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🎭 Başyapıt Sahne',
+        isPopular: true,
+      ),
+      EventModel(
+        id: 'biletix_theatre_zengin_mutfagi',
+        title: 'Zengin Mutfağı - Şener Şen',
+        category: 'Tiyatro',
+        location: 'Maximum UNIQ Açıkhava, İstanbul',
+        dateTime: now.add(const Duration(days: 20, hours: 21)),
+        description: 'Türk sinema ve tiyatrosunun efsanesi Şener Şen, Vasıf Öngören\'in ölümsüz eseri Zengin Mutfağı ile sahnede devleşiyor.',
+        imageUrl: 'https://images.unsplash.com/photo-1469488865564-c2de10f69f96?auto=format&fit=crop&q=80&w=1200',
+        latitude: 41.1114,
+        longitude: 29.0233,
+        ticketUrl: 'https://www.biletix.com/performance/ZENGIN/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+        atmosphere: '🌟 Efsane Tiyatro',
         isPopular: true,
       ),
     ];
@@ -815,22 +998,22 @@ class MockEventService extends ChangeNotifier {
         if (currentUser.avatarUrls.isEmpty) {
           final cachedUrls = prefs.getStringList('${userId}_userAvatarUrls');
           if (cachedUrls != null && cachedUrls.isNotEmpty) {
-            currentUser.avatarUrls = cachedUrls.where((u) => u.startsWith('http') || u.startsWith('assets/')).toList();
+            currentUser.avatarUrls = cachedUrls.where(UserModel.isValidPhotoUrl).toList();
             if (currentUser.avatarUrls.isNotEmpty) {
               currentUser.avatarUrl = currentUser.avatarUrls.first;
             }
           }
         }
-        if (currentUser.avatarUrl.isEmpty || currentUser.avatarUrl == 'assets/images/user_avatar.jpg') {
+        if (currentUser.avatarUrl.isEmpty || !UserModel.isValidPhotoUrl(currentUser.avatarUrl)) {
           final cachedSingle = prefs.getString('${userId}_userAvatarUrl');
-          currentUser.avatarUrl = (cachedSingle != null && cachedSingle.startsWith('http'))
+          currentUser.avatarUrl = (cachedSingle != null && UserModel.isValidPhotoUrl(cachedSingle))
               ? cachedSingle
               : '';
           if (currentUser.avatarUrl.isNotEmpty && currentUser.avatarUrls.isEmpty) {
             currentUser.avatarUrls = [currentUser.avatarUrl];
           }
         }
-        currentUser.avatarUrls = currentUser.avatarUrls.where((u) => u != 'assets/images/user_avatar.jpg').toList();
+        currentUser.avatarUrls = currentUser.avatarUrls.where(UserModel.isValidPhotoUrl).toList();
         if (currentUser.aboutMe == 'Konser ve festival sever 🎸' || currentUser.aboutMe == 'Festival ve konser tutkunu') {
           currentUser.aboutMe = null;
         }
@@ -1269,7 +1452,7 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> getCarouselEvents() {
     final now = DateTime.now();
-    final active = _events.where((e) => e.isActive && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
+    final active = _events.where((e) => e.isValidForDisplay).toList();
     if (active.isEmpty) return [];
 
     // 1. Şehir ve Konum Önceliği Belirleme:
@@ -1339,7 +1522,7 @@ class MockEventService extends ChangeNotifier {
   String get selectedCity => _selectedCity;
   String get searchQuery => _searchQuery;
 
-  List<EventModel> getAdminEvents() => _events.where((e) => !e.isSportsEvent).toList();
+  List<EventModel> getAdminEvents() => _events.where((e) => !e.isSportsEvent && !e.isExpired).toList();
 
   void setCategory(String category) {
     _selectedCategory = category;
@@ -1378,13 +1561,14 @@ class MockEventService extends ChangeNotifier {
       final liveResults = await ExternalEventService().fetchLiveTicketmasterEvents(keyword: query);
       bool addedAny = false;
       for (var live in liveResults) {
-        if (live.isSportsEvent) continue;
+        if (!live.isValidForDisplay) continue;
         if (!_events.any((e) => e.id == live.id || e.title.toLowerCase() == live.title.toLowerCase())) {
           _events.add(live);
           addedAny = true;
         }
       }
       if (addedAny) {
+        _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
         notifyListeners();
       }
     } catch (e) {
@@ -1509,7 +1693,7 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> get filteredEvents {
     final now = DateTime.now();
-    List<EventModel> activeEvents = _events.where((e) => e.isActive && !e.isSportsEvent && e.dateTime.isAfter(now.subtract(const Duration(days: 1)))).toList();
+    List<EventModel> activeEvents = _events.where((e) => e.isValidForDisplay).toList();
 
     // 1. Arama sorgusu varsa: Tüm şehirler ve tüm kategoriler genelinde arama yap ve doğrudan döndür!
     if (_searchQuery.trim().isNotEmpty) {
@@ -1644,19 +1828,24 @@ class MockEventService extends ChangeNotifier {
       if (e.isSportsEvent) return false;
 
       final catNorm = _normalizeText(e.category);
+      final titleNorm = _normalizeText(e.title);
+      final descNorm = _normalizeText(e.description);
+
       if (selectedNorm == 'konser') {
-        return catNorm.contains('konser') || catNorm.contains('music') || catNorm.contains('müzik') || catNorm.contains('pop') || catNorm.contains('rock');
+        return catNorm.contains('konser') || catNorm.contains('music') || catNorm.contains('müzik') || catNorm.contains('pop') || catNorm.contains('rock') || titleNorm.contains('konser');
       }
       if (selectedNorm == 'tiyatro') {
-        return catNorm.contains('tiyatro') || catNorm.contains('theatre') || catNorm.contains('art');
+        return catNorm.contains('tiyatro') || catNorm.contains('theatre') || catNorm.contains('art') || titleNorm.contains('tiyatro');
       }
       if (selectedNorm == 'stand-up' || selectedNorm == 'standup') {
-        return catNorm.contains('stand') || catNorm.contains('komedi') || catNorm.contains('comedy');
+        return catNorm.contains('stand') || catNorm.contains('komedi') || catNorm.contains('comedy') ||
+               titleNorm.contains('stand') || titleNorm.contains('komedi') || titleNorm.contains('comedy') || titleNorm.contains('özdemir') || titleNorm.contains('demirkol') || titleNorm.contains('gösteri') || descNorm.contains('stand-up');
       }
       if (selectedNorm == 'festival') {
-        return catNorm.contains('festival') || catNorm.contains('fest') || catNorm.contains('parti');
+        return catNorm.contains('festival') || catNorm.contains('fest') || catNorm.contains('parti') ||
+               titleNorm.contains('festival') || titleNorm.contains('fest') || descNorm.contains('festival');
       }
-      return catNorm.contains(selectedNorm);
+      return catNorm.contains(selectedNorm) || titleNorm.contains(selectedNorm);
     }).toList();
   }
 
@@ -1800,7 +1989,7 @@ class MockEventService extends ChangeNotifier {
     return false;
   }
 
-  List<EventModel> get allEvents => _events.where((e) => !e.isSportsEvent && e.dateTime.isAfter(DateTime.now().subtract(const Duration(hours: 6)))).toList();
+  List<EventModel> get allEvents => _events.where((e) => e.isValidForDisplay).toList();
 
   bool isUserCheckedIn(String eventId) {
     return currentUser.checkedInEventId == eventId;

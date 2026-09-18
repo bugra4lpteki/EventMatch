@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../models/user_model.dart';
 import '../../profile/screens/user_profile_screen.dart';
 
@@ -118,15 +119,9 @@ class MatchDialog extends StatelessWidget {
                           color: AppColors.primary,
                           shape: BoxShape.circle,
                         ),
-                        child: CircleAvatar(
+                        child: UserAvatar(
+                          imageUrl: userAvatar,
                           radius: 40,
-                          backgroundColor: const Color(0xFF1E2235),
-                          backgroundImage: userAvatar.startsWith('http')
-                              ? NetworkImage(userAvatar)
-                              : null,
-                          child: !userAvatar.startsWith('http')
-                              ? const Icon(Icons.person, color: Colors.white, size: 36)
-                              : null,
                         ),
                       ),
                     ),
@@ -138,18 +133,9 @@ class MatchDialog extends StatelessWidget {
                           color: Colors.pinkAccent,
                           shape: BoxShape.circle,
                         ),
-                        child: CircleAvatar(
+                        child: UserAvatar(
+                          user: matchedUser,
                           radius: 40,
-                          backgroundColor: const Color(0xFF1E2235),
-                          backgroundImage: matchAvatar.startsWith('http')
-                              ? NetworkImage(matchAvatar)
-                              : null,
-                          child: !matchAvatar.startsWith('http')
-                              ? Text(
-                                  matchedUser.name.isNotEmpty ? matchedUser.name[0].toUpperCase() : '?',
-                                  style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-                                )
-                              : null,
                         ),
                       ),
                     ),

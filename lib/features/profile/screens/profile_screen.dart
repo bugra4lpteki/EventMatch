@@ -5,6 +5,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
+import '../../../core/widgets/user_avatar.dart';
+import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/location_radar_service.dart';
 import '../../events/models/event_model.dart';
@@ -66,7 +68,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .whereType<EventModel>()
         .toList();
 
-    final displayPhotos = user.avatarUrls.isNotEmpty ? user.avatarUrls : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
+    final rawPhotos = user.avatarUrls.isNotEmpty ? user.avatarUrls : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
+    final displayPhotos = rawPhotos.where(UserModel.isValidPhotoUrl).toList();
     final recentVenues = plannedEvents.isNotEmpty ? plannedEvents : pastEvents;
 
     return Scaffold(
@@ -116,107 +119,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
-                        // Left / Right tap overlay for easy photo navigation
-                        if (displayPhotos.length > 1) ...[
-                          Positioned(
-                            left: 0,
-                            top: 0,
-                            bottom: 0,
-                            width: 140,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () {
-                                if (_currentPhotoIndex > 0) {
-                                  _pageController.previousPage(
-                                    duration: const Duration(milliseconds: 260),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                          Positioned(
-                            right: 0,
-                            top: 0,
-                            bottom: 0,
-                            left: 140,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.translucent,
-                              onTap: () {
-                                if (_currentPhotoIndex < displayPhotos.length - 1) {
-                                  _pageController.nextPage(
-                                    duration: const Duration(milliseconds: 260),
-                                    curve: Curves.easeInOut,
-                                  );
-                                }
-                              },
-                            ),
-                          ),
-                        ],
-                        // Top subtle gradient for story indicator bars
-                        IgnorePointer(
-                          child: Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [Colors.black.withValues(alpha: 0.5), Colors.transparent],
-                                stops: const [0.0, 0.22],
-                              ),
-                            ),
-                          ),
-                        ),
-                        // Modern Story-style Top Segment Progress Bars
-                        if (displayPhotos.length > 1)
-                          Positioned(
-                            top: 14,
-                            left: 16,
-                            right: 16,
-                            child: Row(
-                              children: List.generate(displayPhotos.length, (index) {
-                                final isActive = _currentPhotoIndex == index;
-                                return Expanded(
-                                  child: Container(
-                                    height: 3.5,
-                                    margin: const EdgeInsets.symmetric(horizontal: 2.5),
-                                    decoration: BoxDecoration(
-                                      color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.35),
-                                      borderRadius: BorderRadius.circular(3),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.3),
-                                          blurRadius: 3,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ),
-                        // Photo counter badge (e.g. 1/3)
-                        if (displayPhotos.length > 1)
-                          Positioned(
-                            top: 26,
-                            right: 18,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.55),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white24, width: 0.5),
-                              ),
-                              child: Text(
-                                '${_currentPhotoIndex + 1}/${displayPhotos.length}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ),
                         // Bottom subtle gradient for indicators only
                         IgnorePointer(
                           child: Container(
@@ -245,9 +147,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     duration: const Duration(milliseconds: 300),
                                     margin: const EdgeInsets.symmetric(horizontal: 4),
                                     width: isActive ? 24 : 8,
-                                    height: 7,
+                                    height: 8,
                                     decoration: BoxDecoration(
-                                      color: isActive ? AppColors.textPrimary : AppColors.textPrimary.withValues(alpha: 0.3),
+                                      color: isActive
+                                          ? AppColors.textPrimary
+                                          : AppColors.textPrimary.withValues(alpha: 0.3),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                   );
@@ -570,17 +474,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _defaultHeroBg(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withOpacity(0.15),
-            Theme.of(context).scaffoldBackgroundColor,
-          ],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
+    final user = context.read<MockEventService>().currentUser;
+    return UserHeroAvatarCard(
+      gender: user.gender,
+      name: user.name,
+      height: 380,
     );
   }
 }

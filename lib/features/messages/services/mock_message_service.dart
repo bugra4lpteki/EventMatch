@@ -48,11 +48,21 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   List<ChatModel> _chats = [];
 
   List<ChatModel> get individualChats => _chats
-      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && !c.isArchived)
+      .where((c) =>
+          !_deletedChatIds.contains(c.id) &&
+          !_deletedChatIds.contains(c.participant.id) &&
+          !c.participant.id.toLowerCase().startsWith('venue_') &&
+          !c.id.toLowerCase().contains('venue_') &&
+          !c.isArchived)
       .toList();
 
   List<ChatModel> get archivedChats => _chats
-      .where((c) => !_deletedChatIds.contains(c.id) && !_deletedChatIds.contains(c.participant.id) && c.isArchived)
+      .where((c) =>
+          !_deletedChatIds.contains(c.id) &&
+          !_deletedChatIds.contains(c.participant.id) &&
+          !c.participant.id.toLowerCase().startsWith('venue_') &&
+          !c.id.toLowerCase().contains('venue_') &&
+          c.isArchived)
       .toList();
 
   void toggleArchiveChat(String chatId) {
@@ -141,6 +151,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     });
 
     await _loadChatsFromLocalStorage();
+    _chats.removeWhere((c) =>
+        c.participant.id.toLowerCase().startsWith('venue_') ||
+        c.id.toLowerCase().contains('venue_'));
     await reloadChats();
     _subscribeToRealtime();
 
@@ -148,6 +161,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       if (data.session != null) {
         await _syncBlockedUsers();
         await _loadChatsFromLocalStorage();
+        _chats.removeWhere((c) =>
+            c.participant.id.toLowerCase().startsWith('venue_') ||
+            c.id.toLowerCase().contains('venue_'));
         await reloadChats();
         _subscribeToRealtime();
       } else {
@@ -213,7 +229,15 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
         for (var item in decodedList) {
           try {
-            loadedChats.add(ChatModel.fromMap(Map<String, dynamic>.from(item)));
+            final chat = ChatModel.fromMap(Map<String, dynamic>.from(item));
+            if (!chat.participant.id.toLowerCase().startsWith('venue_') &&
+                !chat.id.toLowerCase().contains('venue_')) {
+              if (!UserModel.isValidPhotoUrl(chat.participant.avatarUrl)) {
+                chat.participant.avatarUrl = '';
+              }
+              chat.participant.avatarUrls = chat.participant.avatarUrls.where(UserModel.isValidPhotoUrl).toList();
+              loadedChats.add(chat);
+            }
           } catch (e) {
             debugPrint('MODEL PARSE HATASI: $e');
           }
@@ -228,6 +252,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           }
           debugPrint('[MessageService] 💾 Yerel önbellekten ${_chats.length} sohbet yüklendi.');
         }
+
+        // Eski önbellekte kalmış venue chatlerini kalıcı olarak temizle
+        _saveChatsToLocalStorage();
       }
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Local storage read error: $e');
@@ -238,7 +265,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     try {
       final prefs = await SharedPreferences.getInstance();
       final cacheKey = _getCacheKey();
-      final serializedList = _chats.map((c) => c.toMap()).toList();
+      final serializedList = _chats
+          .where((c) => !c.participant.id.toLowerCase().startsWith('venue_') && !c.id.toLowerCase().contains('venue_'))
+          .map((c) => c.toMap())
+          .toList();
       await prefs.setString(cacheKey, jsonEncode(serializedList));
     } catch (e) {
       debugPrint('[MessageService] ⚠️ Local storage save error: $e');
@@ -581,6 +611,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       final partnerId = isSender ? receiverId : senderId;
       if (partnerId.isEmpty || partnerId == currentId) return;
+      if (partnerId.startsWith('venue_') || senderId.startsWith('venue_') || receiverId.startsWith('venue_')) return;
       if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
@@ -625,6 +656,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       final partnerId = isSender ? receiverId : senderId;
       if (partnerId.isEmpty || partnerId == currentId) return;
+      if (partnerId.startsWith('venue_') || senderId.startsWith('venue_') || receiverId.startsWith('venue_')) return;
       if (isBlocked(partnerId) || isBlocked(senderId)) return;
 
       _injectMessageIntoChat(
@@ -649,6 +681,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     required DateTime timestamp,
   }) {
     if (content.trim().isEmpty || partnerId.isEmpty) return;
+    if (partnerId.toLowerCase().startsWith('venue_') ||
+        receiverId.toLowerCase().startsWith('venue_') ||
+        senderId.toLowerCase().startsWith('venue_')) {
+      return;
+    }
 
     final lowerCurrent = currentUserId.toLowerCase().trim();
     final lowerPartnerId = partnerId.toLowerCase().trim();
@@ -667,39 +704,64 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
 
     if (chatIndex < 0) {
-      // Sohbet henüz yerel listede yoksa, sohbetleri yenile ve ardından mesajı ve bildirimi üret
-      reloadChats().then((_) {
-        final newIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == lowerPartnerId);
-        if (newIndex >= 0) {
-          _injectMessageIntoChat(
-            partnerId: partnerId,
-            msgId: msgId,
-            senderId: senderId,
-            receiverId: receiverId,
-            content: content,
-            timestamp: timestamp,
-          );
-        } else if (lowerSender != lowerCurrent) {
-          // Eşleşme sorgusu gecikse bile kullanıcıya bildirimi anında ulaştır
-          _supabase.from('users').select('name').eq('id', partnerId).maybeSingle().then((uData) {
-            final senderName = uData?['name']?.toString() ?? 'Yeni Eşleşme';
-            NotificationService().showMessageNotification(
-              chatId: partnerId,
-              senderName: senderName,
-              message: content,
-              unreadCount: 1,
-              messageId: msgId,
-            );
-          }).catchError((_) {
-            NotificationService().showMessageNotification(
-              chatId: partnerId,
-              senderName: 'Yeni Eşleşme',
-              message: content,
-              unreadCount: 1,
-              messageId: msgId,
-            );
-          });
-        }
+      // Sohbet henüz yerel listede yoksa, partner profilini çek ve sohbeti hemen oluştur
+      _supabase.from('users').select('*').eq('id', partnerId).maybeSingle().then((uData) async {
+        final name = uData?['name']?.toString() ?? 'Kullanıcı';
+        final username = uData?['username']?.toString() ?? (partnerId.length > 8 ? partnerId.substring(0, 8) : partnerId);
+        final avatarUrl = uData?['avatar_url']?.toString() ?? '';
+
+        final List<String> photos = [];
+        try {
+          final pRes = await _supabase
+              .from('user_photos')
+              .select('storage_url')
+              .eq('user_id', partnerId)
+              .eq('is_active', true)
+              .order('sort_order', ascending: true);
+          for (var p in pRes) {
+            final u = p['storage_url']?.toString() ?? '';
+            if (u.isNotEmpty) photos.add(u);
+          }
+        } catch (_) {}
+
+        final cleanPhotos = photos.where(UserModel.isValidPhotoUrl).toList();
+        final cleanAvatar = cleanPhotos.isNotEmpty
+            ? cleanPhotos.first
+            : (UserModel.isValidPhotoUrl(avatarUrl) ? avatarUrl : '');
+
+        final partnerUser = UserModel(
+          id: partnerId,
+          name: name,
+          username: username,
+          avatarUrl: cleanAvatar,
+          avatarUrls: cleanPhotos,
+          gender: uData?['gender']?.toString(),
+          city: uData?['city']?.toString(),
+          aboutMe: uData?['bio']?.toString() ?? uData?['about_me']?.toString(),
+          isVerified: uData?['is_verified'] == true,
+        );
+
+        createOrGetChatForUser(partnerUser);
+        _injectMessageIntoChat(
+          partnerId: partnerId,
+          msgId: msgId,
+          senderId: senderId,
+          receiverId: receiverId,
+          content: content,
+          timestamp: timestamp,
+        );
+      }).catchError((e) {
+        debugPrint('[MessageService] ⚠️ Partner profil oluşturma hatası: $e');
+        final partnerUser = UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: '');
+        createOrGetChatForUser(partnerUser);
+        _injectMessageIntoChat(
+          partnerId: partnerId,
+          msgId: msgId,
+          senderId: senderId,
+          receiverId: receiverId,
+          content: content,
+          timestamp: timestamp,
+        );
       });
       return;
     }
@@ -933,8 +995,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   ChatModel createOrGetChatForUser(UserModel user, {String? initialMessage}) {
-    if (isBlocked(user.id)) {
-      // Engellenen kullanıcı için sohbet oluşturulamaz
+    if (isBlocked(user.id) || user.id.toLowerCase().startsWith('venue_')) {
+      // Engellenen veya mekan grup sohbeti olan kayıtlar bireysel sohbete dönüştürülemez
       return ChatModel(
         id: 'blocked_${user.id}',
         participant: user,
@@ -943,7 +1005,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
     final lowerUserId = user.id.toLowerCase();
     final existingIndex = _chats.indexWhere(
-      (c) => c.participant.id.toLowerCase() == lowerUserId || c.participant.name.toLowerCase() == user.name.toLowerCase(),
+      (c) => c.participant.id.toLowerCase() == lowerUserId ||
+             (user.name.trim().isNotEmpty && user.name != 'Kullanıcı' && c.participant.name.toLowerCase() == user.name.toLowerCase()),
     );
 
     if (existingIndex >= 0) {
@@ -1201,13 +1264,22 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       List<dynamic> directMessagesRes = [];
       try {
+        final lowerCurrent = currentId.toLowerCase();
         directMessagesRes = await _supabase
             .from('messages')
             .select('*')
-            .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
+            .or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$lowerCurrent,receiver_id.eq.$lowerCurrent')
+            .not('receiver_id', 'like', 'venue_%')
             .order('created_at', ascending: true);
       } catch (e) {
         debugPrint('[MessageService] ⚠️ direct messages select error: $e');
+        try {
+          directMessagesRes = await _supabase
+              .from('messages')
+              .select('*')
+              .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
+              .order('created_at', ascending: true);
+        } catch (_) {}
       }
 
       final partnerUserIds = <String>{};
@@ -1217,20 +1289,44 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       for (var match in matchesRes) {
         final status = match['status']?.toString().toLowerCase().trim();
-        // KESİN KURAL: SADECE iki taraf da karşılıklı eşleştiyse (status == 'matched') sohbet oluşturulur!
-        // 'liked' (tek taraflı beğeni / eşleşme isteği), 'pending' veya 'rejected' olanlar sohbet kutusuna DÜŞEMEZ!
-        if (status != 'matched') continue;
-
         final u1 = match['user_id_1']?.toString() ?? '';
         final u2 = match['user_id_2']?.toString() ?? '';
         final otherId = u1.toLowerCase() == currentId.toLowerCase() ? u2 : u1;
-        if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase()) {
+        final hasMessages = match['messages'] != null && (match['messages'] as List).isNotEmpty;
+
+        // Karşılıklı onaylanmış eşleşmeler VEYA aralarında mesaj kaydı olanlar sohbet listesine alınır
+        if (status != 'matched' && !hasMessages) continue;
+
+        if (otherId.isNotEmpty && otherId.toLowerCase() != currentId.toLowerCase() && !otherId.toLowerCase().startsWith('venue_')) {
           partnerUserIds.add(otherId);
           matchIdByPartner[otherId] = match['id']?.toString() ?? match['match_id']?.toString() ?? match['m_id']?.toString() ?? match['M_ID']?.toString() ?? '';
           eventIdByPartner[otherId] = match['event_id']?.toString();
           if (match['expires_at'] != null) {
             expiresByPartner[otherId] = DateTime.tryParse(match['expires_at'].toString());
           }
+        }
+      }
+
+      // Doğrudan mesajlaşma geçmişi olan tüm kullanıcıları da partnerUserIds listesine dahil et
+      for (var msg in directMessagesRes) {
+        final sender = (msg['sender_id']?.toString() ?? '').trim();
+        final receiver = (msg['receiver_id']?.toString() ?? '').trim();
+        final lowerCurrent = currentId.toLowerCase();
+        final lowerSender = sender.toLowerCase();
+        final lowerReceiver = receiver.toLowerCase();
+
+        if (lowerReceiver.startsWith('venue_') || lowerSender.startsWith('venue_')) {
+          continue;
+        }
+
+        String pId = '';
+        if (lowerSender == lowerCurrent && lowerReceiver.isNotEmpty && lowerReceiver != lowerCurrent) {
+          pId = receiver;
+        } else if (lowerReceiver == lowerCurrent && lowerSender.isNotEmpty && lowerSender != lowerCurrent) {
+          pId = sender;
+        }
+        if (pId.isNotEmpty && !pId.toLowerCase().startsWith('venue_') && !partnerUserIds.any((id) => id.toLowerCase() == pId.toLowerCase())) {
+          partnerUserIds.add(pId);
         }
       }
 
@@ -1244,7 +1340,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         try {
           final profilesRes = await _supabase
               .from('users')
-              .select('id, name, username, bio, city, gender, interests')
+              .select('*')
               .inFilter('id', validUuidList);
 
           for (var p in profilesRes) {
@@ -1344,6 +1440,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final lowerSender = sender.toLowerCase();
         final lowerReceiver = receiver.toLowerCase();
 
+        if (lowerReceiver.startsWith('venue_') || lowerSender.startsWith('venue_')) {
+          continue;
+        }
+
         String partnerId = '';
         if (lowerSender == lowerCurrent && lowerReceiver.isNotEmpty && lowerReceiver != lowerCurrent) {
           partnerId = receiver;
@@ -1353,10 +1453,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           continue;
         }
 
-        // SADECE ve SADECE karşılıklı onaylanmış eşleşmesi (status == 'matched') bulunan partnerlerin mesajları eklenir
         final lowerPartner = partnerId.toLowerCase();
+        if (lowerPartner.startsWith('venue_')) continue;
         if (!partnerUserIds.any((id) => id.toLowerCase() == lowerPartner)) {
-          continue;
+          partnerUserIds.add(partnerId);
         }
 
         try {
@@ -1409,12 +1509,13 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final username = profile?['username'] ?? existingChat?.participant.username;
         final bio = profile?['bio'] ?? existingChat?.participant.aboutMe;
         final city = profile?['city'] ?? existingChat?.participant.city;
-        final gender = profile?['gender'] ?? existingChat?.participant.gender;
-        final userPhotos = photosMap[lowerPartnerId] ?? existingChat?.participant.avatarUrls ?? [];
-        final avatarUrl = userPhotos.isNotEmpty
+        final gender = profile?['gender']?.toString() ?? existingChat?.participant.gender;
+        final rawUserPhotos = photosMap[lowerPartnerId] ?? existingChat?.participant.avatarUrls ?? [];
+        final userPhotos = rawUserPhotos.where(UserModel.isValidPhotoUrl).toList();
+        final rawAvatar = userPhotos.isNotEmpty
             ? userPhotos.first
-            : (existingChat?.participant.avatarUrl ??
-                'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=600');
+            : (existingChat?.participant.avatarUrl ?? '');
+        final avatarUrl = UserModel.isValidPhotoUrl(rawAvatar) ? rawAvatar : '';
 
         final List<String> socialLinks = List<String>.from(socialLinksMap[lowerPartnerId] ?? existingChat?.participant.socialLinks ?? []);
         List<String> tags = [];
@@ -1479,8 +1580,22 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         );
       }
 
+      for (var existingChat in _chats) {
+        final pId = existingChat.participant.id;
+        final lowerPId = pId.toLowerCase();
+        if (lowerPId.startsWith('venue_') || existingChat.id.toLowerCase().contains('venue_')) {
+          continue;
+        }
+        if (!consolidatedChats.containsKey(lowerPId) && existingChat.messages.isNotEmpty) {
+          consolidatedChats[lowerPId] = existingChat;
+        }
+      }
+
       final newChatsList = consolidatedChats.values
-          .where((c) => !isBlocked(c.participant.id))
+          .where((c) =>
+              !isBlocked(c.participant.id) &&
+              !c.participant.id.toLowerCase().startsWith('venue_') &&
+              !c.id.toLowerCase().contains('venue_'))
           .toList();
       newChatsList.sort((a, b) {
         final aTime = a.messages.isNotEmpty ? a.messages.last.timestamp : DateTime(2000);

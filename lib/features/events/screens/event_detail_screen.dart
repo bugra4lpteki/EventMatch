@@ -9,6 +9,7 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/widgets/app_image_widget.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import '../services/mock_event_service.dart';
@@ -1435,28 +1436,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                               width: isMe ? 2 : 1.5,
                                             ),
                                           ),
-                                          child: CircleAvatar(
-                                            backgroundColor: AppColors.surface,
+                                          child: UserAvatar(
+                                            user: user,
                                             radius: 24,
-                                            child: ClipOval(
-                                              child: user.avatarUrl.startsWith('http')
-                                                  ? Image.network(
-                                                      user.avatarUrl,
-                                                      width: 48,
-                                                      height: 48,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (context, error, stackTrace) =>
-                                                          Icon(Icons.person, color: AppColors.primary),
-                                                    )
-                                                  : Image.asset(
-                                                      user.avatarUrl.isNotEmpty ? user.avatarUrl : 'assets/images/user_avatar.jpg',
-                                                      width: 48,
-                                                      height: 48,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (context, error, stackTrace) =>
-                                                          Icon(Icons.person, color: AppColors.primary),
-                                                    ),
-                                            ),
                                           ),
                                         ),
                                         if (isAtVenue)
