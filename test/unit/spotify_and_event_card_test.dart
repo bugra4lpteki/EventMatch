@@ -286,6 +286,7 @@ void main() {
         ),
       );
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
 
       // SPOTIFY başlığı stand-up'ta OLMAMALI
       expect(find.text('SPOTIFY', skipOffstage: false), findsNothing);

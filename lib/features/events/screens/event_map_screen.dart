@@ -37,8 +37,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
   EventModel? _selectedEvent;
   UserModel? _selectedUser;
   MapMode _currentMapMode = MapMode.events;
-  String _selectedCategoryFilter = 'Tümü';
-  String _selectedDateFilter = '🌐 Tüm Tarihler';
+  String? _selectedCategoryFilter;
+  String? _selectedDateFilter;
   String _selectedMapStyle = 'google'; // 'google', 'satellite', 'dark', 'osm'
   bool _hasAutoFittedBounds = false;
 
@@ -364,7 +364,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
       });
     }
 
-    // Tarih & Canlı Konum Filtreleme (Varsayılan: 🌐 Tüm Tarihler)
+    // Tarih & Canlı Konum Filtreleme (Seçim yoksa varsayılan tüm tarihler gösterilir)
     if (_selectedDateFilter == '🔥 Bugün') {
       final todayEvents = mapEvents.where((e) => _isSameDay(e.dateTime, now) || _isWithinDays(e.dateTime, 1)).toList();
       if (todayEvents.isNotEmpty) {
@@ -382,9 +382,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
       mapEvents = mapEvents.where((e) => _isWithinDays(e.dateTime, 7)).toList();
     }
 
-    // Akıllı Kategori Filtreleme
-    if (_selectedCategoryFilter != 'Tümü') {
-      mapEvents = mapEvents.where((e) => _matchesCategory(e, _selectedCategoryFilter)).toList();
+    // Akıllı Kategori Filtreleme (Seçim yoksa veya 'Tümü' ise tüm kategoriler gösterilir)
+    if (_selectedCategoryFilter != null && _selectedCategoryFilter != 'Tümü') {
+      mapEvents = mapEvents.where((e) => _matchesCategory(e, _selectedCategoryFilter!)).toList();
     }
 
     // İlk açılışta etkinliklerin tamamını kapsayacak şekilde kadrajla
@@ -811,12 +811,16 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     child: Row(
-                      children: ['🌐 Tüm Tarihler', '🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta'].map((dateFilter) {
+                      children: ['🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta'].map((dateFilter) {
                         final isSelected = _selectedDateFilter == dateFilter;
                         return GestureDetector(
                           onTap: () {
                             setState(() {
-                              _selectedDateFilter = dateFilter;
+                              if (_selectedDateFilter == dateFilter) {
+                                _selectedDateFilter = null;
+                              } else {
+                                _selectedDateFilter = dateFilter;
+                              }
                               _selectedEvent = null;
                             });
                           },
@@ -856,12 +860,16 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     child: Row(
-                      children: eventService.categories.map((category) {
+                      children: eventService.categories.where((c) => c != 'Tümü').map((category) {
                         final isSelected = _selectedCategoryFilter == category;
                         return GestureDetector(
                           onTap: () {
                             setState(() {
-                              _selectedCategoryFilter = category;
+                              if (_selectedCategoryFilter == category) {
+                                _selectedCategoryFilter = null;
+                              } else {
+                                _selectedCategoryFilter = category;
+                              }
                               _selectedEvent = null;
                             });
                           },

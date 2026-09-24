@@ -10,12 +10,22 @@ class ExternalEventService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   /// 🌐 Ticketmaster / Biletix Canlı API'sinden Türkiye Etkinliklerini Çekme
-  Future<List<EventModel>> fetchLiveTicketmasterEvents({String countryCode = 'TR', String keyword = '', int page = 0, int size = 100}) async {
+  Future<List<EventModel>> fetchLiveTicketmasterEvents({
+    String countryCode = 'TR',
+    String keyword = '',
+    String sort = 'relevance,desc',
+    String? classificationName,
+    int page = 0,
+    int size = 100,
+  }) async {
     final apiKey = ApiKeys.ticketmasterApiKey;
     final nowIso = '${DateTime.now().toUtc().toIso8601String().split('.').first}Z';
-    String urlStr = 'https://app.ticketmaster.com/discovery/v2/events.json?apikey=$apiKey&countryCode=$countryCode&size=$size&page=$page&sort=date,asc&startDateTime=$nowIso';
+    String urlStr = 'https://app.ticketmaster.com/discovery/v2/events.json?apikey=$apiKey&countryCode=$countryCode&size=$size&page=$page&sort=$sort&startDateTime=$nowIso';
     if (keyword.trim().isNotEmpty && keyword.trim().toLowerCase() != 'biletix') {
       urlStr += '&keyword=${Uri.encodeComponent(keyword.trim())}';
+    }
+    if (classificationName != null && classificationName.trim().isNotEmpty) {
+      urlStr += '&classificationName=${Uri.encodeComponent(classificationName.trim())}';
     }
     final url = Uri.parse(urlStr);
 

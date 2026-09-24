@@ -155,30 +155,28 @@ class MockEventService extends ChangeNotifier {
         // Ticketmaster API limitlerine (rate limit 5 req/sec) takılmamak için sorguları sıralı ve gecikmeli çekiyoruz
         final List<List<EventModel>> results = [];
         
-        // 1. Genel Türkiye etkinlikleri (Sayfa 0 ve 1)
-        final p0 = await service.fetchLiveTicketmasterEvents(page: 0, size: 100);
-        results.add(p0);
+        // 1. Öne çıkan ve popüler Türkiye etkinlikleri (relevance,desc ile tüm takvime yayılmış en kaliteli konserler, turneler ve festivaller)
+        final pRelevant = await service.fetchLiveTicketmasterEvents(sort: 'relevance,desc', page: 0, size: 100);
+        results.add(pRelevant);
         await Future.delayed(const Duration(milliseconds: 250));
 
-        final p1 = await service.fetchLiveTicketmasterEvents(page: 1, size: 100);
-        results.add(p1);
+        // 2. Yakın tarihli güncel Türkiye etkinlikleri (date,asc ile bugün, yarın ve bu hafta başlayanlar)
+        final pChronological = await service.fetchLiveTicketmasterEvents(sort: 'date,asc', page: 0, size: 100);
+        results.add(pChronological);
         await Future.delayed(const Duration(milliseconds: 250));
 
-        // 2. Öne çıkan popüler aramalar (kademeli)
+        // 3. Öne çıkan popüler aramalar (kademeli, relevance,desc)
         final keywords = ['duman', 'teoman', 'tiyatro', 'stand up', 'festival', 'komedi', 'caz festivali'];
         for (final kw in keywords) {
           await Future.delayed(const Duration(milliseconds: 250));
-          final kwResults = await service.fetchLiveTicketmasterEvents(keyword: kw, size: 20);
+          final kwResults = await service.fetchLiveTicketmasterEvents(keyword: kw, sort: 'relevance,desc', size: 25);
           if (kwResults.isNotEmpty) results.add(kwResults);
         }
 
         bool addedAny = false;
-        final Set<String> liveBiletixIds = {};
-
         for (var list in results) {
           for (var live in list) {
             if (!live.isValidForDisplay) continue;
-            liveBiletixIds.add(live.id);
             final idx = _events.indexWhere((e) => e.id == live.id);
             if (idx < 0) {
               _events.add(live);
@@ -191,19 +189,8 @@ class MockEventService extends ChangeNotifier {
           }
         }
 
-        // Canlı Biletix API sonuçları geldiyse:
-        // 1. Canlı Biletix listesinde artık bulunmayan veya eski mock olan Biletix etkinliklerini temizle
-        // 2. Tarihi geçmiş veya iptal edilmiş tüm etkinlikleri temizle
-        if (liveBiletixIds.isNotEmpty) {
-          _events.removeWhere((e) {
-            if (!e.isValidForDisplay) return true;
-            if (e.id.startsWith('biletix_') && !liveBiletixIds.contains(e.id)) {
-              return true;
-            }
-            return false;
-          });
-          addedAny = true;
-        }
+        // Tarihi geçmiş veya geçersiz tüm etkinlikleri temizle
+        _cleanObsoleteAndExpiredEvents();
 
         if (addedAny) {
           _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
@@ -1747,7 +1734,11 @@ class MockEventService extends ChangeNotifier {
       activeEvents = activeEvents.where((e) => e.dateTime.isBefore(endOfMonth)).toList();
     }
     
-    if (_selectedCategory == 'Tümü') return activeEvents;
+    if (_selectedCategory == 'Tümü') {
+      return _selectedDateFilter == 'Tümü'
+          ? _homogenizeEvents(activeEvents)
+          : activeEvents;
+    }
     
     if (_selectedCategory == '🔥 Popüler') {
       final sorted = List<EventModel>.from(activeEvents)..sort((a, b) {
@@ -1824,7 +1815,7 @@ class MockEventService extends ChangeNotifier {
     
     final selectedNorm = _normalizeText(_selectedCategory);
 
-    return activeEvents.where((e) {
+    final filtered = activeEvents.where((e) {
       if (e.isSportsEvent) return false;
 
       final catNorm = _normalizeText(e.category);
@@ -1847,6 +1838,90 @@ class MockEventService extends ChangeNotifier {
       }
       return catNorm.contains(selectedNorm) || titleNorm.contains(selectedNorm);
     }).toList();
+
+    return _selectedDateFilter == 'Tümü' ? _homogenizeEvents(filtered) : filtered;
+  }
+
+  /// Etkinlikleri tarihler ve kategoriler arasında dengeli & homojen şekilde dağıtır.
+  /// Sadece bugünün etkinliklerinin üst üste yığılmasını engeller; bugün, bu hafta, gelecek hafta ve
+  /// büyük gelecek konserleri ahenkli ve zengin bir ritimde harmanlar.
+  List<EventModel> _homogenizeEvents(List<EventModel> events) {
+    if (events.length <= 4) return events;
+
+    final now = DateTime.now();
+    final todayEnd = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final weekEnd = now.add(const Duration(days: 7));
+    final monthEnd = now.add(const Duration(days: 30));
+
+    final List<EventModel> bucketToday = [];
+    final List<EventModel> bucketThisWeek = [];
+    final List<EventModel> bucketThisMonth = [];
+    final List<EventModel> bucketFuture = [];
+
+    for (final e in events) {
+      if (e.dateTime.isBefore(todayEnd) ||
+          (e.dateTime.year == now.year && e.dateTime.month == now.month && e.dateTime.day == now.day)) {
+        bucketToday.add(e);
+      } else if (e.dateTime.isBefore(weekEnd)) {
+        bucketThisWeek.add(e);
+      } else if (e.dateTime.isBefore(monthEnd)) {
+        bucketThisMonth.add(e);
+      } else {
+        bucketFuture.add(e);
+      }
+    }
+
+    int score(EventModel e) => (e.isPopular ? 12 : 0) + (e.attendees.length * 3);
+    bucketToday.sort((a, b) => score(b).compareTo(score(a)));
+    bucketThisWeek.sort((a, b) => score(b).compareTo(score(a)));
+    bucketThisMonth.sort((a, b) => score(b).compareTo(score(a)));
+    bucketFuture.sort((a, b) => score(b).compareTo(score(a)));
+
+    final List<EventModel> result = [];
+    final int total = events.length;
+
+    while (result.length < total) {
+      bool addedAny = false;
+
+      // 1. Bugünün öne çıkan etkinliği
+      if (bucketToday.isNotEmpty) {
+        result.add(bucketToday.removeAt(0));
+        addedAny = true;
+      }
+      // 2. Bu haftanın öne çıkan etkinliği
+      if (bucketThisWeek.isNotEmpty) {
+        result.add(bucketThisWeek.removeAt(0));
+        addedAny = true;
+      }
+      // 3. Gelecek haftalar/ayların büyük konseri veya gösterisi
+      if (bucketThisMonth.isNotEmpty) {
+        result.add(bucketThisMonth.removeAt(0));
+        addedAny = true;
+      } else if (bucketFuture.isNotEmpty) {
+        result.add(bucketFuture.removeAt(0));
+        addedAny = true;
+      }
+      // 4. Bu hafta veya sonrasından farklı bir etkinlik
+      if (bucketThisWeek.isNotEmpty) {
+        result.add(bucketThisWeek.removeAt(0));
+        addedAny = true;
+      } else if (bucketFuture.isNotEmpty) {
+        result.add(bucketFuture.removeAt(0));
+        addedAny = true;
+      }
+
+      if (!addedAny) {
+        for (final b in [bucketThisWeek, bucketThisMonth, bucketFuture, bucketToday]) {
+          if (b.isNotEmpty) {
+            result.add(b.removeAt(0));
+            addedAny = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   void toggleEventVisibility(String id) {

@@ -225,9 +225,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _currentPosition = Duration.zero;
       }
 
-      final audioUrl = (track.previewUrl != null && track.previewUrl!.isNotEmpty)
-          ? track.previewUrl!
-          : 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
+      String? audioUrl = (track.previewUrl != null && track.previewUrl!.isNotEmpty && !track.previewUrl!.contains('soundhelix'))
+          ? track.previewUrl
+          : null;
+
+      if (audioUrl == null) {
+        audioUrl = await SpotifyService().resolveAudioPreview(track.artistName, track.title);
+      }
+
+      if (audioUrl == null || audioUrl.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.music_off_rounded, color: Colors.white70),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Ses önizlemesi yüklenemedi. Spotify üzerinden dinleyebilirsiniz.')),
+                ],
+              ),
+              backgroundColor: AppColors.surfaceLight,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          );
+        }
+        return;
+      }
 
       try {
         await _audioPlayer.play(UrlSource(audioUrl));
@@ -236,13 +260,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _isPlaying = true;
         });
       } catch (innerError) {
-        debugPrint("Primary audio preview failed, attempting fallback: $innerError");
-        const fallbackUrl = 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-        await _audioPlayer.play(UrlSource(fallbackUrl));
-        setState(() {
-          _playingTrackId = track.id;
-          _isPlaying = true;
-        });
+        debugPrint("Audio preview failed: $innerError");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.music_off_rounded, color: Colors.white70),
+                  SizedBox(width: 10),
+                  Expanded(child: Text('Ses önizlemesi yüklenemedi. Spotify üzerinden dinleyebilirsiniz.')),
+                ],
+              ),
+              backgroundColor: AppColors.surfaceLight,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint("Audio preview error: $e");
