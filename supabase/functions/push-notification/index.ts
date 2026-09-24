@@ -124,10 +124,14 @@ serve(async (req) => {
           },
           body: JSON.stringify(fcmPayload),
         });
-        const fcmData = await fcmRes.json();
-        console.log("[FCM Push Result]", fcmData);
+        if (fcmRes.ok) {
+          const fcmData = await fcmRes.json();
+          console.log("[FCM Push Result]", fcmData);
+        } else {
+          console.warn("[FCM Warning] Legacy FCM endpoint status:", fcmRes.status, "- OneSignal primary delivery active.");
+        }
       } catch (fcmErr) {
-        console.error("[FCM Push Error]", fcmErr);
+        console.warn("[FCM Fallback] Legacy FCM call skipped, OneSignal delivery handles delivery:", fcmErr);
       }
     }
 

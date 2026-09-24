@@ -10,9 +10,10 @@ CREATE TABLE IF NOT EXISTS public.push_debug_logs (
   details JSONB
 );
 
--- Okuma iznini aç (anon ve authenticated görebilsin)
-GRANT ALL ON public.push_debug_logs TO anon, authenticated, service_role;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+-- Sadece yetkili ve sistem rollerinin okuyup yazabilmesi için izinleri sınırla (anon erişimi engellendi)
+REVOKE ALL ON public.push_debug_logs FROM anon;
+GRANT SELECT, INSERT ON public.push_debug_logs TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
 
 -- 2. Push Token ve FCM Token sütunlarını users tablosunda garantiye al
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS push_token TEXT;
@@ -26,8 +27,8 @@ CREATE OR REPLACE FUNCTION public.handle_new_message_push()
 RETURNS TRIGGER AS $$
 DECLARE
   v_sender_name TEXT;
-  v_onesignal_app_id CONSTANT TEXT := 'bc0c0b94-e465-4b0f-b01c-581d848df2ca';
-  v_onesignal_api_key CONSTANT TEXT := 'os_v2_app_' || 'xqgaxfhemvfq7ma4laoyjd' || 'pszigevoz2dkxuzh5pgc7z5r74qo7lnhgkeq24skvoikqryf4iunk3e4rebzhylmd5aycvfxqitekka6a';
+  v_onesignal_app_id CONSTANT TEXT := COALESCE(NULLIF(current_setting('app.settings.onesignal_app_id', true), ''), 'bc0c0b94-e465-4b0f-b01c-581d848df2ca');
+  v_onesignal_api_key TEXT := COALESCE(NULLIF(current_setting('app.settings.onesignal_api_key', true), ''), 'os_v2_app_' || 'xqgaxfhemvfq7ma4laoyjd' || 'pszigevoz2dkxuzh5pgc7z5r74qo7lnhgkeq24skvoikqryf4iunk3e4rebzhylmd5aycvfxqitekka6a');
   v_receiver_push_token TEXT;
   v_request_id BIGINT;
   v_payload JSONB;

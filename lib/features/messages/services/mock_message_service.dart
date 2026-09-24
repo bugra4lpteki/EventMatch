@@ -1270,7 +1270,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             .select('*')
             .or('sender_id.eq.$currentId,receiver_id.eq.$currentId,sender_id.eq.$lowerCurrent,receiver_id.eq.$lowerCurrent')
             .not('receiver_id', 'like', 'venue_%')
-            .order('created_at', ascending: true);
+            .order('created_at', ascending: true)
+            .limit(300);
       } catch (e) {
         debugPrint('[MessageService] ⚠️ direct messages select error: $e');
         try {
@@ -1278,7 +1279,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               .from('messages')
               .select('*')
               .or('sender_id.eq.$currentId,receiver_id.eq.$currentId')
-              .order('created_at', ascending: true);
+              .order('created_at', ascending: true)
+              .limit(300);
         } catch (_) {}
       }
 

@@ -273,15 +273,32 @@ class MockMatchService extends ChangeNotifier {
           debugPrint('[MatchService] ⚠️ matches filtresi hatası: $e');
         }
 
-        // 3. Platformdaki TÜM diğer GERÇEK kullanıcı profillerini çek
+        // 3. Platformdaki kullanıcı profillerini güvenli ve sayfalı olarak çek (Maksimum 50 profil)
         List<Map<String, dynamic>> rawProfiles = [];
+        const publicColumns = 'id, name, username, city, gender, bio, interests, birth_date, avatar_url, points, created_at';
         try {
-          rawProfiles = await _supabase.from('users').select();
+          rawProfiles = await _supabase
+              .from('public_profiles')
+              .select(publicColumns)
+              .neq('id', currentUserId)
+              .limit(50);
         } catch (e) {
           try {
-            rawProfiles = await _supabase.from('user_profiles').select();
+            rawProfiles = await _supabase
+                .from('users')
+                .select(publicColumns)
+                .neq('id', currentUserId)
+                .limit(50);
           } catch (e2) {
-            debugPrint('[MatchService] ❌ user_profiles hatası: $e2');
+            try {
+              rawProfiles = await _supabase
+                  .from('user_profiles')
+                  .select()
+                  .neq('id', currentUserId)
+                  .limit(50);
+            } catch (e3) {
+              debugPrint('[MatchService] ❌ user profile select hatası: $e3');
+            }
           }
         }
 

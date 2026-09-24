@@ -17,10 +17,16 @@ ON CONFLICT (id) DO UPDATE SET
   file_size_limit = 5242880,
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'audio/mp4', 'audio/mpeg', 'audio/m4a', 'audio/aac'];
 
--- 2. Herkesin okuyabilmesi için SELECT (download) policy
-CREATE POLICY "Public read access for chat-media"
+-- 2. Yalnızca oturum açmış kullanıcıların okuyabilmesi için SELECT policy
+DROP POLICY IF EXISTS "Public read access for chat-media" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated read access for chat-media" ON storage.objects;
+
+CREATE POLICY "Authenticated read access for chat-media"
 ON storage.objects FOR SELECT
-USING (bucket_id = 'chat-media');
+USING (
+  bucket_id = 'chat-media'
+  AND auth.role() = 'authenticated'
+);
 
 -- 3. Giriş yapmış kullanıcıların yükleyebilmesi için INSERT policy
 CREATE POLICY "Authenticated users can upload to chat-media"

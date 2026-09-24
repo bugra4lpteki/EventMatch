@@ -212,7 +212,11 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> _loadSupabaseAttendees() async {
     try {
-      final rows = await _supabase.from('event_attendees').select('event_id, user_id, status').eq('status', 'joined');
+      final rows = await _supabase
+          .from('event_attendees')
+          .select('event_id, user_id, status')
+          .eq('status', 'joined')
+          .limit(200);
       if (rows.isEmpty) return;
 
       final myUid = currentUserId.toLowerCase().trim();
@@ -222,6 +226,7 @@ class MockEventService extends ChangeNotifier {
           .where((id) => id != null && id.isNotEmpty && _isValidUuid(id))
           .cast<String>()
           .toSet()
+          .take(50)
           .toList();
 
       final Map<String, UserModel> usersMap = {};
