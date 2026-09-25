@@ -63,8 +63,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       msgService.syncChatMessagesForPartner(widget.chat.participant.id);
     });
 
-    // 4 saniyelik canlı senkronizasyon emniyet sübabı
-    _liveSyncTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    // 15 saniyelik canlı senkronizasyon emniyet sübabı (WebSocket'e ek hafif periyodik kontrol)
+    _liveSyncTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) {
         context.read<MockMessageService>().syncChatMessagesForPartner(widget.chat.participant.id);
       }
@@ -1084,7 +1084,79 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       ),
       child: GestureDetector(
         onLongPress: () => _showReactionSheet(context, message, msgService, currentChatId),
+        onTap: message.status == MessageStatus.failed
+            ? () => _showFailedMessageAction(context, message, msgService, currentChatId)
+            : null,
         child: _buildWhatsAppMessageBubble(message, isMe, msgService, currentChatId),
+      ),
+    );
+  }
+
+  void _showFailedMessageAction(
+    BuildContext context,
+    MessageModel message,
+    MockMessageService msgService,
+    String currentChatId,
+  ) {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2235),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 20,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'İleti Gönderilemedi',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.refresh_rounded, color: Colors.amber),
+              title: const Text('Tekrar Gönder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onTap: () {
+                Navigator.pop(ctx);
+                msgService.retryFailedMessage(currentChatId, message);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              title: const Text('Mesajı Sil', style: TextStyle(color: Colors.redAccent)),
+              onTap: () {
+                Navigator.pop(ctx);
+                msgService.deleteMessage(currentChatId, message.id);
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1403,6 +1475,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white70);
       case MessageStatus.read:
         return const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF34B7F1));
+      case MessageStatus.failed:
+        return const Icon(Icons.error_outline_rounded, size: 14, color: Colors.redAccent);
     }
   }
 
@@ -1658,6 +1732,15 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
         if (await f.exists()) {
           await _player.stop();
           await _player.play(DeviceFileSource(url));
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Ses kaydı bu cihazda bulunamadı veya henüz sunucuya yüklenmemiş.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
         }
       }
     }

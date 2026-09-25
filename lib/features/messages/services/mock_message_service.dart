@@ -1739,12 +1739,29 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final now = DateTime.now();
 
-      // Supabase Storage'a yükle, başarısız olursa local path kullan
-      String audioUrl = localAudioPath;
+      // Supabase Storage'a yükle (Başarısız olursa yerel yolu karşı tarafa sızdırma)
       final storageUrl = await _uploadMediaToStorage(localAudioPath, folder: 'voice', extension: 'm4a');
-      if (storageUrl != null) {
-        audioUrl = storageUrl;
+      if (storageUrl == null) {
+        debugPrint('[MessageService] ❌ Ses kaydı Storage yüklemesi başarısız oldu.');
+        final failedMsg = MessageModel(
+          id: newMsgId,
+          senderId: currentId,
+          receiverId: partnerId,
+          text: '🎤 Sesli Mesaj (Yüklenemedi)',
+          timestamp: now,
+          status: MessageStatus.failed,
+          mediaUrl: localAudioPath,
+          audioDurationSeconds: durationSeconds,
+          messageType: 'audio',
+        );
+        chat.messages.add(failedMsg);
+        _sortChats();
+        _saveChatsToLocalStorage();
+        _emitRoomUpdate(partnerId);
+        notifyListeners();
+        return;
       }
+      final String audioUrl = storageUrl;
 
       String? replySender;
       String? replyText;
@@ -1831,18 +1848,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final isPng = localImagePath.toLowerCase().endsWith('.png');
       final ext = isPng ? 'png' : 'jpg';
 
-      // Supabase Storage'a yükle, başarısız olursa local path kullan
-      String imageUrl = localImagePath;
-      final storageUrl = await _uploadMediaToStorage(localImagePath, folder: 'images', extension: ext);
-      if (storageUrl != null) {
-        imageUrl = storageUrl;
-      }
-
       final trimmedCaption = caption?.trim() ?? '';
       String? replySender;
       String? replyText;
-      String encodedContent = '[image:$imageUrl]${trimmedCaption.isNotEmpty ? '\n$trimmedCaption' : ''}';
-
       if (replyToMessage != null) {
         replySender = replyToMessage.senderId.toLowerCase().trim() == currentId.toLowerCase().trim()
             ? 'Sen'
@@ -1850,6 +1858,36 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         replyText = replyToMessage.isAudio
             ? '🎤 Sesli Mesaj'
             : (replyToMessage.isImage ? '📷 Fotoğraf' : replyToMessage.text);
+      }
+
+      // Supabase Storage'a yükle (Başarısız olursa yerel yolu karşı tarafa sızdırma)
+      final storageUrl = await _uploadMediaToStorage(localImagePath, folder: 'images', extension: ext);
+      if (storageUrl == null) {
+        debugPrint('[MessageService] ❌ Görsel Storage yüklemesi başarısız oldu.');
+        final failedMsg = MessageModel(
+          id: newMsgId,
+          senderId: currentId,
+          receiverId: partnerId,
+          text: trimmedCaption.isNotEmpty ? trimmedCaption : '📷 Fotoğraf (Yüklenemedi)',
+          timestamp: now,
+          status: MessageStatus.failed,
+          mediaUrl: localImagePath,
+          messageType: 'image',
+          replyToMessageId: replyToMessage?.id,
+          replyToText: replyText,
+          replyToSenderName: replySender,
+        );
+        chat.messages.add(failedMsg);
+        _sortChats();
+        _saveChatsToLocalStorage();
+        _emitRoomUpdate(partnerId);
+        notifyListeners();
+        return;
+      }
+      final String imageUrl = storageUrl;
+      String encodedContent = '[image:$imageUrl]${trimmedCaption.isNotEmpty ? '\n$trimmedCaption' : ''}';
+
+      if (replyToMessage != null) {
         encodedContent = '[reply:$replySender:$replyText]\n$encodedContent';
       }
 
@@ -1983,6 +2021,79 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       );
     } catch (e) {
       debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
+      final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      if (chatIndex >= 0) {
+        final chat = _chats[chatIndex];
+        final optIdx = chat.messages.indexWhere((m) => m.id == clientMsgId);
+        if (optIdx >= 0) {
+          chat.messages[optIdx].status = MessageStatus.failed;
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(partnerId);
+          notifyListeners();
+        }
+      }
+    }
+  }
+
+  /// Başarısız olan mesajı yeniden göndermeyi dener
+  Future<void> retryFailedMessage(String chatId, MessageModel failedMsg) async {
+    final lowerReceiver = failedMsg.receiverId?.toLowerCase().trim();
+    final chatIndex = _chats.indexWhere((c) =>
+        c.id == chatId ||
+        (lowerReceiver != null && c.participant.id.toLowerCase().trim() == lowerReceiver));
+
+    if (chatIndex >= 0) {
+      final chat = _chats[chatIndex];
+      chat.messages.removeWhere((m) => m.id == failedMsg.id);
+      _saveChatsToLocalStorage();
+      notifyListeners();
+
+      final receiverId = failedMsg.receiverId ?? chat.participant.id;
+      if (failedMsg.isAudio && failedMsg.mediaUrl != null) {
+        await sendVoiceNote(
+          chat.id,
+          receiverId,
+          failedMsg.mediaUrl!,
+          failedMsg.audioDurationSeconds ?? 0,
+        );
+      } else if (failedMsg.isImage && failedMsg.mediaUrl != null) {
+        await sendImageMessage(
+          chat.id,
+          receiverId,
+          failedMsg.mediaUrl!,
+          caption: failedMsg.text != '📷 Fotoğraf' && failedMsg.text != '📷 Fotoğraf (Yüklenemedi)'
+              ? failedMsg.text
+              : null,
+        );
+      } else {
+        await sendMessage(
+          chat.id,
+          failedMsg.text,
+          receiverUserId: receiverId,
+        );
+      }
+    }
+  }
+
+  /// Mesajı yerelden (ve veritabanından) siler
+  Future<void> deleteMessage(String chatId, String messageId) async {
+    final lowerChatId = chatId.toLowerCase().trim();
+    final chatIndex = _chats.indexWhere((c) =>
+        c.id.toLowerCase() == lowerChatId ||
+        c.participant.id.toLowerCase() == lowerChatId);
+
+    if (chatIndex >= 0) {
+      final chat = _chats[chatIndex];
+      chat.messages.removeWhere((m) => m.id == messageId);
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(chat.participant.id);
+      notifyListeners();
+    }
+
+    try {
+      await _supabase.from('messages').delete().eq('id', messageId);
+    } catch (e) {
+      debugPrint('[MessageService] ❌ deleteMessage error: $e');
     }
   }
 

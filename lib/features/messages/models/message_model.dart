@@ -6,6 +6,7 @@ enum MessageStatus {
   sent,      // Tek gri tık (Sunucuya ulaştı)
   delivered, // Çift gri tık (Karşı cihaza iletildi)
   read,      // Çift mavi tık (Karşı taraf okudu)
+  failed,    // Kırmızı ünlem / Gönderim başarısız oldu
 }
 
 class MessageModel {
