@@ -235,7 +235,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                          ),
                                          if (user.isVerified) ...[
                                            const SizedBox(width: 6),
-                                           const Icon(Icons.verified_rounded, size: 22, color: Color(0xFF38BDF8)),
+                                           GestureDetector(
+                                             onTap: () => _showVerifiedBadgeDialog(context),
+                                             child: const Tooltip(
+                                               message: 'Doğrulanmış Profil',
+                                               child: Icon(Icons.verified_rounded, size: 22, color: Color(0xFF38BDF8)),
+                                             ),
+                                           ),
                                          ],
                                        ],
                                      ),
@@ -680,6 +686,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showVerifiedBadgeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: const [
+            Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 26),
+            SizedBox(width: 10),
+            Text(
+              'Doğrulanmış Profil',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+          ],
+        ),
+        content: const Text(
+          'Bu profil, e-posta doğrulaması tamamlanmış ve EventMatch topluluğunun güvenilir bir üyesi olduğunu kanıtlamıştır.',
+          style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF38BDF8),
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Anladım', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

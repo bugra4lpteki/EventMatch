@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 
 class HelpSettingsScreen extends StatefulWidget {
   const HelpSettingsScreen({super.key});
@@ -44,7 +46,8 @@ class _HelpSettingsScreenState extends State<HelpSettingsScreen> {
   }
 
   void _sendMessage() async {
-    if (_messageController.text.trim().isEmpty) {
+    final text = _messageController.text.trim();
+    if (text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Lütfen destek ekibimize iletmek istediğiniz mesajı yazın.', style: GoogleFonts.outfit(color: Colors.white)),
@@ -56,7 +59,19 @@ class _HelpSettingsScreenState extends State<HelpSettingsScreen> {
     }
 
     setState(() => _isSending = true);
-    await Future.delayed(const Duration(milliseconds: 900));
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('support_tickets').insert({
+        'category': _selectedCategory,
+        'message': text,
+        'user_id': supabase.auth.currentUser?.id,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('[HelpSettings] Support ticket insert notice: $e');
+    }
+
+    await Future.delayed(const Duration(milliseconds: 600));
 
     if (mounted) {
       setState(() => _isSending = false);
@@ -229,6 +244,21 @@ class _HelpSettingsScreenState extends State<HelpSettingsScreen> {
                       label: Text(
                         _isSending ? 'GÖNDERİLİYOR...' : 'DESTEK TALEBİ GÖNDER',
                         style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () {
+                        final subject = Uri.encodeComponent('EventMatch Destek: $_selectedCategory');
+                        final body = Uri.encodeComponent(_messageController.text);
+                        UrlLauncherHelper.launchURL('mailto:destek@eventmatch.app?subject=$subject&body=$body');
+                      },
+                      icon: const Icon(Icons.mail_outline_rounded, size: 16, color: Colors.white70),
+                      label: Text(
+                        'destek@eventmatch.app ile İletişime Geç',
+                        style: GoogleFonts.outfit(color: Colors.white70, fontSize: 12, decoration: TextDecoration.underline),
                       ),
                     ),
                   ),

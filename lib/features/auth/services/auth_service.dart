@@ -242,8 +242,18 @@ class AuthService extends ChangeNotifier {
     }
   }
 
-  Future<String?> updatePassword(String newPassword) async {
+  Future<String?> updatePassword(String newPassword, {String? currentPassword}) async {
     try {
+      final email = currentUserEmail;
+      if (email != null && currentPassword != null && currentPassword.isNotEmpty) {
+        // Re-authenticate user to confirm current password
+        try {
+          await _supabase.auth.signInWithPassword(email: email, password: currentPassword);
+        } on AuthException catch (e) {
+          return 'Mevcut şifreniz hatalı: ${e.message}';
+        }
+      }
+
       if (_supabase.auth.currentSession == null) {
         // Mock / Offline user session fallback
         return null;

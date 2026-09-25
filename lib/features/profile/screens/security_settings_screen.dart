@@ -48,6 +48,12 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   Future<void> _updatePassword() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final currentPass = _currentPasswordController.text.trim();
+    if (currentPass.isEmpty) {
+      _showSnackBar('Lütfen mevcut şifrenizi girin.', isError: true);
+      return;
+    }
+
     if (_newPasswordController.text != _confirmPasswordController.text) {
       _showSnackBar('Yeni şifreler eşleşmiyor.', isError: true);
       return;
@@ -55,7 +61,10 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
 
     setState(() => _isLoading = true);
     final authService = context.read<AuthService>();
-    final error = await authService.updatePassword(_newPasswordController.text.trim());
+    final error = await authService.updatePassword(
+      _newPasswordController.text.trim(),
+      currentPassword: currentPass,
+    );
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -134,13 +143,27 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          '2 Adımlı Doğrulama (2FA)',
-                          style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+                        Row(
+                          children: [
+                            Text(
+                              '2 Adımlı Doğrulama (2FA)',
+                              style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                              ),
+                              child: const Text('Beta', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'Giriş yaparken ek güvenlik kodu istenir.',
+                          'Cihaz güvenlik doğrulaması ve ek koruma.',
                           style: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],

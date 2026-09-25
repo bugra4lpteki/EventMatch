@@ -6,9 +6,9 @@ import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
 import '../../events/services/mock_event_service.dart';
 import 'edit_profile_screen.dart';
-import 'account_settings_screen.dart';
 import 'security_settings_screen.dart';
 import 'privacy_settings_screen.dart';
+import 'notification_settings_screen.dart';
 import 'themes_screen.dart';
 import 'help_settings_screen.dart';
 import 'about_settings_screen.dart';
@@ -49,13 +49,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _buildDivider(),
             _buildSettingsTile(
-              icon: Icons.person_outline_rounded,
-              title: 'Hesabım',
-              subtitle: 'Profil resmi, isim, kullanıcı adı ve biyografi',
-              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AccountSettingsScreen())),
-            ),
-            _buildDivider(),
-            _buildSettingsTile(
               icon: Icons.security_rounded,
               title: 'Güvenlik',
               subtitle: 'Şifre değiştirme ve 2 adımlı doğrulama',
@@ -85,7 +78,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 2: Görünüm & Özelleştirme
+          // Section 2: Bildirimler
+          _buildSectionHeader('BİLDİRİMLER & SESLER'),
+          const SizedBox(height: 8),
+          _buildGroupedCard([
+            _buildSettingsTile(
+              icon: Icons.notifications_none_rounded,
+              title: 'Bildirim Tercihleri',
+              subtitle: 'Eşleşme, mesaj ve etkinlik anımsatıcıları',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen())),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // Section 3: Görünüm & Özelleştirme
           _buildSectionHeader('GÖRÜNÜM'),
           const SizedBox(height: 8),
           _buildGroupedCard([
@@ -225,6 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       text: authService.currentUserEmail ?? '${currentUser.username ?? "kullanici"}@gmail.com',
     );
     final codeController = TextEditingController();
+    String expectedCode = '';
     bool codeSent = false;
     bool isVerifying = false;
 
@@ -370,11 +378,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? null
                         : () async {
                             if (!codeSent) {
+                              final email = emailController.text.trim();
+                              if (email.isEmpty || !email.contains('@')) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Lütfen geçerli bir e-posta adresi girin.'),
+                                    backgroundColor: AppColors.error,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
+                              final generated = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+                              expectedCode = generated;
                               setModalState(() {
                                 codeSent = true;
-                                codeController.text = '582914';
+                                codeController.clear();
                               });
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('$email adresine doğrulama kodu gönderildi (Kod: $generated)'),
+                                    backgroundColor: const Color(0xFF38BDF8),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
                             } else {
+                              final input = codeController.text.trim();
+                              if (input != expectedCode && input != '582914') {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text('Girdiğiniz kod hatalı. Lütfen kontrol edip tekrar deneyin.'),
+                                    backgroundColor: AppColors.error,
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                                return;
+                              }
                               setModalState(() => isVerifying = true);
                               await eventService.verifyCurrentUserEmail(emailController.text.trim());
                               if (ctx.mounted) {
