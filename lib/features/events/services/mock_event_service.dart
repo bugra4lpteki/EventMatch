@@ -1522,6 +1522,15 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void resetFilters() {
+    _selectedCategory = 'Tümü';
+    _selectedSportsSubFilter = 'Tümü';
+    _selectedCity = 'Tüm Şehirler';
+    _selectedDateFilter = 'Tümü';
+    _searchQuery = '';
+    notifyListeners();
+  }
+
   void setSportsSubFilter(String subFilter) {
     _selectedSportsSubFilter = 'Tümü';
     notifyListeners();

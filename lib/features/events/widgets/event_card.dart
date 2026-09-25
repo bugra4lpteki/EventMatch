@@ -94,6 +94,21 @@ class _EventCardState extends State<EventCard> {
         : Future.value(null);
   }
 
+  @override
+  void didUpdateWidget(covariant EventCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.event.id != oldWidget.event.id ||
+        widget.event.imageUrl != oldWidget.event.imageUrl ||
+        widget.event.title != oldWidget.event.title) {
+      _bannerFuture = (!_hasDirectEventPoster && _isMusicEvent)
+          ? _spotifyService.getArtistImageUrl(
+              widget.event.title,
+              category: widget.event.category,
+            )
+          : Future.value(null);
+    }
+  }
+
   IconData _getCategoryIcon(String category) {
     final lower = category.toLowerCase();
     if (lower.contains('konser') || lower.contains('müzik') || lower.contains('music')) {

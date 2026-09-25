@@ -20,6 +20,7 @@ class ExploreScreen extends StatefulWidget {
 class _ExploreScreenState extends State<ExploreScreen> {
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
   bool _isSearchFocused = false;
 
   @override
@@ -64,7 +65,42 @@ class _ExploreScreenState extends State<ExploreScreen> {
   void dispose() {
     _searchFocusNode.dispose();
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  Widget _buildActiveFilterTag({required String label, required VoidCallback onClear}) {
+    return Container(
+      margin: const EdgeInsets.only(right: 6),
+      padding: const EdgeInsets.only(left: 10, right: 6, top: 4, bottom: 4),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: AppColors.primaryVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onClear,
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.all(2.0),
+              child: Icon(Icons.close_rounded, size: 14, color: AppColors.primaryVariant),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -77,10 +113,18 @@ class _ExploreScreenState extends State<ExploreScreen> {
           PointerDeviceKind.trackpad,
         },
       ),
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        cacheExtent: 600, // Pre-cache offscreen items to prevent scroll jank
-        slivers: [
+      child: RefreshIndicator(
+        color: AppColors.primary,
+        backgroundColor: AppColors.surface,
+        onRefresh: () async {
+          HapticFeedback.lightImpact();
+          await context.read<MockEventService>().fetchEvents();
+        },
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          cacheExtent: 600, // Pre-cache offscreen items to prevent scroll jank
+          slivers: [
         SliverToBoxAdapter(
           child: Column(
             children: [
@@ -257,8 +301,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           // Filtreleme Butonu
                           Consumer<MockEventService>(
                             builder: (context, eventService, child) {
-                              final bool hasActiveFilter = eventService.selectedCity != 'Tümü' ||
-                                  eventService.selectedCategory != 'Tümü';
+                              final bool hasActiveFilter = (eventService.selectedCity != 'Tüm Şehirler' && eventService.selectedCity != 'Tümü') ||
+                                  eventService.selectedCategory != 'Tümü' ||
+                                  eventService.selectedDateFilter != 'Tümü';
 
                               return GestureDetector(
                                 onTap: () {
@@ -423,6 +468,76 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     ),
                   ),
                 ),
+                // Aktif Filtre Çipleri Göstergesi
+                Consumer<MockEventService>(
+                  builder: (context, eventService, child) {
+                    final bool hasCityFilter = eventService.selectedCity != 'Tüm Şehirler' && eventService.selectedCity != 'Tümü';
+                    final bool hasCategoryFilter = eventService.selectedCategory != 'Tümü';
+                    final bool hasDateFilter = eventService.selectedDateFilter != 'Tümü';
+                    final bool hasAnyFilter = hasCityFilter || hasCategoryFilter || hasDateFilter;
+
+                    if (!hasAnyFilter) return const SizedBox.shrink();
+
+                    return Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            Text(
+                              'Aktif:',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (hasCityFilter)
+                              _buildActiveFilterTag(
+                                label: '📍 ${eventService.selectedCity}',
+                                onClear: () {
+                                  HapticFeedback.lightImpact();
+                                  eventService.setCity('Tüm Şehirler');
+                                },
+                              ),
+                            if (hasCategoryFilter)
+                              _buildActiveFilterTag(
+                                label: '🏷️ ${eventService.selectedCategory}',
+                                onClear: () {
+                                  HapticFeedback.lightImpact();
+                                  eventService.setCategory('Tümü');
+                                },
+                              ),
+                            if (hasDateFilter)
+                              _buildActiveFilterTag(
+                                label: '📅 ${eventService.selectedDateFilter}',
+                                onClear: () {
+                                  HapticFeedback.lightImpact();
+                                  eventService.setDateFilter('Tümü');
+                                },
+                              ),
+                            TextButton(
+                              onPressed: () {
+                                HapticFeedback.mediumImpact();
+                                eventService.resetFilters();
+                              },
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              child: Text(
+                                'Temizle',
+                                style: TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ] else ...[
                 Consumer<MockEventService>(
                   builder: (context, eventService, child) {
@@ -495,12 +610,63 @@ class _ExploreScreenState extends State<ExploreScreen> {
             ],
           ),
         ),
+        // Liste Başlığı ve Etkinlik Sayacı
+        SliverToBoxAdapter(
+          child: Consumer<MockEventService>(
+            builder: (context, eventService, child) {
+              final events = eventService.filteredEvents;
+              if (events.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _searchController.text.isNotEmpty
+                          ? 'Arama Sonuçları'
+                          : (eventService.selectedCategory != 'Tümü'
+                              ? '${eventService.selectedCategory} Etkinlikleri'
+                              : 'Yaklaşan Etkinlikler'),
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                      ),
+                      child: Text(
+                        '${events.length} Etkinlik',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
         // Lazy-loaded Event List (Zero-lag rendering with RepaintBoundary & automatic keep-alives)
         Consumer<MockEventService>(
           builder: (context, eventService, child) {
             final events = eventService.filteredEvents;
 
             if (events.isEmpty) {
+              final bool isSearching = _searchController.text.trim().isNotEmpty;
+              final bool hasFilter = (eventService.selectedCity != 'Tüm Şehirler' && eventService.selectedCity != 'Tümü') ||
+                  eventService.selectedCategory != 'Tümü' ||
+                  eventService.selectedDateFilter != 'Tümü';
+
               return SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 48.0),
@@ -508,17 +674,59 @@ class _ExploreScreenState extends State<ExploreScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.event_busy_rounded,
-                          size: 48,
-                          color: AppColors.textSecondary.withValues(alpha: 0.5),
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.surface,
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                          ),
+                          child: Icon(
+                            isSearching ? Icons.search_off_rounded : Icons.event_busy_rounded,
+                            size: 48,
+                            color: AppColors.textSecondary.withValues(alpha: 0.6),
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         Text(
-                          "Bu kategoride etkinlik bulunamadı.",
+                          isSearching
+                              ? '"${_searchController.text.trim()}" ile eşleşen etkinlik bulunamadı'
+                              : (hasFilter
+                                  ? 'Seçili filtrelerle eşleşen etkinlik bulunamadı'
+                                  : 'Şu anda gösterilecek etkinlik bulunmuyor'),
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                          style: TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          isSearching
+                              ? 'Farklı bir arama terimi deneyebilir veya filtreleri sıfırlayabilirsiniz.'
+                              : 'Farklı bir şehir veya kategori seçerek diğer etkinlikleri keşfedin.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
+                        ),
+                        if (isSearching || hasFilter) ...[
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () {
+                              HapticFeedback.mediumImpact();
+                              _searchController.clear();
+                              eventService.resetFilters();
+                            },
+                            icon: const Icon(Icons.refresh_rounded, size: 18),
+                            label: const Text('Filtreleri Sıfırla & Tümünü Gör', style: TextStyle(fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -554,7 +762,8 @@ class _ExploreScreenState extends State<ExploreScreen> {
         const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
     ),
-  );
+  ),
+);
 }
 
   void _showCitySearchPicker(BuildContext context, MockEventService eventService, StateSetter setModalState) {
@@ -679,11 +888,11 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                       TextButton(
                         onPressed: () {
-                          eventService.setCategory('Tümü');
-                          eventService.setCity('Tüm Şehirler');
-                          Navigator.pop(context);
+                          HapticFeedback.lightImpact();
+                          eventService.resetFilters();
+                          setModalState(() {});
                         },
-                        child: Text('Sıfırla', style: TextStyle(color: AppColors.primary)),
+                        child: Text('Sıfırla', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold)),
                       ),
                     ],
                   ),
@@ -724,10 +933,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                           label: Text(city),
                           selected: isSelected,
                           onSelected: (selected) {
-                            if (selected) {
-                              eventService.setCity(city);
-                              setModalState(() {});
-                            }
+                            HapticFeedback.selectionClick();
+                            eventService.setCity(selected ? city : 'Tüm Şehirler');
+                            setModalState(() {});
                           },
                           selectedColor: AppColors.primary.withOpacity(0.2),
                           backgroundColor: AppColors.surface,
@@ -768,10 +976,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         label: Text(df),
                         selected: isSelected,
                         onSelected: (selected) {
-                          if (selected) {
-                            eventService.setDateFilter(df);
-                            setModalState(() {});
-                          }
+                          HapticFeedback.selectionClick();
+                          eventService.setDateFilter(selected ? df : 'Tümü');
+                          setModalState(() {});
                         },
                         selectedColor: AppColors.primary.withValues(alpha: 0.2),
                         backgroundColor: AppColors.surface,
@@ -808,10 +1015,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                         label: Text(cat),
                         selected: isSelected,
                         onSelected: (selected) {
-                          if (selected) {
-                            eventService.setCategory(cat);
-                            setModalState(() {});
-                          }
+                          HapticFeedback.selectionClick();
+                          eventService.setCategory(selected ? cat : 'Tümü');
+                          setModalState(() {});
                         },
                         selectedColor: AppColors.primary.withOpacity(0.2),
                         backgroundColor: AppColors.surface,
