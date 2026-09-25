@@ -14,7 +14,6 @@ import '../../events/screens/event_detail_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
 import 'edit_profile_screen.dart';
-import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -162,33 +161,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                       ],
-                      // Top Quick Action Buttons (Edit Profile & Settings)
-                      Positioned(
-                        top: 16,
-                        right: 16,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildGlassCircleButton(
-                              icon: Icons.edit_rounded,
-                              tooltip: 'Profili Düzenle',
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildGlassCircleButton(
-                              icon: Icons.settings_rounded,
-                              tooltip: 'Ayarlar',
-                              onTap: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -280,42 +252,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                                      ),
-                                      icon: const Icon(Icons.edit_outlined, size: 16),
-                                      label: const Text('Profili Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.white,
-                                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                        padding: const EdgeInsets.symmetric(vertical: 10),
-                                        backgroundColor: AppColors.surface.withValues(alpha: 0.5),
-                                      ),
-                                    ),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
                                   ),
-                                  const SizedBox(width: 10),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: AppColors.surface.withValues(alpha: 0.5),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
-                                      tooltip: 'Ayarlar',
-                                      onPressed: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                                      ),
-                                    ),
+                                  icon: const Icon(Icons.edit_outlined, size: 16),
+                                  label: const Text('Profili Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(vertical: 10),
+                                    backgroundColor: AppColors.surface.withValues(alpha: 0.5),
                                   ),
-                                ],
+                                ),
                               ),
                             ],
                           ),
@@ -562,29 +515,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildGlassCircleButton({
-    required IconData icon,
-    required String tooltip,
-    required VoidCallback onTap,
-  }) {
-    return ClipOval(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.4),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
-          ),
-          child: IconButton(
-            icon: Icon(icon, color: Colors.white, size: 20),
-            tooltip: tooltip,
-            onPressed: onTap,
-          ),
-        ),
-      ),
-    );
-  }
 
   void _showAllEventsBottomSheet(BuildContext context, List<EventModel> events) {
     showModalBottomSheet(

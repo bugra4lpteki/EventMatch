@@ -480,25 +480,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 const Center(child: RadarIconWidget()),
-                if (_currentIndex == 4)
-                  IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.06),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+                IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.06),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white10),
                     ),
-                    onPressed: () {
-                      HapticFeedback.selectionClick();
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                      );
-                    },
+                    child: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
                   ),
+                  onPressed: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(width: 4),
               ],
             ),
             body: IndexedStack(
