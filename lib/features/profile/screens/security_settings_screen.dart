@@ -31,10 +31,13 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   }
 
   Future<void> _loadSecurityPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _is2FAEnabled = prefs.getBool('security_2fa_enabled') ?? false;
-    });
+    final authService = context.read<AuthService>();
+    final isEnabled = await authService.isTwoFactorEnabled();
+    if (mounted) {
+      setState(() {
+        _is2FAEnabled = isEnabled;
+      });
+    }
   }
 
   @override
@@ -80,12 +83,109 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
   }
 
   Future<void> _toggle2FA(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('security_2fa_enabled', value);
-    setState(() {
-      _is2FAEnabled = value;
-    });
-    _showSnackBar(value ? '2 Adımlı Doğrulama (2FA) aktifleştirildi.' : '2 Adımlı Doğrulama (2FA) devredışı bırakıldı.');
+    final authService = context.read<AuthService>();
+    final email = authService.currentUserEmail ?? 'kayıtlı e-posta adresinize';
+
+    if (value) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF13131A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.shield_rounded, color: Color(0xFF38BDF8), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '2 Adımlı Doğrulama',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'Bu özelliği açtığınızda, hesabınıza her giriş yaptığınızda $email adresine 6 haneli güvenlik kodu gönderilecektir.\n\nAktifleştirmek istiyor musunuz?',
+            style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13.5, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Vazgeç', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF38BDF8),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text('Etkinleştir', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        await authService.setTwoFactorEnabled(true);
+        if (mounted) {
+          setState(() => _is2FAEnabled = true);
+          _showSnackBar('✅ 2 Adımlı Doğrulama (E-posta Güvenlik Kodu) başarıyla aktifleştirildi.');
+        }
+      }
+    } else {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF13131A),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          ),
+          title: Text(
+            '2 Adımlı Doğrulamayı Kapat',
+            style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          content: Text(
+            '2 faktörlü doğrulamayı kapatmak hesabınızın güvenlik korumasını zayıflatır. Devre dışı bırakmak istediğinize emin misiniz?',
+            style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13.5, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('İptal', style: GoogleFonts.outfit(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.error,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text('Evet, Kapat', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm == true) {
+        await authService.setTwoFactorEnabled(false);
+        if (mounted) {
+          setState(() => _is2FAEnabled = false);
+          _showSnackBar('2 Adımlı Doğrulama devredışı bırakıldı.');
+        }
+      }
+    }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
@@ -133,10 +233,16 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.15),
+                      color: _is2FAEnabled
+                          ? const Color(0xFF38BDF8).withValues(alpha: 0.15)
+                          : AppColors.primary.withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.phonelink_lock_rounded, color: AppColors.primary, size: 24),
+                    child: Icon(
+                      _is2FAEnabled ? Icons.verified_user_rounded : Icons.mark_email_unread_rounded,
+                      color: _is2FAEnabled ? const Color(0xFF38BDF8) : AppColors.primary,
+                      size: 24,
+                    ),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -150,20 +256,38 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                               style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
                             ),
                             const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.amber.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                            if (_is2FAEnabled)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.shield_rounded, color: Color(0xFF38BDF8), size: 11),
+                                    SizedBox(width: 3),
+                                    Text('Aktif & Korumalı', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              )
+                            else
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                                ),
+                                child: const Text('Önerilen', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
                               ),
-                              child: const Text('Beta', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-                            ),
                           ],
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
-                          'Cihaz güvenlik doğrulaması ve ek koruma.',
+                          'Giriş yaparken e-posta adresinize 6 haneli güvenlik kodu gönderilir.',
                           style: GoogleFonts.outfit(color: AppColors.textMuted, fontSize: 12),
                         ),
                       ],
@@ -171,8 +295,8 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                   ),
                   Switch(
                     value: _is2FAEnabled,
-                    activeColor: AppColors.primary,
-                    activeTrackColor: AppColors.primary.withOpacity(0.3),
+                    activeColor: const Color(0xFF38BDF8),
+                    activeTrackColor: const Color(0xFF38BDF8).withValues(alpha: 0.3),
                     onChanged: _toggle2FA,
                   ),
                 ],

@@ -9,6 +9,7 @@ import 'forgot_password_screen.dart';
 import '../../home/screens/home_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
+import '../widgets/two_factor_verification_sheet.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -46,6 +47,10 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (errorMessage != null) {
+      if (errorMessage == '2FA_REQUIRED') {
+        _showTwoFactorModal();
+        return;
+      }
       _showSnackBar(
         errorMessage == 'Email not confirmed' 
             ? 'Lütfen e-posta adresinizi onaylayın.' 
@@ -61,6 +66,35 @@ class _LoginScreenState extends State<LoginScreen> {
         (route) => false,
       );
     }
+  }
+
+  void _showTwoFactorModal() {
+    final authService = context.read<AuthService>();
+    final email = authService.pendingTwoFactorEmail ?? _emailController.text.trim();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => TwoFactorVerificationSheet(
+        email: email,
+        onSuccess: () {
+          Navigator.pop(sheetContext);
+          context.read<MockEventService>().loadUserProfile();
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        },
+        onCancel: () {
+          Navigator.pop(sheetContext);
+          _showSnackBar('İki adımlı doğrulama tamamlanmadı. Giriş iptal edildi.', isError: true);
+        },
+      ),
+    );
   }
 
   void _loginWithGoogle() async {

@@ -442,4 +442,54 @@ class NotificationService with WidgetsBindingObserver {
       debugPrint('[NotificationService] ❌ Bildirim gösterme hatası: $e');
     }
   }
+
+  /// 2 Adımlı Doğrulama (2FA) Güvenlik Kodu Bildirimi
+  Future<void> showTwoFactorNotification(String code) async {
+    const title = '🔐 EventMatch Güvenlik Kodu';
+    final message = 'Giriş için 2 adımlı doğrulama kodunuz: $code (3 dakika geçerlidir).';
+
+    if (kIsWeb) {
+      debugPrint('[NotificationService Web] $title: $message');
+      return;
+    }
+
+    final androidDetails = AndroidNotificationDetails(
+      highImportanceChannel.id,
+      highImportanceChannel.name,
+      channelDescription: '2 Adımlı Doğrulama Güvenlik Kodları',
+      importance: Importance.max,
+      priority: Priority.max,
+      showWhen: true,
+      category: AndroidNotificationCategory.message,
+      enableVibration: true,
+      playSound: true,
+      enableLights: true,
+      ledColor: const Color(0xFF38BDF8),
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    try {
+      await _notificationsPlugin.show(
+        99999,
+        title,
+        message,
+        details,
+        payload: '2fa_code',
+      );
+      debugPrint('[NotificationService] 📢 2FA bildirimi gösterildi: $code');
+    } catch (e) {
+      debugPrint('[NotificationService] ❌ 2FA bildirim hatası: $e');
+    }
+  }
 }
