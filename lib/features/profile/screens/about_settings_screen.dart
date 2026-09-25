@@ -121,10 +121,14 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.confirmation_number_rounded,
-                    color: Colors.white,
-                    size: 44,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: Image.asset(
+                      'assets/images/app_logo.png',
+                      width: 88,
+                      height: 88,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
