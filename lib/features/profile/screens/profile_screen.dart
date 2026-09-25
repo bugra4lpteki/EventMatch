@@ -13,6 +13,8 @@ import '../../events/models/event_model.dart';
 import '../../events/screens/event_detail_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
+import 'edit_profile_screen.dart';
+import 'settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -160,6 +162,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                       ],
+                      // Top Quick Action Buttons (Edit Profile & Settings)
+                      Positioned(
+                        top: 16,
+                        right: 16,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildGlassCircleButton(
+                              icon: Icons.edit_rounded,
+                              tooltip: 'Profili Düzenle',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _buildGlassCircleButton(
+                              icon: Icons.settings_rounded,
+                              tooltip: 'Ayarlar',
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -244,6 +273,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   fontSize: 14,
                                 ),
                               ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                                      ),
+                                      icon: const Icon(Icons.edit_outlined, size: 16),
+                                      label: const Text('Profili Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.white,
+                                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        backgroundColor: AppColors.surface.withValues(alpha: 0.5),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: AppColors.surface.withValues(alpha: 0.5),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 20),
+                                      tooltip: 'Ayarlar',
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -315,12 +382,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           letterSpacing: -0.2,
                         ),
                       ),
-                      Text(
-                        'Tümünü Gör',
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                      InkWell(
+                        onTap: () => _showAllEventsBottomSheet(context, recentVenues),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          child: Text(
+                            'Tümünü Gör',
+                            style: TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -479,6 +553,134 @@ class _ProfileScreenState extends State<ProfileScreen> {
       gender: user.gender,
       name: user.name,
       height: 380,
+    );
+  }
+
+  Widget _buildGlassCircleButton({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return ClipOval(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.4),
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
+          ),
+          child: IconButton(
+            icon: Icon(icon, color: Colors.white, size: 20),
+            tooltip: tooltip,
+            onPressed: onTap,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAllEventsBottomSheet(BuildContext context, List<EventModel> events) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Etkinliklerim (${events.length})',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: Colors.white10),
+            Expanded(
+              child: events.isEmpty
+                  ? Center(
+                      child: Text(
+                        'Henüz bir etkinlik bulunmuyor.',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: events.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (context, i) {
+                        final event = events[i];
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          tileColor: Colors.white.withValues(alpha: 0.04),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: SizedBox(
+                              width: 52,
+                              height: 52,
+                              child: AppImageWidget(
+                                imageUrl: event.imageUrl,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                          subtitle: Text(
+                            '${event.dateTime.day}.${event.dateTime.month}.${event.dateTime.year} • ${event.location}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                          trailing: Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+                          onTap: () {
+                            Navigator.pop(ctx);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)),
+                            );
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
