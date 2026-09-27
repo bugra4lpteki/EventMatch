@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,7 +23,7 @@ class NotificationService {
         requestSoundPermission: true,
       );
 
-      const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/launcher_icon');
 
       const InitializationSettings initializationSettings = InitializationSettings(
         iOS: initializationSettingsIOS,
@@ -95,6 +96,9 @@ class NotificationService {
       channelDescription: 'Etkinlik eşleşme radar bildirimleri',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@mipmap/launcher_icon',
+      largeIcon: DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+      color: Color(0xFF8B5CF6),
       playSound: true,
       enableVibration: true,
     );
@@ -135,6 +139,9 @@ class NotificationService {
       channelDescription: 'Etkinlik hatırlatıcı bildirimleri',
       importance: Importance.max,
       priority: Priority.high,
+      icon: '@mipmap/launcher_icon',
+      largeIcon: DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+      color: Color(0xFF8B5CF6),
       playSound: true,
       enableVibration: true,
     );

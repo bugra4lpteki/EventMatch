@@ -64,7 +64,7 @@ class NotificationService with WidgetsBindingObserver {
 
     try {
       // 1. Yerel Bildirim Motorunu Başlat (Local Notifications)
-      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
@@ -260,6 +260,9 @@ class NotificationService with WidgetsBindingObserver {
         'ios_badgeCount': 1,
         'ios_sound': 'default',
         'android_sound': 'default',
+        'small_icon': 'launcher_icon',
+        'large_icon': 'launcher_icon',
+        'android_accent_color': 'FF8B5CF6',
         'android_channel_id': 'high_importance_channel',
         'apns_priority': 10,
         'content_available': true,
@@ -326,6 +329,9 @@ class NotificationService with WidgetsBindingObserver {
         'ios_badgeCount': 1,
         'ios_sound': 'default',
         'android_sound': 'default',
+        'small_icon': 'launcher_icon',
+        'large_icon': 'launcher_icon',
+        'android_accent_color': 'FF8B5CF6',
         'android_channel_id': 'high_importance_channel',
         'apns_priority': 10,
         'content_available': true,
@@ -394,6 +400,9 @@ class NotificationService with WidgetsBindingObserver {
       channelDescription: highImportanceChannel.description,
       importance: Importance.max,
       priority: Priority.max,
+      icon: '@mipmap/launcher_icon',
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+      color: const Color(0xFF8B5CF6),
       showWhen: true,
       category: AndroidNotificationCategory.message,
       number: unreadCount,
@@ -459,6 +468,9 @@ class NotificationService with WidgetsBindingObserver {
       channelDescription: '2 Adımlı Doğrulama Güvenlik Kodları',
       importance: Importance.max,
       priority: Priority.max,
+      icon: '@mipmap/launcher_icon',
+      largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
+      color: const Color(0xFF8B5CF6),
       showWhen: true,
       category: AndroidNotificationCategory.message,
       enableVibration: true,

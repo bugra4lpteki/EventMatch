@@ -80,6 +80,9 @@ BEGIN
       'ios_badgeCount', 1,
       'ios_sound', 'default',
       'android_sound', 'default',
+      'small_icon', 'launcher_icon',
+      'large_icon', 'launcher_icon',
+      'android_accent_color', 'FF8B5CF6',
       'android_channel_id', 'high_importance_channel',
       'apns_priority', 10,
       'content_available', true
