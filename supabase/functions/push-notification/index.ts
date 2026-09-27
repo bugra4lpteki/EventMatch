@@ -139,6 +139,7 @@ serve(async (req) => {
     if (ONESIGNAL_APP_ID && ONESIGNAL_REST_API_KEY) {
       const oneSignalBody: any = {
         app_id: ONESIGNAL_APP_ID,
+        target_channel: "push",
         include_aliases: {
           external_id: [receiverId.toLowerCase(), receiverId],
         },
@@ -160,8 +161,8 @@ serve(async (req) => {
         mutable_content: true,
         ios_interruption_level: "time-sensitive",
         android_sound: "default",
-        small_icon: "launcher_icon",
-        large_icon: "launcher_icon",
+        small_icon: "ic_stat_onesignal_default",
+        large_icon: "ic_launcher",
         android_accent_color: "FF8B5CF6",
         android_channel_id: "high_importance_channel",
         apns_priority: 10,

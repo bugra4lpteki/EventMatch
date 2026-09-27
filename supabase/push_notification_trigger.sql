@@ -57,18 +57,19 @@ BEGIN
 
     v_payload := jsonb_build_object(
       'app_id', v_onesignal_app_id,
+      'target_channel', 'push',
       'include_aliases', jsonb_build_object('external_id', jsonb_build_array(LOWER(NEW.receiver_id::text), NEW.receiver_id::text)),
       'include_external_user_ids', jsonb_build_array(LOWER(NEW.receiver_id::text), NEW.receiver_id::text),
       'channel_for_external_user_ids', 'push',
       'priority', 10,
       'android_priority', 5,
       'headings', jsonb_build_object(
-        'tr', '💬 ' || COALESCE(v_sender_name, 'Yeni Mesaj'),
-        'en', '💬 ' || COALESCE(v_sender_name, 'New Message')
+        'en', '💬 ' || COALESCE(v_sender_name, 'New Message'),
+        'tr', '💬 ' || COALESCE(v_sender_name, 'Yeni Mesaj')
       ),
       'contents', jsonb_build_object(
-        'tr', NEW.content,
-        'en', NEW.content
+        'en', NEW.content,
+        'tr', NEW.content
       ),
       'data', jsonb_build_object(
         'chat_id', NEW.sender_id::text,
@@ -83,8 +84,8 @@ BEGIN
       'mutable_content', true,
       'ios_interruption_level', 'time-sensitive',
       'android_sound', 'default',
-      'small_icon', 'launcher_icon',
-      'large_icon', 'launcher_icon',
+      'small_icon', 'ic_stat_onesignal_default',
+      'large_icon', 'ic_launcher',
       'android_accent_color', 'FF8B5CF6',
       'android_channel_id', 'high_importance_channel',
       'apns_priority', 10,

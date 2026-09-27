@@ -201,14 +201,12 @@ class NotificationService with WidgetsBindingObserver {
       await prefs.setString('device_push_token', pushToken);
 
       final supabase = Supabase.instance.client;
-      if (supabase.auth.currentUser != null) {
-        await supabase.from('users').update({
-          'push_token': pushToken,
-          'fcm_token': pushToken,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', userId);
-        debugPrint('[NotificationService] 📱 OneSignal/Push token veritabanında users/$userId güncellendi: $pushToken');
-      }
+      await supabase.from('users').update({
+        'push_token': pushToken,
+        'fcm_token': pushToken,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', userId);
+      debugPrint('[NotificationService] 📱 OneSignal/Push token veritabanında users/$userId güncellendi: $pushToken');
     } catch (e) {
       debugPrint('[NotificationService] ❌ Push token kaydetme hatası: $e');
     }
@@ -239,6 +237,7 @@ class NotificationService with WidgetsBindingObserver {
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
       final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
+        'target_channel': 'push',
         'include_aliases': {
           'external_id': [receiverId.toLowerCase(), receiverId],
         },
@@ -247,12 +246,12 @@ class NotificationService with WidgetsBindingObserver {
         'priority': 10,
         'android_priority': 5,
         'headings': {
-          'tr': '💬 $senderName',
           'en': '💬 $senderName',
+          'tr': '💬 $senderName',
         },
         'contents': {
-          'tr': content.trim().isNotEmpty ? content : 'Yeni mesajınız var',
           'en': content.trim().isNotEmpty ? content : 'You have a new message',
+          'tr': content.trim().isNotEmpty ? content : 'Yeni mesajınız var',
         },
         'data': {
           'chat_id': senderId ?? '',
@@ -267,8 +266,8 @@ class NotificationService with WidgetsBindingObserver {
         'mutable_content': true,
         'ios_interruption_level': 'time-sensitive',
         'android_sound': 'default',
-        'small_icon': 'launcher_icon',
-        'large_icon': 'launcher_icon',
+        'small_icon': 'ic_stat_onesignal_default',
+        'large_icon': 'ic_launcher',
         'android_accent_color': 'FF8B5CF6',
         'android_channel_id': 'high_importance_channel',
         'apns_priority': 10,
@@ -289,7 +288,7 @@ class NotificationService with WidgetsBindingObserver {
         body: jsonEncode(payload),
       );
 
-      debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode}');
+      debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode} - ${response.body}');
     } catch (e) {
       debugPrint('[NotificationService] ❌ OneSignal Push gönderme hatası: $e');
     }
@@ -317,6 +316,7 @@ class NotificationService with WidgetsBindingObserver {
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
       final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
+        'target_channel': 'push',
         'include_aliases': {
           'external_id': [receiverId.toLowerCase(), receiverId],
         },
@@ -325,12 +325,12 @@ class NotificationService with WidgetsBindingObserver {
         'priority': 10,
         'android_priority': 5,
         'headings': {
-          'tr': '⚡ Yeni Eşleşme İsteği!',
           'en': '⚡ New Match Request!',
+          'tr': '⚡ Yeni Eşleşme İsteği!',
         },
         'contents': {
-          'tr': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
           'en': '$senderName sent you a match request!',
+          'tr': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
         },
         'data': {
           'type': 'match_request',
@@ -342,8 +342,8 @@ class NotificationService with WidgetsBindingObserver {
         'mutable_content': true,
         'ios_interruption_level': 'time-sensitive',
         'android_sound': 'default',
-        'small_icon': 'launcher_icon',
-        'large_icon': 'launcher_icon',
+        'small_icon': 'ic_stat_onesignal_default',
+        'large_icon': 'ic_launcher',
         'android_accent_color': 'FF8B5CF6',
         'android_channel_id': 'high_importance_channel',
         'apns_priority': 10,
@@ -355,7 +355,7 @@ class NotificationService with WidgetsBindingObserver {
         payload['include_player_ids'] = [receiverPushToken];
       }
 
-      await http.post(
+      final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -363,7 +363,7 @@ class NotificationService with WidgetsBindingObserver {
         },
         body: jsonEncode(payload),
       );
-      debugPrint('[NotificationService] ⚡ Eşleşme isteği bildirimi gönderildi -> $receiverId');
+      debugPrint('[NotificationService] ⚡ Eşleşme isteği bildirimi gönderildi -> $receiverId: status ${response.statusCode} - ${response.body}');
     } catch (e) {
       debugPrint('[NotificationService] ⚠️ Eşleşme isteği bildirim hatası: $e');
     }
