@@ -591,7 +591,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final content = payload['content']?.toString() ?? '';
       final msgId = payload['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = payload['created_at']?.toString();
-      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toLocal() ?? DateTime.now() : DateTime.now();
 
       if (content.trim().isEmpty) return;
 
@@ -637,7 +637,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final content = record['content']?.toString() ?? record['message']?.toString() ?? '';
       final msgId = record['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
       final createdAtStr = record['created_at']?.toString();
-      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+      final timestamp = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toLocal() ?? DateTime.now() : DateTime.now();
 
       if (content.trim().isEmpty) return;
 
@@ -1418,7 +1418,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                 receiverId: msg['receiver_id']?.toString(),
                 text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
                 timestamp: msg['created_at'] != null
-                    ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+                    ? DateTime.tryParse(msg['created_at'].toString())?.toLocal() ?? DateTime.now()
                     : DateTime.now(),
                 status: calculatedStatus,
                 replyToSenderName: parsed.replySender,
@@ -1477,7 +1477,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             receiverId: receiver,
             text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
             timestamp: msg['created_at'] != null
-                ? DateTime.tryParse(msg['created_at'].toString()) ?? DateTime.now()
+                ? DateTime.tryParse(msg['created_at'].toString())?.toLocal() ?? DateTime.now()
                 : DateTime.now(),
             status: calculatedStatus,
             replyToSenderName: parsed.replySender,
@@ -1980,7 +1980,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       if (insertedRow != null) {
         final realId = insertedRow['id']?.toString();
         final createdAtStr = insertedRow['created_at']?.toString();
-        final realTs = createdAtStr != null ? DateTime.tryParse(createdAtStr) ?? DateTime.now() : DateTime.now();
+        final realTs = createdAtStr != null ? DateTime.tryParse(createdAtStr)?.toLocal() ?? DateTime.now() : DateTime.now();
 
         if (realId != null && realId.isNotEmpty) {
           final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase());

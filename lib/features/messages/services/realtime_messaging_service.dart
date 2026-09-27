@@ -25,7 +25,7 @@ class RealtimeMessagingService {
                 id: m['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
                 senderId: m['sender_id']?.toString() ?? '',
                 text: m['content']?.toString() ?? m['message']?.toString() ?? '',
-                timestamp: m['created_at'] != null ? DateTime.parse(m['created_at']) : DateTime.now(),
+                timestamp: m['created_at'] != null ? (DateTime.tryParse(m['created_at'].toString())?.toLocal() ?? DateTime.now()) : DateTime.now(),
               );
             }).toList();
           });
@@ -48,7 +48,7 @@ class RealtimeMessagingService {
         'sender_id': senderId,
         'receiver_id': receiverId,
         'content': messageText.trim(),
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
       NotificationService().showMessageNotification(

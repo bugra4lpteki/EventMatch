@@ -329,13 +329,14 @@ class _MessagesScreenState extends State<MessagesScreen> {
 
     String timeStr = '';
     if (lastMsg != null) {
+      final localTs = lastMsg.timestamp.toLocal();
       final now = DateTime.now();
-      if (lastMsg.timestamp.day == now.day &&
-          lastMsg.timestamp.month == now.month &&
-          lastMsg.timestamp.year == now.year) {
-        timeStr = '${lastMsg.timestamp.hour.toString().padLeft(2, '0')}:${lastMsg.timestamp.minute.toString().padLeft(2, '0')}';
+      if (localTs.day == now.day &&
+          localTs.month == now.month &&
+          localTs.year == now.year) {
+        timeStr = '${localTs.hour.toString().padLeft(2, '0')}:${localTs.minute.toString().padLeft(2, '0')}';
       } else {
-        timeStr = '${lastMsg.timestamp.day}/${lastMsg.timestamp.month}';
+        timeStr = '${localTs.day}/${localTs.month}';
       }
     }
 

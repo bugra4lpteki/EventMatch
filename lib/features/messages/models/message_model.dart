@@ -131,7 +131,7 @@ class MessageModel {
       'sender_id': senderId,
       'receiver_id': receiverId,
       'content': text,
-      'created_at': timestamp.toIso8601String(),
+      'created_at': timestamp.toUtc().toIso8601String(),
       'status': status.name,
       'is_read': status == MessageStatus.read,
       'reactions': reactions,
@@ -273,8 +273,10 @@ class MessageModel {
       receiverId: map['receiver_id']?.toString(),
       text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawContent,
       timestamp: map['created_at'] != null
-          ? DateTime.tryParse(map['created_at'].toString()) ?? DateTime.now()
-          : (map['timestamp'] != null ? DateTime.tryParse(map['timestamp'].toString()) ?? DateTime.now() : DateTime.now()),
+          ? DateTime.tryParse(map['created_at'].toString())?.toLocal() ?? DateTime.now()
+          : (map['timestamp'] != null
+              ? DateTime.tryParse(map['timestamp'].toString())?.toLocal() ?? DateTime.now()
+              : DateTime.now()),
       status: parsedStatus,
       reactions: reactionsMap,
       replyToMessageId: replyId,

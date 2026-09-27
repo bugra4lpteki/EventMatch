@@ -1091,8 +1091,10 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     final audioDuration = msg['audioDuration'] != null ? int.tryParse(msg['audioDuration'].toString()) ?? 0 : 0;
     final senderColor = _getStreamerColor(senderName);
     final timeStr = msg['time'] is DateTime
-        ? DateFormat('HH:mm').format(msg['time'] as DateTime)
-        : DateFormat('HH:mm').format(DateTime.now());
+        ? DateFormat('HH:mm').format((msg['time'] as DateTime).toLocal())
+        : (msg['time'] != null
+            ? DateFormat('HH:mm').format(DateTime.tryParse(msg['time'].toString())?.toLocal() ?? DateTime.now())
+            : DateFormat('HH:mm').format(DateTime.now()));
 
     // Resolve user avatar
     String? userAvatar = msg['userAvatar']?.toString();

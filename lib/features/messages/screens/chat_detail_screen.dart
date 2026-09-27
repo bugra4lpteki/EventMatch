@@ -1015,19 +1015,22 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
+    final localA = a.toLocal();
+    final localB = b.toLocal();
+    return localA.year == localB.year && localA.month == localB.month && localA.day == localB.day;
   }
 
   String _formatDateHeader(DateTime date) {
+    final localDate = date.toLocal();
     final now = DateTime.now();
-    if (_isSameDay(date, now)) {
+    if (_isSameDay(localDate, now)) {
       return 'Bugün';
-    } else if (_isSameDay(date, now.subtract(const Duration(days: 1)))) {
+    } else if (_isSameDay(localDate, now.subtract(const Duration(days: 1)))) {
       return 'Dün';
-    } else if (date.year == now.year) {
-      return DateFormat('d MMMM', 'tr_TR').format(date);
+    } else if (localDate.year == now.year) {
+      return DateFormat('d MMMM', 'tr_TR').format(localDate);
     } else {
-      return DateFormat('d MMMM yyyy', 'tr_TR').format(date);
+      return DateFormat('d MMMM yyyy', 'tr_TR').format(localDate);
     }
   }
 
@@ -1248,7 +1251,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     MockMessageService msgService,
     String currentChatId,
   ) {
-    final timeStr = DateFormat('HH:mm').format(message.timestamp);
+    final timeStr = DateFormat('HH:mm').format(message.timestamp.toLocal());
 
     // 1. FOTOĞRAF MESAJI
     if (message.isImage && message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
