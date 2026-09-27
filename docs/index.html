@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EventMatch — Etkinlikleri Keşfet, Tanış ve Sosyalleş</title>
+  <meta name="description" content="EventMatch ile şehrindeki konser, festival ve tiyatro etkinliklerini keşfet, aynı etkinliğe giden insanlarla anında eşleş ve sosyalleş!">
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0A0D14;
+      --bg-card: rgba(22, 27, 38, 0.7);
+      --bg-card-hover: rgba(30, 38, 54, 0.85);
+      --primary: #8B5CF6;
+      --primary-light: #A78BFA;
+      --accent: #EC4899;
+      --accent-gradient: linear-gradient(135deg, #8B5CF6 0%, #EC4899 100%);
+      --text-main: #F3F4F6;
+      --text-muted: #9CA3AF;
+      --border-color: rgba(255, 255, 255, 0.08);
+      --glow-purple: 0 0 50px rgba(139, 92, 246, 0.25);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+      color: #FFFFFF;
+    }
+
+    /* Ambient Glow Backgrounds */
+    .glow-orb-1 {
+      position: absolute;
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.18) 0%, rgba(10, 13, 20, 0) 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .glow-orb-2 {
+      position: absolute;
+      top: 600px;
+      right: -200px;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(236, 72, 153, 0.12) 0%, rgba(10, 13, 20, 0) 70%);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Navigation */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(10, 13, 20, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .nav-container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-box {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+    }
+
+    .logo-img {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      object-fit: cover;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+    }
+
+    .logo-text {
+      font-size: 1.5rem;
+      font-weight: 800;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.5px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: color 0.2s ease;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-main);
+    }
+
+    .btn-cta {
+      background: var(--accent-gradient);
+      color: white;
+      padding: 0.6rem 1.4rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cta:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(236, 72, 153, 0.45);
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      z-index: 10;
+      max-width: 900px;
+      margin: 4.5rem auto 3rem auto;
+      text-align: center;
+      padding: 0 1.5rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      color: var(--primary-light);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+    }
+
+    .hero h1 {
+      font-size: 3.25rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+      letter-spacing: -1px;
+    }
+
+    .hero h1 span {
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero p {
+      font-size: 1.2rem;
+      color: var(--text-muted);
+      margin-bottom: 2.5rem;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1.25rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+      padding: 0.75rem 1.6rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Features Grid */
+    .features-section {
+      position: relative;
+      z-index: 10;
+      max-width: 1200px;
+      margin: 4rem auto;
+      padding: 0 1.5rem;
+    }
+
+    .section-title {
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .section-title h2 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title p {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 20px;
+      padding: 2rem;
+      transition: all 0.3s ease;
+      backdrop-filter: blur(12px);
+    }
+
+    .card:hover {
+      background: var(--bg-card-hover);
+      transform: translateY(-4px);
+      border-color: rgba(139, 92, 246, 0.3);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: rgba(139, 92, 246, 0.15);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.6rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .card h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 0.6rem;
+    }
+
+    .card p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+
+    /* Security Highlight Banner */
+    .security-banner {
+      position: relative;
+      z-index: 10;
+      max-width: 1000px;
+      margin: 2rem auto 5rem auto;
+      padding: 2.5rem;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(236, 72, 153, 0.08) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .security-text h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .security-text p {
+      color: var(--text-muted);
+      max-width: 600px;
+      font-size: 0.95rem;
+    }
+
+    /* Footer */
+    footer {
+      margin-top: auto;
+      background: rgba(10, 13, 20, 0.95);
+      border-top: 1px solid var(--border-color);
+      padding: 3rem 2rem 2rem 2rem;
+      position: relative;
+      z-index: 10;
+    }
+
+    .footer-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--primary-light);
+    }
+
+    .footer-bottom {
+      max-width: 1200px;
+      margin: 1.5rem auto 0 auto;
+      text-align: center;
+      color: #6B7280;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 {
+        font-size: 2.25rem;
+      }
+      .nav-links {
+        display: none;
+      }
+      .security-banner {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="glow-orb-1"></div>
+  <div class="glow-orb-2"></div>
+
+  <!-- Header -->
+  <header>
+    <div class="nav-container">
+      <a href="index.html" class="logo-box">
+        <img src="assets/logo.png" alt="EventMatch Logo" class="logo-img">
+        <span class="logo-text">EventMatch</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features">Özellikler</a>
+        <a href="#security">Güvenlik</a>
+        <a href="privacy.html">Gizlilik Politikası</a>
+        <a href="terms.html">Kullanım Koşulları</a>
+      </nav>
+      <a href="privacy.html" class="btn-cta">Gizlilik & Güvenlik</a>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <main>
+    <section class="hero">
+      <div class="badge">
+        <span>🎉</span> Türkiye'nin En Dinamik Sosyal Etkinlik Platformu
+      </div>
+      <h1>Etkinlikleri Keşfet, <span>Aynı Tutkuyu Paylaşanlarla</span> Tanış!</h1>
+      <p>
+        Konsere, festivale veya tiyatroya tek başına gitmek istemiyor musun? 
+        EventMatch ile şehrindeki yüzlerce etkinliği keşfet, gidenlerle güvenle eşleş ve sosyalleş!
+      </p>
+      <div class="hero-actions">
+        <a href="privacy.html" class="btn-cta">Gizlilik Politikası'nı İncele</a>
+        <a href="terms.html" class="btn-secondary">Kullanım Şartları</a>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section class="features-section" id="features">
+      <div class="section-title">
+        <h2>Öne Çıkan Özellikler</h2>
+        <p>EventMatch sana yepyeni bir sosyal deneyim sunmak için tasarlandı.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">📍</div>
+          <h3>Canlı Etkinlik Keşfi</h3>
+          <p>İstanbul, Ankara, İzmir ve tüm Türkiye'deki güncel konserler, festivaller, tiyatrolar tek ekranda elinizin altında.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔥</div>
+          <h3>Etkinlik Bazlı Eşleşme</h3>
+          <p>Katılacağın etkinliğe giden diğer insanları gör, ortak zevklerine göre profilleri kaydır ve karşılıklı beğeniyle anında eşleş.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📡</div>
+          <h3>Mekan Konum Radarı</h3>
+          <p>Festival veya konser alanına vardığında radarını açarak yakınındaki diğer EventMatch kullanıcılarını canlı keşfet.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">💬</div>
+          <h3>Güvenli & Anlık Sohbet</h3>
+          <p>Eşleştiğin kişilerle anında mesajlaş, etkinlik planları yap. İstemediğin kullanıcıları tek dokunuşla engelle veya şikayet et.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Security Banner -->
+    <section class="security-banner" id="security">
+      <div class="security-text">
+        <h3>🛡️ Gizlilik ve Güvenliğiniz Önceliğimizdir</h3>
+        <p>
+          EventMatch; Google OAuth güvencesi, Supabase RLS koruması, 2 Adımlı Doğrulama ve Hayalet Modu (Ghost Mode) ile kişisel verilerinizi en üst düzeyde korur.
+        </p>
+      </div>
+      <div>
+        <a href="privacy.html" class="btn-cta">Gizlilik Sözleşmesi</a>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="logo-box">
+        <img src="assets/logo.png" alt="EventMatch Logo" class="logo-img" style="width: 32px; height: 32px;">
+        <span class="logo-text" style="font-size: 1.25rem;">EventMatch</span>
+      </div>
+      <div class="footer-links">
+        <a href="index.html">Ana Sayfa</a>
+        <a href="privacy.html">Gizlilik Politikası (Privacy Policy)</a>
+        <a href="terms.html">Kullanım Şartları (Terms of Service)</a>
+        <a href="mailto:bugra4lpteki@gmail.com">İletişim: bugra4lpteki@gmail.com</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      &copy; 2026 EventMatch. Tüm hakları saklıdır.
+    </div>
+  </footer>
+</body>
+</html>
