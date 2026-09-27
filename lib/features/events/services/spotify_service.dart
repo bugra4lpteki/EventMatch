@@ -275,6 +275,34 @@ class SpotifyService {
                 }
               }
             }
+            // 2. veya 3. parçada hala previewUrl boşsa, sanatçının Universal Deezer kataloğundan stüdyo önizlemesiyle doldur
+            List<SpotifyTrack>? universalBackup;
+            for (var i = 0; i < tracks.length; i++) {
+              if (tracks[i].previewUrl == null || tracks[i].previewUrl!.isEmpty) {
+                universalBackup ??= await _fetchTracksFromUniversalApi(cleanName);
+                if (universalBackup.isNotEmpty && i < universalBackup.length && universalBackup[i].previewUrl != null) {
+                  tracks[i] = SpotifyTrack(
+                    id: tracks[i].id,
+                    title: tracks[i].title,
+                    artistName: tracks[i].artistName,
+                    albumCoverUrl: tracks[i].albumCoverUrl.isNotEmpty ? tracks[i].albumCoverUrl : universalBackup[i].albumCoverUrl,
+                    previewUrl: universalBackup[i].previewUrl,
+                    spotifyUrl: tracks[i].spotifyUrl,
+                    durationMs: tracks[i].durationMs,
+                  );
+                } else if (universalBackup.isNotEmpty && universalBackup.first.previewUrl != null) {
+                  tracks[i] = SpotifyTrack(
+                    id: tracks[i].id,
+                    title: tracks[i].title,
+                    artistName: tracks[i].artistName,
+                    albumCoverUrl: tracks[i].albumCoverUrl,
+                    previewUrl: universalBackup.first.previewUrl,
+                    spotifyUrl: tracks[i].spotifyUrl,
+                    durationMs: tracks[i].durationMs,
+                  );
+                }
+              }
+            }
             _topTracksCache[cacheKey] = tracks;
             return tracks;
           }
@@ -341,12 +369,19 @@ class SpotifyService {
   /// Asla SoundHelix veya alakasız sentetik ritim çalmaz!
   Future<String?> resolveAudioPreview(String artistName, String trackTitle) async {
     final cleanArtist = _cleanArtistName(artistName);
-    final cleanTitle = trackTitle.split('(').first.split('-').first.trim();
+    final cleanTitle = trackTitle
+        .split('(').first
+        .split('-').first
+        .replaceAll('feat.', '')
+        .replaceAll('ft.', '')
+        .replaceAll('Feat.', '')
+        .replaceAll('Ft.', '')
+        .trim();
     final query = '$cleanArtist $cleanTitle'.trim();
     if (query.isEmpty) return null;
 
     final cacheKey = 'preview_${query.toLowerCase()}';
-    if (_previewCache.containsKey(cacheKey)) {
+    if (_previewCache.containsKey(cacheKey) && _previewCache[cacheKey]!.isNotEmpty) {
       return _previewCache[cacheKey];
     }
 
@@ -366,35 +401,92 @@ class SpotifyService {
       }
     }
 
-    // 1. iTunes Arama Motoru (Yüksek kaliteli m4a/aac resmi Apple stüdyo önizlemesi)
+    // 1. iTunes Arama Motoru (TR)
     try {
-      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=1&country=TR');
+      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5&country=TR');
       final res = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final results = data['results'] as List?;
         if (results != null && results.isNotEmpty) {
-          final p = results[0]['previewUrl'] as String?;
-          if (p != null && p.isNotEmpty) {
-            _previewCache[cacheKey] = p;
-            return p;
+          for (var r in results) {
+            final p = r['previewUrl'] as String?;
+            if (p != null && p.isNotEmpty) {
+              _previewCache[cacheKey] = p;
+              return p;
+            }
           }
         }
       }
     } catch (_) {}
 
-    // 2. Deezer Arama Motoru (Resmi stüdyo mp3 önizlemesi)
+    // 2. iTunes Global Arama Motoru (Ülke kısıtlamasız arama)
     try {
-      final dUrl = Uri.parse('https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=1');
+      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5');
+      final res = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final results = data['results'] as List?;
+        if (results != null && results.isNotEmpty) {
+          for (var r in results) {
+            final p = r['previewUrl'] as String?;
+            if (p != null && p.isNotEmpty) {
+              _previewCache[cacheKey] = p;
+              return p;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 3. Deezer Arama Motoru (Doğrudan artist + title ile)
+    try {
+      final dUrl = Uri.parse('https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=5');
       final dRes = await http.get(dUrl).timeout(const Duration(seconds: 4));
       if (dRes.statusCode == 200) {
         final dData = jsonDecode(dRes.body);
         final dItems = dData['data'] as List?;
         if (dItems != null && dItems.isNotEmpty) {
-          final dp = dItems[0]['preview'] as String?;
-          if (dp != null && dp.isNotEmpty) {
-            _previewCache[cacheKey] = dp;
-            return dp;
+          for (var item in dItems) {
+            final dp = item['preview'] as String?;
+            if (dp != null && dp.isNotEmpty) {
+              _previewCache[cacheKey] = dp;
+              return dp;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // 4. Deezer Parça Arama (Sadece şarkı adıyla arama)
+    if (cleanTitle.isNotEmpty && cleanTitle != cleanArtist) {
+      try {
+        final dUrl = Uri.parse('https://api.deezer.com/search/track?q=${Uri.encodeComponent(cleanTitle)}&limit=5');
+        final dRes = await http.get(dUrl).timeout(const Duration(seconds: 4));
+        if (dRes.statusCode == 200) {
+          final dData = jsonDecode(dRes.body);
+          final dItems = dData['data'] as List?;
+          if (dItems != null && dItems.isNotEmpty) {
+            for (var item in dItems) {
+              final dp = item['preview'] as String?;
+              if (dp != null && dp.isNotEmpty) {
+                _previewCache[cacheKey] = dp;
+                return dp;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // 5. Sanatçı Top Parçalarından Yedek Önizleme
+    try {
+      final artistTracks = await _fetchTracksFromUniversalApi(cleanArtist);
+      if (artistTracks.isNotEmpty) {
+        for (var t in artistTracks) {
+          if (t.previewUrl != null && t.previewUrl!.isNotEmpty) {
+            _previewCache[cacheKey] = t.previewUrl!;
+            return t.previewUrl!;
           }
         }
       }

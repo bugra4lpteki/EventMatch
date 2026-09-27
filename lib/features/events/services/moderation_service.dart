@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,15 +10,33 @@ class ModerationService extends ChangeNotifier {
     _loadBlockedUsers();
   }
 
-  final SupabaseClient _supabase = Supabase.instance.client;
+  SupabaseClient? get _supabase {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
   final Set<String> _blockedUserIds = {};
+  final Map<String, String> _blockedUserNames = {};
 
   Set<String> get blockedUserIds => Set.unmodifiable(_blockedUserIds);
+  Map<String, String> get blockedUserNames => Map.unmodifiable(_blockedUserNames);
 
   bool isBlocked(String userId) {
     if (userId.trim().isEmpty) return false;
     final lower = userId.toLowerCase().trim();
     return _blockedUserIds.any((id) => id.toLowerCase().trim() == lower);
+  }
+
+  String getBlockedUserName(String userId) {
+    final lower = userId.toLowerCase().trim();
+    for (var entry in _blockedUserNames.entries) {
+      if (entry.key.toLowerCase().trim() == lower) {
+        return entry.value;
+      }
+    }
+    return '';
   }
 
   Future<void> _loadBlockedUsers() async {
@@ -29,19 +48,32 @@ class ModerationService extends ChangeNotifier {
           _blockedUserIds.add(id.trim());
         }
       }
+
+      final namesJson = prefs.getString('blocked_user_names');
+      if (namesJson != null && namesJson.isNotEmpty) {
+        try {
+          final Map<String, dynamic> decoded = jsonDecode(namesJson);
+          decoded.forEach((k, v) {
+            if (k.isNotEmpty && v.toString().isNotEmpty) {
+              _blockedUserNames[k] = v.toString();
+            }
+          });
+        } catch (_) {}
+      }
       notifyListeners();
     } catch (_) {}
 
-    // Also fetch from Supabase user_blocks table (both blocker and blocked directions)
     await syncFromSupabase();
   }
 
   Future<void> syncFromSupabase() async {
     try {
-      final currentUserId = _supabase.auth.currentUser?.id;
+      final client = _supabase;
+      if (client == null) return;
+      final currentUserId = client.auth.currentUser?.id;
       if (currentUserId == null || currentUserId.isEmpty) return;
 
-      final res = await _supabase
+      final res = await client
           .from('user_blocks')
           .select('blocker_id, blocked_id')
           .or('blocker_id.eq.$currentUserId,blocked_id.eq.$currentUserId');
@@ -57,9 +89,34 @@ class ModerationService extends ChangeNotifier {
         }
       }
 
+      final idsWithoutNames = <String>[];
+      for (var id in _blockedUserIds) {
+        if (getBlockedUserName(id).isEmpty) {
+          idsWithoutNames.add(id);
+        }
+      }
+
+      if (idsWithoutNames.isNotEmpty) {
+        try {
+          final usersRes = await client
+              .from('users')
+              .select('id, name')
+              .inFilter('id', idsWithoutNames);
+          for (var u in usersRes) {
+            final uId = u['id']?.toString() ?? '';
+            final uName = u['name']?.toString() ?? '';
+            if (uId.isNotEmpty && uName.isNotEmpty) {
+              _blockedUserNames[uId] = uName;
+              updated = true;
+            }
+          }
+        } catch (_) {}
+      }
+
       if (updated) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setStringList('blocked_user_ids', _blockedUserIds.toList());
+        await prefs.setString('blocked_user_names', jsonEncode(_blockedUserNames));
         notifyListeners();
       }
     } catch (e) {
@@ -67,22 +124,47 @@ class ModerationService extends ChangeNotifier {
     }
   }
 
+  Future<String> resolveUserName(String userId) async {
+    final existing = getBlockedUserName(userId);
+    if (existing.isNotEmpty && existing != userId) return existing;
+
+    try {
+      final client = _supabase;
+      if (client == null) return 'Kullanıcı';
+      final u = await client.from('users').select('name').eq('id', userId).maybeSingle();
+      final n = u?['name']?.toString();
+      if (n != null && n.trim().isNotEmpty) {
+        _blockedUserNames[userId] = n.trim();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('blocked_user_names', jsonEncode(_blockedUserNames));
+        notifyListeners();
+        return n.trim();
+      }
+    } catch (_) {}
+    return 'Kullanıcı';
+  }
+
   Future<void> blockUser(String userId, {String? userName}) async {
     final cleanId = userId.trim();
     if (cleanId.isEmpty) return;
     _blockedUserIds.add(cleanId);
+    if (userName != null && userName.trim().isNotEmpty && userName != cleanId) {
+      _blockedUserNames[cleanId] = userName.trim();
+    }
     notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('blocked_user_ids', _blockedUserIds.toList());
+      await prefs.setString('blocked_user_names', jsonEncode(_blockedUserNames));
     } catch (_) {}
 
     // Persist to Supabase if authenticated
     try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId != null) {
-        await _supabase.from('user_blocks').upsert({
+      final client = _supabase;
+      final currentUserId = client?.auth.currentUser?.id;
+      if (client != null && currentUserId != null) {
+        await client.from('user_blocks').upsert({
           'blocker_id': currentUserId,
           'blocked_id': cleanId,
           'created_at': DateTime.now().toIso8601String(),
@@ -95,17 +177,21 @@ class ModerationService extends ChangeNotifier {
     final cleanId = userId.trim();
     final lower = cleanId.toLowerCase();
     _blockedUserIds.removeWhere((id) => id.toLowerCase().trim() == lower);
+    _blockedUserNames.remove(cleanId);
+    _blockedUserNames.removeWhere((k, v) => k.toLowerCase().trim() == lower);
     notifyListeners();
 
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList('blocked_user_ids', _blockedUserIds.toList());
+      await prefs.setString('blocked_user_names', jsonEncode(_blockedUserNames));
     } catch (_) {}
 
     try {
-      final currentUserId = _supabase.auth.currentUser?.id;
-      if (currentUserId != null) {
-        await _supabase
+      final client = _supabase;
+      final currentUserId = client?.auth.currentUser?.id;
+      if (client != null && currentUserId != null) {
+        await client
             .from('user_blocks')
             .delete()
             .or('and(blocker_id.eq.$currentUserId,blocked_id.eq.$cleanId),and(blocker_id.eq.$cleanId,blocked_id.eq.$currentUserId)');
@@ -120,22 +206,25 @@ class ModerationService extends ChangeNotifier {
     String? details,
   }) async {
     try {
-      final currentUserId = _supabase.auth.currentUser?.id ?? 'guest_user';
+      final client = _supabase;
+      final currentUserId = client?.auth.currentUser?.id ?? 'guest_user';
       
       // Save report in Supabase
       try {
-        await _supabase.from('user_reports').insert({
-          'reporter_id': currentUserId,
-          'reported_user_id': reportedUserId,
-          'reported_user_name': reportedUserName,
-          'reason': reason,
-          'details': details ?? '',
-          'created_at': DateTime.now().toIso8601String(),
-          'status': 'pending_review',
-        });
+        if (client != null) {
+          await client.from('user_reports').insert({
+            'reporter_id': currentUserId,
+            'reported_user_id': reportedUserId,
+            'reported_user_name': reportedUserName,
+            'reason': reason,
+            'details': details ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'status': 'pending_review',
+          });
+        }
       } catch (_) {}
 
-      // Automatically offer to block the user as well for safety
+      // Automatically block the user as well for safety
       await blockUser(reportedUserId, userName: reportedUserName);
       return true;
     } catch (e) {

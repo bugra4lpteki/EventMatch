@@ -788,10 +788,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       if (optIndex >= 0) {
         final old = chat.messages[optIndex];
+        final preservedStatus = old.status == MessageStatus.read ? MessageStatus.read : MessageStatus.sent;
         chat.messages[optIndex] = old.copyWith(
           id: msgId,
           timestamp: timestamp,
-          status: MessageStatus.sent, // DB onayladı: Tek gri tık
+          status: preservedStatus,
         );
         _deduplicateMessagesList(chat.messages);
         _saveChatsToLocalStorage();
@@ -814,13 +815,16 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       final parsed = MessageModel.parseEncodedContent(content);
+      final isActiveInThisChat = NotificationService().activeChatId?.toLowerCase().trim() == lowerPartnerId;
+      final initialStatus = isActiveInThisChat ? MessageStatus.read : MessageStatus.delivered;
+
       final newMsg = MessageModel(
         id: msgId,
         senderId: senderId,
         receiverId: receiverId,
         text: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
         timestamp: timestamp,
-        status: MessageStatus.delivered,
+        status: initialStatus,
         replyToSenderName: parsed.replySender,
         replyToText: parsed.replyText,
         mediaUrl: parsed.mediaUrl,
@@ -831,15 +835,33 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       _deduplicateMessagesList(chat.messages);
 
       if (lowerSender != lowerCurrent) {
-        chat.unreadCount += 1;
-        if (!chat.isMuted) {
-          NotificationService().showMessageNotification(
-            chatId: partnerId,
-            senderName: chat.participant.name,
-            message: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
-            unreadCount: chat.unreadCount,
-            messageId: msgId,
-          );
+        if (isActiveInThisChat) {
+          // Kullanıcı şu an bu sohbette mesajı canlı olarak okuyor!
+          chat.unreadCount = 0;
+          try {
+            _broadcastChannel?.sendBroadcastMessage(
+              event: 'messages_read',
+              payload: {
+                'chat_id': chat.id,
+                'reader_id': currentUserId,
+                'partner_id': chat.participant.id,
+              },
+            );
+          } catch (_) {}
+          try {
+            _supabase.from('messages').update({'is_read': true}).eq('id', msgId);
+          } catch (_) {}
+        } else {
+          chat.unreadCount += 1;
+          if (!chat.isMuted) {
+            NotificationService().showMessageNotification(
+              chatId: partnerId,
+              senderName: chat.participant.name,
+              message: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
+              unreadCount: chat.unreadCount,
+              messageId: msgId,
+            );
+          }
         }
       }
       _sortChats();
@@ -904,7 +926,16 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   bool isFollowing(String userId) => _followingUserIds.contains(userId);
 
-  void toggleBlockUser(String userId) {
+  void blockUser(String userId, {String? userName}) {
+    final cleanId = userId.trim();
+    if (cleanId.isEmpty) return;
+    _blockedUserIds.add(cleanId);
+    ModerationService().blockUser(cleanId, userName: userName);
+    endMatchAndRemoveChat('', cleanId);
+    notifyListeners();
+  }
+
+  void toggleBlockUser(String userId, {String? userName}) {
     final cleanId = userId.trim();
     if (cleanId.isEmpty) return;
     if (isBlocked(cleanId)) {
@@ -912,7 +943,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       ModerationService().unblockUser(cleanId);
     } else {
       _blockedUserIds.add(cleanId);
-      ModerationService().blockUser(cleanId);
+      ModerationService().blockUser(cleanId, userName: userName);
       // Clean up chat and active match
       endMatchAndRemoveChat('', cleanId);
     }
@@ -1113,8 +1144,13 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             // 1. Zaten aynı kesin veritabanı ID'si varsa, durumunu (okundu/iletildi) güncelle
             final exactIdIndex = chat.messages.indexWhere((m) => m.id == mId);
             if (exactIdIndex >= 0) {
-              if (chat.messages[exactIdIndex].status != calculatedStatus) {
-                chat.messages[exactIdIndex].status = calculatedStatus;
+              final currentStatus = chat.messages[exactIdIndex].status;
+              // Yerelde zaten okundu olarak işaretlenmişse, sunucudaki eski/gecikmiş unread durumu yerel okundu bilgisini ezmesin
+              final effectiveStatus = (currentStatus == MessageStatus.read && calculatedStatus != MessageStatus.read)
+                  ? MessageStatus.read
+                  : calculatedStatus;
+              if (chat.messages[exactIdIndex].status != effectiveStatus) {
+                chat.messages[exactIdIndex].status = effectiveStatus;
                 hasNew = true;
               }
               continue;
@@ -1132,10 +1168,13 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
             if (optIndex >= 0) {
               final old = chat.messages[optIndex];
+              final effectiveStatus = (old.status == MessageStatus.read && calculatedStatus != MessageStatus.read)
+                  ? MessageStatus.read
+                  : calculatedStatus;
               chat.messages[optIndex] = old.copyWith(
                 id: mId,
                 timestamp: ts,
-                status: calculatedStatus,
+                status: effectiveStatus,
               );
               hasNew = true;
               continue;
@@ -1554,14 +1593,17 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                                  (s == lowerPartnerId && (r == lowerCurrent || r.isEmpty));
             if (!isLocalValid) continue;
 
-            // Eğer bu yerel mesaj sunucudan gelen mesajlar arasında zaten varsa kesinlikle tekrar ekleme
-            final alreadyInServer = rawMessages.any((m) =>
+            final existingServerIdx = rawMessages.indexWhere((m) =>
                 m.id == localMsg.id ||
                 (m.senderId.toLowerCase().trim() == s &&
                  m.text.trim() == localMsg.text.trim() &&
                  m.timestamp.difference(localMsg.timestamp).abs().inSeconds < 120));
 
-            if (!alreadyInServer) {
+            if (existingServerIdx >= 0) {
+              if (localMsg.status == MessageStatus.read) {
+                rawMessages[existingServerIdx].status = MessageStatus.read;
+              }
+            } else {
               rawMessages.add(localMsg);
             }
           }
@@ -1570,12 +1612,16 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         final dedupedMessages = List<MessageModel>.from(rawMessages);
         _deduplicateMessagesList(dedupedMessages);
 
+        final int finalUnread = (existingChat != null && existingChat.unreadCount == 0)
+            ? 0
+            : (existingChat?.unreadCount ?? 0);
+
         consolidatedChats[lowerPartnerId] = ChatModel(
           id: matchId,
           participant: participant,
           isEventBased: event != null,
           relatedEvent: event,
-          unreadCount: existingChat?.unreadCount ?? 0,
+          unreadCount: finalUnread,
           messages: dedupedMessages,
           expiresAt: expiresByPartner[partnerId],
           isOnline: isUserOnline(partnerId),
@@ -2134,14 +2180,16 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
       // Veritabanında da okundu olarak güncelle
       try {
-        if (currentId.isNotEmpty && chat.participant.id.isNotEmpty) {
+        final pId = chat.participant.id.trim();
+        if (currentId.isNotEmpty && pId.isNotEmpty) {
           await _supabase
               .from('messages')
               .update({'is_read': true})
-              .eq('receiver_id', currentId)
-              .eq('sender_id', chat.participant.id);
+              .or('and(receiver_id.eq.$currentId,sender_id.eq.$pId),and(receiver_id.ilike.$currentId,sender_id.ilike.$pId)');
         }
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('[MessageService] ⚠️ markAsRead DB update error: $e');
+      }
     }
   }
 

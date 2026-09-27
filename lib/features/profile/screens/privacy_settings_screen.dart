@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -128,7 +129,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           ListenableBuilder(
             listenable: ModerationService(),
             builder: (context, _) {
-              final blockedIds = ModerationService().blockedUserIds.toList();
+              final moderation = ModerationService();
+              final blockedIds = moderation.blockedUserIds.toList();
               return Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -152,33 +154,52 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                         separatorBuilder: (_, __) => const Divider(color: Colors.white10, height: 1),
                         itemBuilder: (context, index) {
                           final id = blockedIds[index];
-                          return ListTile(
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent.withValues(alpha: 0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.block, color: Colors.redAccent, size: 18),
-                            ),
-                            title: Text(
-                              'Engellenen Kullanıcı (#$id)',
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            trailing: TextButton(
-                              onPressed: () async {
-                                await ModerationService().unblockUser(id);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Kullanıcının engeli kaldırıldı.')),
-                                  );
-                                }
-                              },
-                              child: const Text(
-                                'Engeli Kaldır',
-                                style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
-                            ),
+                          final storedName = moderation.getBlockedUserName(id);
+
+                          return FutureBuilder<String>(
+                            future: storedName.isNotEmpty ? Future.value(storedName) : moderation.resolveUserName(id),
+                            initialData: storedName.isNotEmpty ? storedName : 'Kullanıcı',
+                            builder: (context, snapshot) {
+                              final displayName = (snapshot.data != null && snapshot.data!.isNotEmpty)
+                                  ? snapshot.data!
+                                  : 'Kullanıcı';
+                              return ListTile(
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(alpha: 0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(Icons.block, color: Colors.redAccent, size: 18),
+                                ),
+                                title: Text(
+                                  displayName,
+                                  style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                ),
+                                subtitle: Text(
+                                  '@${id.length > 8 ? id.substring(0, 8) : id}',
+                                  style: const TextStyle(color: Colors.white38, fontSize: 11),
+                                ),
+                                trailing: TextButton(
+                                  onPressed: () async {
+                                    HapticFeedback.lightImpact();
+                                    await moderation.unblockUser(id);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('$displayName kullanıcısının engeli kaldırıldı.'),
+                                          duration: const Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  child: const Text(
+                                    'Engeli Kaldır',
+                                    style: TextStyle(color: Colors.cyanAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),

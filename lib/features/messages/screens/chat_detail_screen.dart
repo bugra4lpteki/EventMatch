@@ -93,6 +93,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   @override
   void dispose() {
     _messageController.removeListener(_onTextChanged);
+    try {
+      context.read<MockMessageService>().markAsRead(widget.chat.id, partnerId: widget.chat.participant.id);
+    } catch (_) {}
     NotificationService().activeChatId = null;
     _liveSyncTimer?.cancel();
     _typingDebounceTimer?.cancel();
@@ -749,7 +752,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   userId: currentChat.participant.id,
                   userName: currentChat.participant.name,
                   onUserBlocked: () {
-                    msgService.toggleBlockUser(currentChat.participant.id);
+                    msgService.endMatchAndRemoveChat(currentChat.id, currentChat.participant.id);
                     if (mounted) {
                       Navigator.pop(context);
                     }
@@ -761,7 +764,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   userId: currentChat.participant.id,
                   userName: currentChat.participant.name,
                   onUserBlocked: () {
-                    msgService.toggleBlockUser(currentChat.participant.id);
+                    msgService.endMatchAndRemoveChat(currentChat.id, currentChat.participant.id);
                     if (mounted) {
                       Navigator.pop(context);
                     }
@@ -842,7 +845,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () => msgService.toggleBlockUser(currentChat.participant.id),
+                    onPressed: () => msgService.toggleBlockUser(currentChat.participant.id, userName: currentChat.participant.name),
                     child: const Text('Engeli Kaldır', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
                   ),
                 ],
@@ -1467,15 +1470,16 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   }
 
   /// WhatsApp & Telegram Tık İkonları:
-  /// Saat ikonu (Gönderiliyor) -> Tek gri tık (Gönderildi) -> Çift gri tık (İletildi) -> Çift mavi tık (Okundu)
+  /// WhatsApp & Telegram Tık İkonları:
+  /// Saat ikonu (Gönderiliyor) -> Çift soluk gri tık (Gönderildi / İletildi) -> Çift mavi tık (Okundu)
   Widget _buildStatusTick(MessageStatus status) {
     switch (status) {
       case MessageStatus.sending:
         return const Icon(Icons.access_time_rounded, size: 12, color: Colors.white60);
       case MessageStatus.sent:
-        return const Icon(Icons.check_rounded, size: 14, color: Colors.white70);
+        return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white38);
       case MessageStatus.delivered:
-        return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white70);
+        return const Icon(Icons.done_all_rounded, size: 14, color: Colors.white38);
       case MessageStatus.read:
         return const Icon(Icons.done_all_rounded, size: 14, color: Color(0xFF34B7F1));
       case MessageStatus.failed:

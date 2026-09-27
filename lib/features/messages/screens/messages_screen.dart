@@ -323,21 +323,45 @@ class _MessagesScreenState extends State<MessagesScreen> {
     );
   }
 
+  String _formatChatTimestamp(DateTime timestamp) {
+    final localTs = timestamp.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final msgDate = DateTime(localTs.year, localTs.month, localTs.day);
+    final diffDays = today.difference(msgDate).inDays;
+
+    if (diffDays <= 0) {
+      final h = localTs.hour.toString().padLeft(2, '0');
+      final m = localTs.minute.toString().padLeft(2, '0');
+      return '$h:$m';
+    } else if (diffDays == 1) {
+      return 'Dün';
+    } else if (diffDays > 1 && diffDays < 7) {
+      const dayNames = [
+        'Pazartesi',
+        'Salı',
+        'Çarşamba',
+        'Perşembe',
+        'Cuma',
+        'Cumartesi',
+        'Pazar',
+      ];
+      return dayNames[localTs.weekday - 1];
+    } else {
+      final d = localTs.day.toString().padLeft(2, '0');
+      final mo = localTs.month.toString().padLeft(2, '0');
+      final y = localTs.year.toString();
+      return '$d.$mo.$y';
+    }
+  }
+
   Widget _buildSlidableChatTile(BuildContext context, ChatModel chat, MockMessageService service) {
     final lastMsg = chat.lastMessage;
     final isBlocked = service.isBlocked(chat.participant.id);
 
     String timeStr = '';
     if (lastMsg != null) {
-      final localTs = lastMsg.timestamp.toLocal();
-      final now = DateTime.now();
-      if (localTs.day == now.day &&
-          localTs.month == now.month &&
-          localTs.year == now.year) {
-        timeStr = '${localTs.hour.toString().padLeft(2, '0')}:${localTs.minute.toString().padLeft(2, '0')}';
-      } else {
-        timeStr = '${localTs.day}/${localTs.month}';
-      }
+      timeStr = _formatChatTimestamp(lastMsg.timestamp);
     }
 
     return Slidable(
@@ -406,13 +430,17 @@ class _MessagesScreenState extends State<MessagesScreen> {
       ),
       child: ListTile(
         onTap: () {
-          service.markAsRead(chat.id);
+          service.markAsRead(chat.id, partnerId: chat.participant.id);
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => ChatDetailScreen(chat: chat),
             ),
-          );
+          ).then((_) {
+            if (context.mounted) {
+              service.markAsRead(chat.id, partnerId: chat.participant.id);
+            }
+          });
         },
         leading: GestureDetector(
           onTap: () {
@@ -626,13 +654,17 @@ class ArchivedChatsScreen extends StatelessWidget {
                 ),
                 child: ListTile(
                   onTap: () {
-                    service.markAsRead(chat.id);
+                    service.markAsRead(chat.id, partnerId: chat.participant.id);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => ChatDetailScreen(chat: chat),
                       ),
-                    );
+                    ).then((_) {
+                      if (context.mounted) {
+                        service.markAsRead(chat.id, partnerId: chat.participant.id);
+                      }
+                    });
                   },
                   leading: UserAvatar(
                     user: chat.participant,

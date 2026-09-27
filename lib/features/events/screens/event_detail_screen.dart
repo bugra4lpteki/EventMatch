@@ -234,16 +234,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
 
       if (audioUrl == null || audioUrl.isEmpty) {
+        final dynamicList = await SpotifyService().getArtistTopTracks('', artistName: track.artistName);
+        for (var t in dynamicList) {
+          if (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix')) {
+            audioUrl = t.previewUrl;
+            break;
+          }
+        }
+      }
+
+      if (audioUrl == null || audioUrl.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Row(
                 children: [
-                  Icon(Icons.music_off_rounded, color: Colors.white70),
+                  Icon(Icons.music_note_rounded, color: Colors.white70),
                   SizedBox(width: 10),
-                  Expanded(child: Text('Ses önizlemesi yüklenemedi. Spotify üzerinden dinleyebilirsiniz.')),
+                  Expanded(child: Text('Önizleme bulunamadı. Şarkıyı Spotify üzerinden dinleyebilirsiniz.')),
                 ],
               ),
+              action: track.spotifyUrl.isNotEmpty
+                  ? SnackBarAction(
+                      label: 'Spotify',
+                      textColor: const Color(0xFF1DB954),
+                      onPressed: () => UrlLauncherHelper.launchURL(track.spotifyUrl),
+                    )
+                  : null,
               backgroundColor: AppColors.surfaceLight,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -266,11 +283,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             SnackBar(
               content: const Row(
                 children: [
-                  Icon(Icons.music_off_rounded, color: Colors.white70),
+                  Icon(Icons.music_note_rounded, color: Colors.white70),
                   SizedBox(width: 10),
                   Expanded(child: Text('Ses önizlemesi yüklenemedi. Spotify üzerinden dinleyebilirsiniz.')),
                 ],
               ),
+              action: track.spotifyUrl.isNotEmpty
+                  ? SnackBarAction(
+                      label: 'Spotify',
+                      textColor: const Color(0xFF1DB954),
+                      onPressed: () => UrlLauncherHelper.launchURL(track.spotifyUrl),
+                    )
+                  : null,
               backgroundColor: AppColors.surfaceLight,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
