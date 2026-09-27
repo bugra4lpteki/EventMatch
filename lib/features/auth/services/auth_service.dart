@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../../services/notification_service.dart';
 
 class AuthService extends ChangeNotifier {
@@ -38,6 +39,39 @@ class AuthService extends ChangeNotifier {
 
   Future<bool> signInWithGoogle() async {
     try {
+      // 1. Mobil cihazlarda yerel (Native) Google Sign-In: Web tarayıcısı açılmaz, doğrudan telefonun yerel "EventMatch" penceresi gelir
+      if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS)) {
+        try {
+          const webClientId = '1089492303271-usnrteug9r9o2j8cge5t6b7ctk0acvik.apps.googleusercontent.com';
+          final GoogleSignIn googleSignIn = GoogleSignIn(
+            serverClientId: webClientId,
+          );
+          
+          final googleUser = await googleSignIn.signIn();
+          if (googleUser == null) {
+            // Kullanıcı pencereyi kapattı/vazgeçti
+            return false;
+          }
+
+          final googleAuth = await googleUser.authentication;
+          final idToken = googleAuth.idToken;
+          final accessToken = googleAuth.accessToken;
+
+          if (idToken != null) {
+            await _supabase.auth.signInWithIdToken(
+              provider: OAuthProvider.google,
+              idToken: idToken,
+              accessToken: accessToken,
+            );
+            notifyListeners();
+            return true;
+          }
+        } catch (nativeErr) {
+          debugPrint('[Auth] Native Google Sign-In uyarısı, Web OAuth ile devam ediliyor: $nativeErr');
+        }
+      }
+
+      // 2. Web veya masaüstü için Web OAuth akışı
       final res = await _supabase.auth.signInWithOAuth(
         OAuthProvider.google,
         redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
