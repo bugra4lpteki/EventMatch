@@ -370,6 +370,9 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   child: Consumer<MockEventService>(
                     builder: (context, eventService, child) {
                       final carouselEvents = eventService.getCarouselEvents();
+                      if (carouselEvents.isEmpty) {
+                        return _buildCarouselSkeleton();
+                      }
                       return PopularEventsCarousel(events: carouselEvents);
                     },
                   ),
@@ -666,6 +669,12 @@ class _ExploreScreenState extends State<ExploreScreen> {
               final bool hasFilter = (eventService.selectedCity != 'Tüm Şehirler' && eventService.selectedCity != 'Tümü') ||
                   eventService.selectedCategory != 'Tümü' ||
                   eventService.selectedDateFilter != 'Tümü';
+
+              // Kullanıcı arama veya filtre yapmamışsa (uygulama ilk açılışında etkinliklerin yüklenme anı)
+              // "Etkinlik bulunmuyor" göstermek yerine şık bir yükleme iskeleti göster
+              if (!isSearching && !hasFilter) {
+                return _buildEventShimmerList();
+              }
 
               return SliverToBoxAdapter(
                 child: Padding(
@@ -1053,4 +1062,154 @@ class _ExploreScreenState extends State<ExploreScreen> {
       },
     );
   }
+
+  Widget _buildCarouselSkeleton() {
+    return Container(
+      height: 380,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.02),
+                    Colors.black.withValues(alpha: 0.5),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: 24,
+            left: 20,
+            right: 20,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 90,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: 180,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventShimmerList() {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            return Container(
+              margin: const EdgeInsets.only(bottom: 16),
+              height: 240,
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              ),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withValues(alpha: 0.02),
+                            Colors.black.withValues(alpha: 0.45),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 14,
+                    left: 14,
+                    child: Container(
+                      width: 70,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 16,
+                    left: 16,
+                    right: 16,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          height: 18,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: 150,
+                          height: 14,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          childCount: 3,
+        ),
+      ),
+    );
+  }
 }
+

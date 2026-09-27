@@ -122,11 +122,18 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   _searchQuery = val.trim();
                 });
               },
+              textAlignVertical: TextAlignVertical.center,
               decoration: InputDecoration(
                 isDense: true,
                 hintText: 'Sohbetlerde veya kişilerde ara...',
                 hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.65), fontSize: 13.5),
+                filled: false,
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+                disabledBorder: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
               ),
             ),

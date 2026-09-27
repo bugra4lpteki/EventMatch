@@ -30,11 +30,18 @@ class MockEventService extends ChangeNotifier {
     return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
   }
 
+  bool _isLoadingEvents = false;
+  bool get isLoadingEvents => _isLoadingEvents;
+
   MockEventService() {
     final sbUid = _supabase.auth.currentUser?.id;
     if (sbUid != null && sbUid.isNotEmpty) {
       currentUser.id = sbUid;
     }
+    // Uygulama açılır açılmaz anında vitrin etkinliklerini hazırla (ekranda "etkinlik bulunmuyor" gözükmesini önler)
+    _populateFallbackEvents();
+    _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
     _initAuthListener();
     _loadCarouselSettings();
     _initService();
@@ -43,8 +50,10 @@ class MockEventService extends ChangeNotifier {
   }
 
   Future<void> _initService() async {
-    await loadUserProfile();
-    await fetchEvents();
+    await Future.wait([
+      loadUserProfile(),
+      fetchEvents(),
+    ]);
   }
 
   void _initAuthListener() {
@@ -114,6 +123,7 @@ class MockEventService extends ChangeNotifier {
         await prefs.remove(_eventsCacheKey);
         await prefs.setInt('eventmatch_cache_version_num', 16);
         _events.clear();
+        _populateFallbackEvents();
       } else {
         await _loadEventsFromCache();
       }
@@ -130,6 +140,9 @@ class MockEventService extends ChangeNotifier {
     _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
     await _loadLocalAttendeesCache();
     _syncPlannedEventsWithAttendees();
+    _isLoadingEvents = false;
+    notifyListeners();
+
     // B. Arka planda sessizce Canlı Biletix API'lerini güncelle (Test ortamında timer/network sızıntısını önler)
     final bool isTestMode = const bool.fromEnvironment('flutter.test') ||
         (WidgetsBinding.instance.runtimeType.toString().contains('Test'));
@@ -1132,6 +1145,8 @@ class MockEventService extends ChangeNotifier {
     if (locationSharing != null) {
       currentUser.enableLocationSharing = locationSharing;
       await prefs.setBool('privacy_location_sharing', locationSharing);
+      await prefs.setBool('${currentUser.id}_privacy_location_sharing', locationSharing);
+      await prefs.setBool('${currentUser.name}_privacy_location_sharing', locationSharing);
     }
     notifyListeners();
   }

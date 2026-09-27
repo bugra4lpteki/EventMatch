@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -942,12 +943,15 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       ),
                     ),
                     const Spacer(),
-                    // Hayalet Modu & Görünürlük Butonu (SnackBar gösterimi tamamen kaldırıldı)
+                    // Hayalet Modu & Görünürlük Butonu (Tüm cihazlar ve Supabase ile canlı senkronize)
                     GestureDetector(
-                      onTap: () {
+                      onTap: () async {
+                        final newStatus = !currentUser.enableLocationSharing;
                         setState(() {
-                          currentUser.enableLocationSharing = !currentUser.enableLocationSharing;
+                          currentUser.enableLocationSharing = newStatus;
                         });
+                        HapticFeedback.mediumImpact();
+                        await radarService.updateGhostMode(newStatus);
                         eventService.notifyListeners();
                       },
                       child: Container(

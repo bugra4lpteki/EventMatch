@@ -49,6 +49,46 @@ class LocationRadarService extends ChangeNotifier {
     }
   }
 
+  Future<void> updateGhostMode(bool enableLocationSharing) async {
+    _eventService.currentUser.enableLocationSharing = enableLocationSharing;
+    await _eventService.updatePrivacySettings(locationSharing: enableLocationSharing);
+
+    final uid = currentUserId;
+    if (!enableLocationSharing) {
+      // 1. Canlı kanala hayalet modu bildirimi gönder (diğer ekranlar anında pini silsin)
+      try {
+        _radarChannel?.sendBroadcastMessage(
+          event: 'radar_ghost',
+          payload: {
+            'user_id': uid,
+            'enable_location_sharing': false,
+          },
+        );
+      } catch (_) {}
+
+      // 2. Supabase'deki koordinatları ve konum paylaşımını temizle
+      try {
+        if (uid.isNotEmpty) {
+          await _supabase.from('users').update({
+            'latitude': null,
+            'longitude': null,
+            'enable_location_sharing': false,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', uid);
+        }
+      } catch (e) {
+        debugPrint('[Radar] Hayalet modu Supabase güncelleme hatası: $e');
+      }
+    } else {
+      // 3. Görünür moda geri dönüldüğünde koordinatları tekrar buluta yaz ve sinyal yay
+      if (_lastPosition != null) {
+        await _syncMyCoordinatesToCloud(_lastPosition!);
+        _broadcastRadarPresence(isPing: true);
+      }
+    }
+    notifyListeners();
+  }
+
   Future<void> _startRadar() async {
     _isRadarActive = true;
     notifyListeners();
@@ -158,11 +198,22 @@ class LocationRadarService extends ChangeNotifier {
     try {
       final uid = currentUserId;
       if (uid.isNotEmpty) {
+        if (!_eventService.currentUser.enableLocationSharing) {
+          await _supabase.from('users').update({
+            'latitude': null,
+            'longitude': null,
+            'enable_location_sharing': false,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', uid);
+          return;
+        }
+
         await _supabase.from('users').upsert({
           'id': uid,
           'name': _eventService.currentUser.name,
           'latitude': pos.latitude,
           'longitude': pos.longitude,
+          'enable_location_sharing': true,
           'city': _eventService.currentUser.city ?? 'İstanbul',
           'about_me': _eventService.currentUser.aboutMe ?? '',
           'avatar_url': _eventService.currentUser.avatarUrl,
@@ -192,10 +243,24 @@ class LocationRadarService extends ChangeNotifier {
               _handleIncomingRadarPayload(payload, isPing: false);
             },
           )
+          .onBroadcast(
+            event: 'radar_ghost',
+            callback: (payload) {
+              _handleGhostEvent(payload);
+            },
+          )
+          .onBroadcast(
+            event: 'radar_leave',
+            callback: (payload) {
+              _handleGhostEvent(payload);
+            },
+          )
           .subscribe((status, [error]) {
             debugPrint('📡 [RADAR REALTIME] Kanal durumu: $status');
             if (status == RealtimeSubscribeStatus.subscribed) {
-              _broadcastRadarPresence(isPing: true);
+              if (_eventService.currentUser.enableLocationSharing) {
+                _broadcastRadarPresence(isPing: true);
+              }
             }
           });
     } catch (e) {
@@ -203,8 +268,22 @@ class LocationRadarService extends ChangeNotifier {
     }
   }
 
+  void _handleGhostEvent(Map<String, dynamic> payload) {
+    try {
+      final remoteUserId = payload['user_id']?.toString().toLowerCase().trim() ?? '';
+      if (remoteUserId.isNotEmpty) {
+        _liveRealtimeUsers.remove(remoteUserId);
+        _recalculateNearbyUsers();
+      }
+    } catch (e) {
+      debugPrint('[Radar] Hayalet sinyali işleme hatası: $e');
+    }
+  }
+
   void _broadcastRadarPresence({bool isPing = true}) {
     if (!_isRadarActive || _lastPosition == null || _radarChannel == null) return;
+    // Hayalet modundaysa diğer kullanıcılara konum yayını yapma
+    if (!_eventService.currentUser.enableLocationSharing) return;
 
     try {
       final user = _eventService.currentUser;
@@ -222,6 +301,7 @@ class LocationRadarService extends ChangeNotifier {
         'points': user.points,
         'latitude': _lastPosition!.latitude,
         'longitude': _lastPosition!.longitude,
+        'enable_location_sharing': true,
         'is_verified': user.isVerified,
         'is_radar_active': true,
         'timestamp': DateTime.now().toUtc().toIso8601String(),
@@ -245,6 +325,14 @@ class LocationRadarService extends ChangeNotifier {
       if (remoteUserId.isEmpty ||
           remoteUserId.toLowerCase() == currentUserId.toLowerCase() ||
           remoteUserName.toLowerCase() == _eventService.currentUser.name.toLowerCase()) {
+        return;
+      }
+
+      // Karşıdaki kullanıcı konum paylaşımını kapattıysa / hayalet modundaysa haritadan kaldır
+      final bool isSharing = payload['enable_location_sharing'] != false;
+      if (!isSharing) {
+        _liveRealtimeUsers.remove(remoteUserId.toLowerCase());
+        _recalculateNearbyUsers();
         return;
       }
 
@@ -286,8 +374,8 @@ class LocationRadarService extends ChangeNotifier {
         _liveRealtimeUsers[remoteUserId.toLowerCase()] = remoteUser;
         _recalculateNearbyUsers();
 
-        // Eğer karşı taraf ping attıysa biz de hemen cevap veriyoruz (pong)
-        if (isPing) {
+        // Eğer karşı taraf ping attıysa ve biz hayalet modunda DEĞİLSEK pong ile cevap veriyoruz
+        if (isPing && _eventService.currentUser.enableLocationSharing) {
           _broadcastRadarPresence(isPing: false);
         }
       }
@@ -328,8 +416,15 @@ class LocationRadarService extends ChangeNotifier {
           continue;
         }
 
+        final bool isSharing = row['enable_location_sharing'] != false && row['enableLocationSharing'] != false;
         final double? uLat = double.tryParse(row['latitude']?.toString() ?? '');
         final double? uLng = double.tryParse(row['longitude']?.toString() ?? '');
+
+        // Kullanıcı hayalet modundaysa veya koordinatları yoksa haritadan kaldır
+        if (!isSharing || uLat == null || uLng == null) {
+          _liveRealtimeUsers.remove(uid.toLowerCase());
+          continue;
+        }
 
         if (uLat != null && uLng != null) {
           double dist = 0;

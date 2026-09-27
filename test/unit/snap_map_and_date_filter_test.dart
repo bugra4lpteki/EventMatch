@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:event_match/core/constants/supabase_config.dart';
 import 'package:event_match/features/events/services/mock_event_service.dart';
+import 'package:event_match/features/events/services/location_radar_service.dart';
 import 'package:event_match/features/events/services/spotify_service.dart';
 import 'package:event_match/features/events/models/user_model.dart';
 
@@ -197,6 +198,23 @@ void main() {
       final restored = UserModel.fromMap(map);
       expect(restored.avatarUrls.length, equals(3));
       expect(restored.avatarUrls[1], equals('https://example.com/p2.jpg'));
+    });
+
+    test('LocationRadarService updateGhostMode kullanıcının konum paylaşımını kapatır ve hayalet modunu senkronize eder', () async {
+      final eventService = MockEventService();
+      final radarService = LocationRadarService(eventService);
+
+      expect(eventService.currentUser.enableLocationSharing, isTrue);
+
+      // Hayalet moduna geç
+      await radarService.updateGhostMode(false);
+
+      expect(eventService.currentUser.enableLocationSharing, isFalse);
+
+      // Tekrar görünür moda geç
+      await radarService.updateGhostMode(true);
+
+      expect(eventService.currentUser.enableLocationSharing, isTrue);
     });
   });
 }
