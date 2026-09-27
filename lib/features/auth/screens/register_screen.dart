@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -90,6 +92,381 @@ class _RegisterScreenState extends State<RegisterScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         margin: const EdgeInsets.all(16),
       ),
+    );
+  }
+
+  void _showModernDatePicker() {
+    DateTime tempDate = _selectedDate ??
+        DateTime.now().subtract(const Duration(days: 365 * 20));
+    int pickerKey = 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withOpacity(0.75),
+      builder: (BuildContext sheetContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            final int age = _calculateAge(tempDate);
+            final bool isEligible = age >= 18;
+            final int currentYear = DateTime.now().year;
+            final List<int> quickAges = [18, 20, 22, 25, 28, 30, 35, 40];
+
+            return Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.08),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 25,
+                    spreadRadius: 5,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 14,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SafeArea(
+                top: false,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Handle Bar
+                    Center(
+                      child: Container(
+                        width: 42,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: AppColors.textMuted.withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Sheet Header
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: AppColors.primary.withOpacity(0.3),
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.cake_rounded,
+                            color: AppColors.primaryVariant,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Doğum Tarihinizi Seçin',
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'EventMatch için 18 yaş ve üzeri olmalısınız',
+                                style: GoogleFonts.outfit(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close_rounded, color: AppColors.textMuted, size: 22),
+                          onPressed: () => Navigator.pop(context),
+                          splashRadius: 20,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Live Date & Age Card
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.background.withOpacity(0.6),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isEligible
+                              ? AppColors.success.withOpacity(0.4)
+                              : AppColors.error.withOpacity(0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Seçilen Tarih',
+                                  style: GoogleFonts.outfit(
+                                    color: AppColors.textMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  _formatDate(tempDate),
+                                  style: GoogleFonts.outfit(
+                                    color: AppColors.textPrimary,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isEligible
+                                  ? AppColors.success.withOpacity(0.18)
+                                  : AppColors.error.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: isEligible
+                                    ? AppColors.success.withOpacity(0.5)
+                                    : AppColors.error.withOpacity(0.5),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  isEligible
+                                      ? Icons.check_circle_rounded
+                                      : Icons.warning_amber_rounded,
+                                  color: isEligible ? AppColors.success : AppColors.error,
+                                  size: 15,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  isEligible
+                                      ? '$age Yaşında (Uygun)'
+                                      : '$age Yaşında (18+ Gerekli)',
+                                  style: GoogleFonts.outfit(
+                                    color: isEligible ? AppColors.success : AppColors.error,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Quick Year Jump Chips
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(left: 2, bottom: 8),
+                          child: Text(
+                            'Hızlı Yıl Seçimi',
+                            style: GoogleFonts.outfit(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          physics: const BouncingScrollPhysics(),
+                          child: Row(
+                            children: quickAges.map((targetAge) {
+                              final targetYear = currentYear - targetAge;
+                              final bool isSelected = tempDate.year == targetYear;
+
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      HapticFeedback.selectionClick();
+                                      setModalState(() {
+                                        final maxDays = DateUtils.getDaysInMonth(targetYear, tempDate.month);
+                                        final validDay = tempDate.day > maxDays ? maxDays : tempDate.day;
+                                        tempDate = DateTime(targetYear, tempDate.month, validDay);
+                                        pickerKey++;
+                                      });
+                                    },
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 180),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      decoration: BoxDecoration(
+                                        gradient: isSelected ? AppColors.primaryGradient : null,
+                                        color: isSelected ? null : AppColors.surfaceLight,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? AppColors.primaryVariant
+                                              : Colors.white.withOpacity(0.08),
+                                          width: isSelected ? 1.5 : 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '$targetYear ($targetAge Yaş)',
+                                        style: GoogleFonts.outfit(
+                                          color: isSelected ? Colors.white : AppColors.textSecondary,
+                                          fontSize: 12,
+                                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Modern Cupertino Wheel Picker
+                    Container(
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: AppColors.background.withOpacity(0.4),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.05),
+                        ),
+                      ),
+                      child: CupertinoTheme(
+                        data: CupertinoThemeData(
+                          brightness: Brightness.dark,
+                          textTheme: CupertinoTextThemeData(
+                            dateTimePickerTextStyle: GoogleFonts.outfit(
+                              color: AppColors.textPrimary,
+                              fontSize: 19,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        child: CupertinoDatePicker(
+                          key: ValueKey(pickerKey),
+                          mode: CupertinoDatePickerMode.date,
+                          dateOrder: DatePickerDateOrder.dmy,
+                          initialDateTime: tempDate,
+                          minimumDate: DateTime(1940, 1, 1),
+                          maximumDate: DateTime.now(),
+                          onDateTimeChanged: (DateTime newDate) {
+                            setModalState(() {
+                              tempDate = newDate;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Confirm Action Button
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: isEligible ? AppColors.primaryGradient : null,
+                        color: isEligible ? null : AppColors.surfaceLight,
+                        boxShadow: isEligible
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.35),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (!isEligible) {
+                            HapticFeedback.heavyImpact();
+                            _showSnackBar(
+                              'EventMatch\'e katılabilmek için en az 18 yaşında olmalısınız.',
+                              isError: true,
+                            );
+                            return;
+                          }
+
+                          HapticFeedback.mediumImpact();
+                          setState(() {
+                            _selectedDate = tempDate;
+                          });
+                          Navigator.pop(context);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              isEligible ? Icons.check_circle_rounded : Icons.lock_outline_rounded,
+                              color: isEligible ? Colors.white : AppColors.textMuted,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isEligible ? 'Tarihi Onayla & Devam Et' : 'En Az 18 Yaşında Olmalısınız',
+                              style: GoogleFonts.outfit(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: isEligible ? Colors.white : AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -400,36 +777,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                                   // Date of Birth Picker Button
                                   GestureDetector(
-                                    onTap: () async {
-                                      final DateTime? picked = await showDatePicker(
-                                        context: context,
-                                        initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                                        firstDate: DateTime(1900),
-                                        lastDate: DateTime.now(),
-                                        builder: (context, child) {
-                                          return Theme(
-                                            data: Theme.of(context).copyWith(
-                                              colorScheme: ColorScheme.dark(
-                                                primary: AppColors.primary,
-                                                onPrimary: Colors.white,
-                                                surface: AppColors.surface,
-                                                onSurface: AppColors.textPrimary,
-                                              ),
-                                              dialogBackgroundColor: AppColors.surface,
-                                            ),
-                                            child: child!,
-                                          );
-                                        },
-                                      );
-                                      if (picked != null && picked != _selectedDate) {
-                                        setState(() {
-                                          _selectedDate = picked;
-                                        });
-                                      }
-                                    },
+                                    onTap: _showModernDatePicker,
                                     child: AnimatedContainer(
                                       duration: const Duration(milliseconds: 200),
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                       decoration: BoxDecoration(
                                         color: AppColors.surface,
                                         borderRadius: BorderRadius.circular(16),
@@ -438,16 +789,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                               ? (calculatedAge != null && calculatedAge >= 18 
                                                   ? AppColors.primary.withOpacity(0.6) 
                                                   : AppColors.error.withOpacity(0.6))
-                                              : Colors.transparent,
+                                              : Colors.white.withOpacity(0.06),
                                           width: 1.5,
                                         ),
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(
-                                            Icons.calendar_today_rounded,
-                                            color: AppColors.primaryVariant,
-                                            size: 22,
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: _selectedDate != null
+                                                  ? AppColors.primary.withOpacity(0.15)
+                                                  : AppColors.surfaceLight,
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                            child: Icon(
+                                              _selectedDate != null ? Icons.cake_rounded : Icons.calendar_today_rounded,
+                                              color: _selectedDate != null ? AppColors.primaryVariant : AppColors.textMuted,
+                                              size: 20,
+                                            ),
                                           ),
                                           const SizedBox(width: 14),
                                           Expanded(
@@ -510,10 +870,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                               ),
                                             ),
                                           ] else ...[
-                                            Icon(
-                                              Icons.chevron_right_rounded,
-                                              color: AppColors.textMuted,
-                                              size: 22,
+                                            Container(
+                                              padding: const EdgeInsets.all(4),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.surfaceLight,
+                                                borderRadius: BorderRadius.circular(8),
+                                              ),
+                                              child: Icon(
+                                                Icons.expand_more_rounded,
+                                                color: AppColors.textMuted,
+                                                size: 20,
+                                              ),
                                             ),
                                           ],
                                         ],
