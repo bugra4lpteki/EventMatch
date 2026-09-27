@@ -139,6 +139,9 @@ serve(async (req) => {
     if (ONESIGNAL_APP_ID && ONESIGNAL_REST_API_KEY) {
       const oneSignalBody: any = {
         app_id: ONESIGNAL_APP_ID,
+        include_aliases: {
+          external_id: [receiverId.toLowerCase(), receiverId],
+        },
         include_external_user_ids: [receiverId.toLowerCase(), receiverId],
         channel_for_external_user_ids: "push",
         priority: 10,
@@ -154,6 +157,8 @@ serve(async (req) => {
         ios_badgeType: "Increase",
         ios_badgeCount: 1,
         ios_sound: "default",
+        mutable_content: true,
+        ios_interruption_level: "time-sensitive",
         android_sound: "default",
         small_icon: "launcher_icon",
         large_icon: "launcher_icon",
@@ -164,6 +169,7 @@ serve(async (req) => {
       };
 
       if (pushToken && pushToken.length > 20) {
+        oneSignalBody["include_subscription_ids"] = [pushToken];
         oneSignalBody["include_player_ids"] = [pushToken];
       }
 

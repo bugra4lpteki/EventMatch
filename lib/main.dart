@@ -138,13 +138,13 @@ class _EventMatchAppState extends State<EventMatchApp> {
       final event = data.event;
       debugPrint('[Auth] onAuthStateChange event: $event');
 
-      final ctx = navigatorKey.currentContext;
-      if (ctx == null || !ctx.mounted) return;
-
       final userId = data.session?.user.id;
       if (userId != null) {
         NotificationService().syncUserWithOneSignal(userId);
       }
+
+      final ctx = navigatorKey.currentContext;
+      if (ctx == null || !ctx.mounted) return;
 
       if (event == AuthChangeEvent.signedIn) {
         ctx.read<MockEventService>().loadUserProfile();

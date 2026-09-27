@@ -160,8 +160,9 @@ class NotificationService with WidgetsBindingObserver {
     try {
       if (kIsWeb) return;
 
-      // 1. OneSignal external_id olarak Supabase User ID'sini bağla
+      // 1. OneSignal external_id olarak Supabase User ID'sini bağla ve aboneliği garantile
       await OneSignal.login(userId);
+      OneSignal.User.pushSubscription.optIn();
       debugPrint('[OneSignal] 👤 OneSignal login yapıldı: $userId');
 
       // 2. Cihaz Player/Subscription ID'sini anında al ve Supabase'e kaydet
@@ -179,6 +180,7 @@ class NotificationService with WidgetsBindingObserver {
       // Kısa bir gecikmeyle tekrar dene (APNs token gecikmeli atanabilir)
       Future.delayed(const Duration(milliseconds: 1500), checkAndSaveToken);
       Future.delayed(const Duration(seconds: 4), checkAndSaveToken);
+      Future.delayed(const Duration(seconds: 8), checkAndSaveToken);
 
       // Subscription değişikliklerini dinle
       OneSignal.User.pushSubscription.addObserver((state) {
@@ -237,6 +239,9 @@ class NotificationService with WidgetsBindingObserver {
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
       final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
+        'include_aliases': {
+          'external_id': [receiverId.toLowerCase(), receiverId],
+        },
         'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
         'channel_for_external_user_ids': 'push',
         'priority': 10,
@@ -246,8 +251,8 @@ class NotificationService with WidgetsBindingObserver {
           'en': '💬 $senderName',
         },
         'contents': {
-          'tr': content,
-          'en': content,
+          'tr': content.trim().isNotEmpty ? content : 'Yeni mesajınız var',
+          'en': content.trim().isNotEmpty ? content : 'You have a new message',
         },
         'data': {
           'chat_id': senderId ?? '',
@@ -259,6 +264,8 @@ class NotificationService with WidgetsBindingObserver {
         'ios_badgeType': 'Increase',
         'ios_badgeCount': 1,
         'ios_sound': 'default',
+        'mutable_content': true,
+        'ios_interruption_level': 'time-sensitive',
         'android_sound': 'default',
         'small_icon': 'launcher_icon',
         'large_icon': 'launcher_icon',
@@ -269,6 +276,7 @@ class NotificationService with WidgetsBindingObserver {
       };
 
       if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        payload['include_subscription_ids'] = [receiverPushToken];
         payload['include_player_ids'] = [receiverPushToken];
       }
 
@@ -309,6 +317,9 @@ class NotificationService with WidgetsBindingObserver {
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
       final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
+        'include_aliases': {
+          'external_id': [receiverId.toLowerCase(), receiverId],
+        },
         'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
         'channel_for_external_user_ids': 'push',
         'priority': 10,
@@ -328,6 +339,8 @@ class NotificationService with WidgetsBindingObserver {
         'ios_badgeType': 'Increase',
         'ios_badgeCount': 1,
         'ios_sound': 'default',
+        'mutable_content': true,
+        'ios_interruption_level': 'time-sensitive',
         'android_sound': 'default',
         'small_icon': 'launcher_icon',
         'large_icon': 'launcher_icon',
@@ -338,6 +351,7 @@ class NotificationService with WidgetsBindingObserver {
       };
 
       if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        payload['include_subscription_ids'] = [receiverPushToken];
         payload['include_player_ids'] = [receiverPushToken];
       }
 

@@ -140,6 +140,9 @@ class AuthService extends ChangeNotifier {
         }
 
         _isTwoFactorPending = false;
+        if (uid != null) {
+          NotificationService().syncUserWithOneSignal(uid);
+        }
         notifyListeners();
         return null;
       }
@@ -403,6 +406,10 @@ class AuthService extends ChangeNotifier {
       _isTwoFactorPending = false;
       _activeTwoFactorCode = null;
       _activeTwoFactorExpiry = null;
+      final uid = currentUserId;
+      if (uid != null) {
+        NotificationService().syncUserWithOneSignal(uid);
+      }
       notifyListeners();
       return true;
     }

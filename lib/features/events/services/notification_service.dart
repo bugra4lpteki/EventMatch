@@ -16,6 +16,9 @@ class NotificationService {
 
     try {
       tz.initializeTimeZones();
+      try {
+        tz.setLocalLocation(tz.getLocation('Europe/Istanbul'));
+      } catch (_) {}
 
       const DarwinInitializationSettings initializationSettingsIOS = DarwinInitializationSettings(
         requestAlertPermission: true,

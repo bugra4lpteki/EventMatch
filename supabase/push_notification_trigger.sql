@@ -57,6 +57,7 @@ BEGIN
 
     v_payload := jsonb_build_object(
       'app_id', v_onesignal_app_id,
+      'include_aliases', jsonb_build_object('external_id', jsonb_build_array(LOWER(NEW.receiver_id::text), NEW.receiver_id::text)),
       'include_external_user_ids', jsonb_build_array(LOWER(NEW.receiver_id::text), NEW.receiver_id::text),
       'channel_for_external_user_ids', 'push',
       'priority', 10,
@@ -79,6 +80,8 @@ BEGIN
       'ios_badgeType', 'Increase',
       'ios_badgeCount', 1,
       'ios_sound', 'default',
+      'mutable_content', true,
+      'ios_interruption_level', 'time-sensitive',
       'android_sound', 'default',
       'small_icon', 'launcher_icon',
       'large_icon', 'launcher_icon',
@@ -89,7 +92,10 @@ BEGIN
     );
 
     IF v_receiver_push_token IS NOT NULL AND v_receiver_push_token <> '' THEN
-      v_payload := v_payload || jsonb_build_object('include_player_ids', jsonb_build_array(v_receiver_push_token));
+      v_payload := v_payload || jsonb_build_object(
+        'include_subscription_ids', jsonb_build_array(v_receiver_push_token),
+        'include_player_ids', jsonb_build_array(v_receiver_push_token)
+      );
     END IF;
 
     -- OneSignal REST API v1 çağrısı
