@@ -134,63 +134,12 @@ class MapPoiService {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is List) {
-          final List<MapPoiModel> list = [];
-          for (var item in decoded) {
-            if (item is! Map) continue;
-            final lat = double.tryParse(item['lat']?.toString() ?? '');
-            final lng = double.tryParse(item['lng']?.toString() ?? '');
-            if (lat == null || lng == null || lat < 40.5 || lat > 41.6 || lng < 28.0 || lng > 30.0) {
-              continue;
-            }
-            final int? total = item['capacity'] is int
-                ? item['capacity']
-                : int.tryParse(item['capacity']?.toString() ?? '');
-            final int? empty = item['emptyCapacity'] is int
-                ? item['emptyCapacity']
-                : int.tryParse(item['emptyCapacity']?.toString() ?? '');
-            final String rawName = (item['parkName']?.toString() ?? 'İspark Otoparkı').trim();
-            final String parkName = rawName.toLowerCase().startsWith('ispark') || rawName.toLowerCase().startsWith('i̇spark')
-                ? rawName
-                : 'İspark $rawName';
-            final String parkType = (item['parkType']?.toString() ?? 'Otopark').trim();
-            final String district = (item['district']?.toString() ?? 'İstanbul').trim();
-            final String workHours = (item['workHours']?.toString() ?? '24 Saat').trim();
-            final int freeTime = item['freeTime'] is int
-                ? item['freeTime']
-                : (int.tryParse(item['freeTime']?.toString() ?? '') ?? 0);
-
-            String feeOrCapText = '';
-            if (empty != null) {
-              feeOrCapText = empty > 0 ? '$empty Boş Yer • $parkType' : 'DOLU (0 Boş) • $parkType';
-            } else {
-              feeOrCapText = parkType;
-            }
-
-            list.add(
-              MapPoiModel(
-                id: 'ibb_${item['parkID'] ?? list.length}',
-                title: parkName,
-                description: '$district • $workHours${freeTime > 0 ? ' • İlk $freeTime dk ücretsiz' : ''}',
-                latitude: lat,
-                longitude: lng,
-                type: PoiType.parking,
-                brandOrOperator: 'İBB / İspark',
-                feeOrCapacity: feeOrCapText,
-                totalCapacity: total,
-                emptyCapacity: empty,
-                workHours: workHours,
-                district: district,
-                isIbb: true,
-              ),
-            );
-          }
-          if (list.isNotEmpty) {
-            _ibbParkingLots = list;
-            _lastIbbFetchTime = DateTime.now();
-            debugPrint('[MapPoiService] İBB İspark API: ${list.length} otopark başarıyla yüklendi.');
-          }
+        // UI thread donmasını önlemek için arka plan izolatında parse et
+        final list = await compute(_parseIbbJson, utf8.decode(response.bodyBytes));
+        if (list.isNotEmpty) {
+          _ibbParkingLots = list;
+          _lastIbbFetchTime = DateTime.now();
+          debugPrint('[MapPoiService] İBB İspark API: ${list.length} otopark başarıyla yüklendi.');
         }
       }
     } catch (e) {
@@ -641,5 +590,66 @@ class MapPoiService {
       final distanceInMeters = Geolocator.distanceBetween(lat, lng, p.latitude, p.longitude);
       return distanceInMeters <= (maxKm * 1000);
     }).toList();
+  }
+}
+
+/// Arka plan izolatında (compute) çalışan yüksek performanslı İBB veri ayrıştırıcı
+List<MapPoiModel> _parseIbbJson(String jsonStr) {
+  try {
+    final decoded = jsonDecode(jsonStr);
+    if (decoded is! List) return [];
+    final List<MapPoiModel> list = [];
+    for (var item in decoded) {
+      if (item is! Map) continue;
+      final lat = double.tryParse(item['lat']?.toString() ?? '');
+      final lng = double.tryParse(item['lng']?.toString() ?? '');
+      if (lat == null || lng == null || lat < 40.5 || lat > 41.6 || lng < 28.0 || lng > 30.0) {
+        continue;
+      }
+      final int? total = item['capacity'] is int
+          ? item['capacity']
+          : int.tryParse(item['capacity']?.toString() ?? '');
+      final int? empty = item['emptyCapacity'] is int
+          ? item['emptyCapacity']
+          : int.tryParse(item['emptyCapacity']?.toString() ?? '');
+      final String rawName = (item['parkName']?.toString() ?? 'İspark Otoparkı').trim();
+      final String parkName = rawName.toLowerCase().startsWith('ispark') || rawName.toLowerCase().startsWith('i̇spark')
+          ? rawName
+          : 'İspark $rawName';
+      final String parkType = (item['parkType']?.toString() ?? 'Otopark').trim();
+      final String district = (item['district']?.toString() ?? 'İstanbul').trim();
+      final String workHours = (item['workHours']?.toString() ?? '24 Saat').trim();
+      final int freeTime = item['freeTime'] is int
+          ? item['freeTime']
+          : (int.tryParse(item['freeTime']?.toString() ?? '') ?? 0);
+
+      String feeOrCapText = '';
+      if (empty != null) {
+        feeOrCapText = empty > 0 ? '$empty Boş Yer • $parkType' : 'DOLU (0 Boş) • $parkType';
+      } else {
+        feeOrCapText = parkType;
+      }
+
+      list.add(
+        MapPoiModel(
+          id: 'ibb_${item['parkID'] ?? list.length}',
+          title: parkName,
+          description: '$district • $workHours${freeTime > 0 ? ' • İlk $freeTime dk ücretsiz' : ''}',
+          latitude: lat,
+          longitude: lng,
+          type: PoiType.parking,
+          brandOrOperator: 'İBB / İspark',
+          feeOrCapacity: feeOrCapText,
+          totalCapacity: total,
+          emptyCapacity: empty,
+          workHours: workHours,
+          district: district,
+          isIbb: true,
+        ),
+      );
+    }
+    return list;
+  } catch (_) {
+    return [];
   }
 }

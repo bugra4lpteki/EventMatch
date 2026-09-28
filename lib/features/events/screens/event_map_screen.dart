@@ -67,10 +67,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
     super.initState();
     _mapController = MapController();
     _checkPermissionAndGetLocation();
-    // Canlı İBB İspark verilerini arka planda hazırla
-    MapPoiService().fetchIbbParkingLots().then((_) {
-      if (mounted) setState(() {});
-    });
   }
 
   @override
@@ -94,16 +90,35 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
       if (permission == LocationPermission.deniedForever) return;
 
-      final position = await Geolocator.getCurrentPosition();
-      setState(() {
-        _currentPosition = position;
-      });
-
-      if (_currentPosition != null) {
+      // 1. Önce cihazdaki son bilinen konumu al (0 milisaniye bekleme, donmayı ve kasılmayı tamamen önler)
+      final lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null && mounted) {
+        setState(() {
+          _currentPosition = lastPos;
+        });
         _mapController.move(
-          LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          LatLng(lastPos.latitude, lastPos.longitude),
           12.5,
         );
+      }
+
+      // 2. Ardından hassas konumu hafif modda ve zaman aşımı korumasıyla al
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 4),
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+        if (lastPos == null) {
+          _mapController.move(
+            LatLng(position.latitude, position.longitude),
+            12.5,
+          );
+        }
       }
     } catch (_) {}
   }
@@ -354,8 +369,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
   Widget build(BuildContext context) {
     final eventService = context.watch<MockEventService>();
     final radarService = context.watch<LocationRadarService>();
-    final matchService = context.watch<MockMatchService>();
-    final msgService = context.watch<MockMessageService>();
     final currentUser = eventService.currentUser;
     final allEvents = eventService.allEvents;
     final now = DateTime.now();
@@ -575,8 +588,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 urlTemplate: _getMapTileUrl(_selectedMapStyle),
                 userAgentPackageName: 'com.eventmatch.app',
                 tileProvider: NetworkTileProvider(),
-                panBuffer: 1,
-                keepBuffer: 3,
+                panBuffer: 0,
+                keepBuffer: 2,
                 maxNativeZoom: 19,
               ),
 
@@ -1942,6 +1955,8 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     // Aksiyon Butonları
                     Builder(
                       builder: (context) {
+                        final msgService = context.watch<MockMessageService>();
+                        final matchService = context.watch<MockMatchService>();
                         final isAlreadyMatched = msgService.individualChats.any(
                           (c) => c.participant.id.toLowerCase() == _selectedUser!.id.toLowerCase(),
                         );
