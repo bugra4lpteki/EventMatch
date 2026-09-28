@@ -13,6 +13,8 @@ import '../services/location_radar_service.dart';
 import '../services/mock_match_service.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
+import '../models/map_poi_model.dart';
+import '../services/map_poi_service.dart';
 import '../widgets/match_dialog.dart';
 import 'event_detail_screen.dart';
 import '../../profile/screens/user_profile_screen.dart';
@@ -37,6 +39,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
   Position? _currentPosition;
   EventModel? _selectedEvent;
   UserModel? _selectedUser;
+  MapPoiModel? _selectedPoi;
+  bool _showParking = false;
+  bool _showGasStations = false;
   MapMode _currentMapMode = MapMode.events;
   String? _selectedCategoryFilter;
   String? _selectedDateFilter;
@@ -532,6 +537,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 setState(() {
                   _selectedEvent = null;
                   _selectedUser = null;
+                  _selectedPoi = null;
                   _isWritingMatchMessage = false;
                 });
               },
@@ -618,6 +624,106 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     );
                   }).toList(),
                 ),
+                // 🅿️ OTOPARKLAR MARKER KATMANI
+                if (_showParking)
+                  MarkerLayer(
+                    markers: MapPoiService().getParkingLots().map((poi) {
+                      final isSelected = _selectedPoi?.id == poi.id;
+                      return Marker(
+                        point: LatLng(poi.latitude, poi.longitude),
+                        width: isSelected ? 40 : 32,
+                        height: isSelected ? 40 : 32,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedPoi = poi;
+                              _selectedEvent = null;
+                              _selectedUser = null;
+                              _isWritingMatchMessage = false;
+                            });
+                            _mapController.move(LatLng(poi.latitude, poi.longitude), 14.5);
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF93C5FD) : Colors.white,
+                                width: isSelected ? 2.5 : 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF2563EB).withValues(alpha: 0.5),
+                                  blurRadius: isSelected ? 10 : 5,
+                                  spreadRadius: isSelected ? 2 : 0,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.local_parking_rounded,
+                              color: Colors.white,
+                              size: isSelected ? 21 : 16,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                // ⛽ BENZİNLİKLER MARKER KATMANI
+                if (_showGasStations)
+                  MarkerLayer(
+                    markers: MapPoiService().getGasStations().map((poi) {
+                      final isSelected = _selectedPoi?.id == poi.id;
+                      return Marker(
+                        point: LatLng(poi.latitude, poi.longitude),
+                        width: isSelected ? 40 : 32,
+                        height: isSelected ? 40 : 32,
+                        child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _selectedPoi = poi;
+                              _selectedEvent = null;
+                              _selectedUser = null;
+                              _isWritingMatchMessage = false;
+                            });
+                            _mapController.move(LatLng(poi.latitude, poi.longitude), 14.5);
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF059669), Color(0xFF047857)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: isSelected ? const Color(0xFF6EE7B7) : Colors.white,
+                                width: isSelected ? 2.5 : 1.5,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF059669).withValues(alpha: 0.5),
+                                  blurRadius: isSelected ? 10 : 5,
+                                  spreadRadius: isSelected ? 2 : 0,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.local_gas_station_rounded,
+                              color: Colors.white,
+                              size: isSelected ? 21 : 16,
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
               ] else ...[
                 // =================== MATCH HARİTASI MODU (GERÇEK KULLANICI PP PINLERI) ===================
                 MarkerLayer(
@@ -812,48 +918,158 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     child: Row(
-                      children: ['🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta'].map((dateFilter) {
-                        final isSelected = _selectedDateFilter == dateFilter;
-                        return GestureDetector(
+                      children: [
+                        ...['🔥 Bugün', '📍 En Yakın (< 10 km)', '⚡ Bu Hafta'].map((dateFilter) {
+                          final isSelected = _selectedDateFilter == dateFilter;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (_selectedDateFilter == dateFilter) {
+                                  _selectedDateFilter = null;
+                                } else {
+                                  _selectedDateFilter = dateFilter;
+                                }
+                                _selectedEvent = null;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                gradient: isSelected ? AppColors.primaryGradient : null,
+                                color: isSelected ? null : AppColors.surface,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected ? Colors.transparent : Colors.white12,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                dateFilter,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12.5,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                        // 🅿️ OTOPARKLAR FİLTRE ÇİPİ
+                        GestureDetector(
                           onTap: () {
                             setState(() {
-                              if (_selectedDateFilter == dateFilter) {
-                                _selectedDateFilter = null;
-                              } else {
-                                _selectedDateFilter = dateFilter;
+                              _showParking = !_showParking;
+                              if (!_showParking && _selectedPoi?.type == PoiType.parking) {
+                                _selectedPoi = null;
                               }
-                              _selectedEvent = null;
                             });
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
-                              gradient: isSelected ? AppColors.primaryGradient : null,
-                              color: isSelected ? null : AppColors.surface,
+                              gradient: _showParking
+                                  ? const LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)])
+                                  : null,
+                              color: _showParking ? null : AppColors.surface,
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                color: isSelected ? Colors.transparent : Colors.white12,
+                                color: _showParking ? const Color(0xFF60A5FA) : Colors.white12,
+                                width: _showParking ? 1.4 : 1.0,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
+                                  color: _showParking
+                                      ? const Color(0xFF2563EB).withValues(alpha: 0.4)
+                                      : Colors.black.withOpacity(0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                            child: Text(
-                              dateFilter,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12.5,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.local_parking_rounded,
+                                  size: 15,
+                                  color: _showParking ? Colors.white : const Color(0xFF60A5FA),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Otoparklar',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: _showParking ? FontWeight.bold : FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      }).toList(),
+                        ),
+                        // ⛽ BENZİNLİKLER FİLTRE ÇİPİ
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              _showGasStations = !_showGasStations;
+                              if (!_showGasStations && _selectedPoi?.type == PoiType.gasStation) {
+                                _selectedPoi = null;
+                              }
+                            });
+                          },
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: _showGasStations
+                                  ? const LinearGradient(colors: [Color(0xFF059669), Color(0xFF047857)])
+                                  : null,
+                              color: _showGasStations ? null : AppColors.surface,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: _showGasStations ? const Color(0xFF34D399) : Colors.white12,
+                                width: _showGasStations ? 1.4 : 1.0,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: _showGasStations
+                                      ? const Color(0xFF059669).withValues(alpha: 0.4)
+                                      : Colors.black.withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.local_gas_station_rounded,
+                                  size: 15,
+                                  color: _showGasStations ? Colors.white : const Color(0xFF34D399),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Benzinlikler',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12.5,
+                                    fontWeight: _showGasStations ? FontWeight.bold : FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -952,7 +1168,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                         });
                         HapticFeedback.mediumImpact();
                         await radarService.updateGhostMode(newStatus);
-                        eventService.notifyListeners();
+                        eventService.notifyListenersPublic();
                       },
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -1188,6 +1404,168 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+
+          // 3.5 POI (OTOPARK & BENZİNLİK) BİLGİ KARTI
+          if (_selectedPoi != null && _currentMapMode == MapMode.events)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 20,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.surface.withValues(alpha: 0.96),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: _selectedPoi!.type == PoiType.parking
+                        ? const Color(0xFF3B82F6).withValues(alpha: 0.6)
+                        : const Color(0xFF10B981).withValues(alpha: 0.6),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: _selectedPoi!.type == PoiType.parking
+                              ? [const Color(0xFF2563EB), const Color(0xFF1D4ED8)]
+                              : [const Color(0xFF059669), const Color(0xFF047857)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_selectedPoi!.type == PoiType.parking
+                                    ? const Color(0xFF2563EB)
+                                    : const Color(0xFF059669))
+                                .withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _selectedPoi!.type == PoiType.parking
+                            ? Icons.local_parking_rounded
+                            : Icons.local_gas_station_rounded,
+                        color: Colors.white,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _selectedPoi!.title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14.5,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedPoi = null;
+                                  });
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 6.0),
+                                  child: Icon(Icons.close_rounded, color: AppColors.textSecondary, size: 18),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _selectedPoi!.description,
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 7),
+                          Row(
+                            children: [
+                              if (_selectedPoi!.feeOrCapacity != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    _selectedPoi!.feeOrCapacity!,
+                                    style: TextStyle(
+                                      color: _selectedPoi!.type == PoiType.parking
+                                          ? const Color(0xFF93C5FD)
+                                          : const Color(0xFF6EE7B7),
+                                      fontSize: 10.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () async {
+                                  final mapsUrl =
+                                      'https://www.google.com/maps/dir/?api=1&destination=${_selectedPoi!.latitude},${_selectedPoi!.longitude}';
+                                  await UrlLauncherHelper.launchURL(mapsUrl);
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradient,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.directions_car_rounded, color: Colors.white, size: 13),
+                                      SizedBox(width: 4),
+                                      Text(
+                                        'Yol Tarifi Al',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

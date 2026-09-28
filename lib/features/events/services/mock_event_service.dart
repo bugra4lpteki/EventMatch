@@ -1424,6 +1424,10 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
+  void notifyListenersPublic() {
+    notifyListeners();
+  }
+
   final List<String> activityFeed = [];
 
   List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Stand-up'];
