@@ -577,7 +577,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
                       _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
                       _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
-                      _buildMessagesNavItemWithBadge(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
+                      _buildMessagesNavItemWithBadge(3, Icons.forum_outlined, Icons.forum_rounded, 'Mesajlar'),
                       _buildProfileNavItem(4, 'Profil'),
                     ],
                   ),
