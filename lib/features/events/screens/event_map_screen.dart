@@ -1076,7 +1076,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             ),
                           ),
                         ),
-                        // ⛽ BENZİNLİKLER FİLTRE ÇİPİ
+                        // ⛽ BENZİNLİKLER FİLTRE ÇİPİ (OPENSTREETMAP CANLI ENTEGRASYON)
                         GestureDetector(
                           onTap: () {
                             setState(() {
@@ -1091,6 +1091,11 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 _selectedPoi = null;
                               }
                             });
+                            if (_showGasStations && userLat != null && userLng != null) {
+                              MapPoiService().fetchOsmGasStations(lat: userLat, lng: userLng).then((_) {
+                                if (mounted) setState(() {});
+                              });
+                            }
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -1125,13 +1130,26 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  'Benzinlikler',
+                                  MapPoiService().isLoadingOsmGas
+                                      ? 'Benzinlikler Yükleniyor...'
+                                      : (_showGasStations ? 'Yakın Benzinlikler (${nearbyGasStations.length})' : 'Benzinlikler'),
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12.5,
                                     fontWeight: _showGasStations ? FontWeight.bold : FontWeight.w500,
                                   ),
                                 ),
+                                if (_showGasStations) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1592,6 +1610,35 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                       const SizedBox(width: 4),
                                       const Text(
                                         'İBB Canlı',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              if (_selectedPoi!.type == PoiType.gasStation) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF064E3B),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: const Color(0xFF34D399),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.local_gas_station_rounded, color: Color(0xFF34D399), size: 10),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'OSM Canlı',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 9.5,

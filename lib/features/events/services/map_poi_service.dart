@@ -14,6 +14,110 @@ class MapPoiService {
   bool get isLoadingIbb => _isLoadingIbb;
   DateTime? _lastIbbFetchTime;
 
+  List<MapPoiModel> _osmGasStations = [];
+  bool _isLoadingOsmGas = false;
+  bool get isLoadingOsmGas => _isLoadingOsmGas;
+  double? _lastOsmGasLat;
+  double? _lastOsmGasLng;
+  DateTime? _lastOsmGasFetchTime;
+
+  /// OpenStreetMap Overpass API üzerinden kullanıcının etrafındaki canlı benzinlikleri çeker
+  Future<List<MapPoiModel>> fetchOsmGasStations({
+    required double lat,
+    required double lng,
+    double radiusMeters = 6000,
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _osmGasStations.isNotEmpty && _lastOsmGasFetchTime != null && _lastOsmGasLat != null && _lastOsmGasLng != null) {
+      final diffTime = DateTime.now().difference(_lastOsmGasFetchTime!);
+      final distMeters = Geolocator.distanceBetween(lat, lng, _lastOsmGasLat!, _lastOsmGasLng!);
+      if (diffTime < const Duration(minutes: 5) && distMeters < 1500) {
+        return _osmGasStations;
+      }
+    }
+
+    _isLoadingOsmGas = true;
+    try {
+      final query = '[out:json][timeout:10];(node["amenity"="fuel"](around:${radiusMeters.round()},$lat,$lng);way["amenity"="fuel"](around:${radiusMeters.round()},$lat,$lng););out center 35;';
+      final uri = Uri.parse('https://overpass-api.de/api/interpreter?data=${Uri.encodeComponent(query)}');
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'EventMatchApp/1.0 (contact@eventmatch.app)',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final elements = decoded['elements'];
+        if (elements is List && elements.isNotEmpty) {
+          final List<MapPoiModel> list = [];
+          for (var item in elements) {
+            if (item is! Map) continue;
+            final tags = item['tags'];
+            if (tags is! Map) continue;
+
+            double? itemLat;
+            double? itemLng;
+
+            if (item['lat'] != null && item['lon'] != null) {
+              itemLat = double.tryParse(item['lat'].toString());
+              itemLng = double.tryParse(item['lon'].toString());
+            } else if (item['center'] is Map) {
+              itemLat = double.tryParse(item['center']['lat']?.toString() ?? '');
+              itemLng = double.tryParse(item['center']['lon']?.toString() ?? '');
+            }
+
+            if (itemLat == null || itemLng == null) continue;
+
+            final rawName = tags['name']?.toString() ?? tags['brand']?.toString() ?? tags['operator']?.toString() ?? 'Benzin İstasyonu';
+            final brand = tags['brand']?.toString() ?? tags['operator']?.toString() ?? 'Akaryakıt İstasyonu';
+            final openingHours = tags['opening_hours']?.toString() ?? '24 Saat Açık';
+
+            final List<String> perks = [];
+            if (tags['shop'] == 'yes' || tags['shop'] == 'convenience') perks.add('Market');
+            if (tags['car_wash'] == 'yes') perks.add('Oto Yıkama');
+            if (tags['compressed_air'] == 'yes') perks.add('Lastik Hava');
+            if (tags['fuel:lpg'] == 'yes') perks.add('LPG');
+            if (tags['charging_station'] == 'yes') perks.add('⚡ Şarj');
+
+            final desc = perks.isNotEmpty
+                ? '$openingHours • ${perks.join(' • ')}'
+                : (tags['addr:street'] != null ? '${tags['addr:street']} • $openingHours' : openingHours);
+
+            list.add(
+              MapPoiModel(
+                id: 'osm_gas_${item['id'] ?? list.length}',
+                title: rawName,
+                description: desc,
+                latitude: itemLat,
+                longitude: itemLng,
+                type: PoiType.gasStation,
+                brandOrOperator: brand,
+                feeOrCapacity: openingHours.contains('24/7') || openingHours.contains('00:00-00:00') ? '24 Saat Açık' : openingHours,
+              ),
+            );
+          }
+
+          if (list.isNotEmpty) {
+            _osmGasStations = list;
+            _lastOsmGasLat = lat;
+            _lastOsmGasLng = lng;
+            _lastOsmGasFetchTime = DateTime.now();
+            debugPrint('[MapPoiService] OpenStreetMap Overpass: ${list.length} canlı benzinlik yüklendi.');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MapPoiService] OSM Overpass Gas API hatası: $e');
+    } finally {
+      _isLoadingOsmGas = false;
+    }
+    return _osmGasStations;
+  }
+
   /// İBB Açık Veri Portalı İspark Canlı REST API'sinden anlık otoparkları çeker
   Future<List<MapPoiModel>> fetchIbbParkingLots({bool forceRefresh = false}) async {
     if (!forceRefresh && _ibbParkingLots.isNotEmpty && _lastIbbFetchTime != null) {
@@ -455,6 +559,9 @@ class MapPoiService {
   }
 
   List<MapPoiModel> getGasStations() {
+    if (_osmGasStations.isNotEmpty) {
+      return _osmGasStations;
+    }
     return _curatedPois.where((p) => p.type == PoiType.gasStation).toList();
   }
 
