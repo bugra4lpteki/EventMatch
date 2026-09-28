@@ -608,8 +608,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       ),
                     ],
                   ),
-                MarkerLayer(
-                  markers: mapEvents.map((event) {
+                // 🎫 ETKİNLİK MARKERLARI (Otopark veya Benzinlik seçildiğinde harita karmaşasını önlemek için etkinlikler gizlenir)
+                if (!_showParking && !_showGasStations)
+                  MarkerLayer(
+                    markers: mapEvents.map((event) {
                     final isSelected = _selectedEvent?.id == event.id;
                     final pinColor = _getCategoryColor(event.category);
                     return Marker(
@@ -960,6 +962,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   _selectedDateFilter = null;
                                 } else {
                                   _selectedDateFilter = dateFilter;
+                                  _showParking = false;
+                                  _showGasStations = false;
+                                  _selectedPoi = null;
                                 }
                                 _selectedEvent = null;
                               });
@@ -998,6 +1003,12 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           onTap: () {
                             setState(() {
                               _showParking = !_showParking;
+                              if (_showParking) {
+                                _showGasStations = false;
+                                _selectedCategoryFilter = null;
+                                _selectedDateFilter = null;
+                                _selectedEvent = null;
+                              }
                               if (!_showParking && _selectedPoi?.type == PoiType.parking) {
                                 _selectedPoi = null;
                               }
@@ -1070,6 +1081,12 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           onTap: () {
                             setState(() {
                               _showGasStations = !_showGasStations;
+                              if (_showGasStations) {
+                                _showParking = false;
+                                _selectedCategoryFilter = null;
+                                _selectedDateFilter = null;
+                                _selectedEvent = null;
+                              }
                               if (!_showGasStations && _selectedPoi?.type == PoiType.gasStation) {
                                 _selectedPoi = null;
                               }
@@ -1136,6 +1153,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 _selectedCategoryFilter = null;
                               } else {
                                 _selectedCategoryFilter = category;
+                                _showParking = false;
+                                _showGasStations = false;
+                                _selectedPoi = null;
                               }
                               _selectedEvent = null;
                             });
