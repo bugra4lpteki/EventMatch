@@ -458,6 +458,68 @@ class MapPoiService {
     return _curatedPois.where((p) => p.type == PoiType.gasStation).toList();
   }
 
+  List<MapPoiModel> getNearbyParkingLots({
+    double? lat,
+    double? lng,
+    double maxKm = 6.0,
+    int limit = 30,
+  }) {
+    final all = getParkingLots();
+    if (lat == null || lng == null) {
+      return all.take(limit).toList();
+    }
+
+    final withDistance = all.map((poi) {
+      final distMeters = Geolocator.distanceBetween(lat, lng, poi.latitude, poi.longitude);
+      return MapEntry(poi, distMeters);
+    }).toList();
+
+    withDistance.sort((a, b) => a.value.compareTo(b.value));
+
+    final filtered = withDistance
+        .where((entry) => entry.value <= (maxKm * 1000))
+        .map((entry) => entry.key)
+        .take(limit)
+        .toList();
+
+    if (filtered.length < 8) {
+      return withDistance.map((entry) => entry.key).take(15).toList();
+    }
+
+    return filtered;
+  }
+
+  List<MapPoiModel> getNearbyGasStations({
+    double? lat,
+    double? lng,
+    double maxKm = 10.0,
+    int limit = 20,
+  }) {
+    final all = getGasStations();
+    if (lat == null || lng == null) {
+      return all.take(limit).toList();
+    }
+
+    final withDistance = all.map((poi) {
+      final distMeters = Geolocator.distanceBetween(lat, lng, poi.latitude, poi.longitude);
+      return MapEntry(poi, distMeters);
+    }).toList();
+
+    withDistance.sort((a, b) => a.value.compareTo(b.value));
+
+    final filtered = withDistance
+        .where((entry) => entry.value <= (maxKm * 1000))
+        .map((entry) => entry.key)
+        .take(limit)
+        .toList();
+
+    if (filtered.length < 5) {
+      return withDistance.map((entry) => entry.key).take(10).toList();
+    }
+
+    return filtered;
+  }
+
   List<MapPoiModel> getNearbyPois({
     required double lat,
     required double lng,

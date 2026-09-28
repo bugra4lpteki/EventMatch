@@ -412,6 +412,29 @@ class _EventMapScreenState extends State<EventMapScreen> {
             ? LatLng(mapEvents.first.latitude!, mapEvents.first.longitude!)
             : const LatLng(41.0082, 28.9784));
 
+    final userLat = _currentPosition?.latitude ?? currentUser.latitude;
+    final userLng = _currentPosition?.longitude ?? currentUser.longitude;
+
+    // Sadece kullanıcının yakınındaki otoparkları göster (haritada aşırı kalabalık olmaması için)
+    final nearbyParkingLots = _showParking
+        ? MapPoiService().getNearbyParkingLots(
+            lat: userLat,
+            lng: userLng,
+            maxKm: 6.0,
+            limit: 25,
+          )
+        : <MapPoiModel>[];
+
+    // Sadece kullanıcının yakınındaki benzinlikleri göster
+    final nearbyGasStations = _showGasStations
+        ? MapPoiService().getNearbyGasStations(
+            lat: userLat,
+            lng: userLng,
+            maxKm: 8.0,
+            limit: 15,
+          )
+        : <MapPoiModel>[];
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -631,7 +654,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 // 🅿️ OTOPARKLAR MARKER KATMANI (İBB İSPARK CANLI DOLULUK DESTEĞİ)
                 if (_showParking)
                   MarkerLayer(
-                    markers: MapPoiService().getParkingLots().map((poi) {
+                    markers: nearbyParkingLots.map((poi) {
                       final isSelected = _selectedPoi?.id == poi.id;
                       final isFull = poi.isFull;
                       final primaryColor = isFull ? const Color(0xFFDC2626) : const Color(0xFF2563EB);
@@ -686,7 +709,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 // ⛽ BENZİNLİKLER MARKER KATMANI
                 if (_showGasStations)
                   MarkerLayer(
-                    markers: MapPoiService().getGasStations().map((poi) {
+                    markers: nearbyGasStations.map((poi) {
                       final isSelected = _selectedPoi?.id == poi.id;
                       return Marker(
                         point: LatLng(poi.latitude, poi.longitude),
@@ -1020,7 +1043,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 Text(
                                   MapPoiService().isLoadingIbb
                                       ? 'İBB İspark Yükleniyor...'
-                                      : (_showParking ? 'İBB İspark' : 'Otoparklar'),
+                                      : (_showParking ? 'Yakın Otoparklar (${nearbyParkingLots.length})' : 'Otoparklar'),
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12.5,
@@ -1585,6 +1608,31 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           const SizedBox(height: 7),
                           Row(
                             children: [
+                              if (_selectedPoi!.getFormattedDistance(userLat, userLng) != null) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.near_me_rounded, color: Color(0xFF60A5FA), size: 11),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        _selectedPoi!.getFormattedDistance(userLat, userLng)!,
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                              ],
                               if (_selectedPoi!.feeOrCapacity != null)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),

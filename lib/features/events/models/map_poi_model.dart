@@ -1,3 +1,5 @@
+import 'package:geolocator/geolocator.dart';
+
 enum PoiType {
   parking,
   gasStation,
@@ -35,4 +37,20 @@ class MapPoiModel {
   });
 
   bool get isFull => emptyCapacity != null && emptyCapacity == 0;
+
+  double? getDistanceInKm(double? userLat, double? userLng) {
+    if (userLat == null || userLng == null) return null;
+    final meters = Geolocator.distanceBetween(userLat, userLng, latitude, longitude);
+    return meters / 1000.0;
+  }
+
+  String? getFormattedDistance(double? userLat, double? userLng) {
+    final dist = getDistanceInKm(userLat, userLng);
+    if (dist == null) return null;
+    if (dist < 1.0) {
+      final meters = (dist * 1000).round();
+      return '$meters m';
+    }
+    return '${dist.toStringAsFixed(1)} km';
+  }
 }
