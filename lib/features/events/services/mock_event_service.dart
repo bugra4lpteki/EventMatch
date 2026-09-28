@@ -1426,7 +1426,7 @@ class MockEventService extends ChangeNotifier {
 
   final List<String> activityFeed = [];
 
-  List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Stand-up', 'Festival'];
+  List<String> categories = ['Tümü', 'Konser', 'Tiyatro', 'Stand-up'];
   static const List<String> sportsSubFilters = <String>[];
 
   List<String> cities = ['Tüm Şehirler', 'İstanbul', 'Ankara', 'İzmir', 'Antalya', 'Bursa', 'Adana', 'Gaziantep', 'Mersin'];

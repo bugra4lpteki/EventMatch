@@ -861,7 +861,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
                     child: Row(
-                      children: eventService.categories.where((c) => c != 'Tümü').map((category) {
+                      children: eventService.categories.where((c) => c != 'Tümü' && c != 'Festival').map((category) {
                         final isSelected = _selectedCategoryFilter == category;
                         return GestureDetector(
                           onTap: () {
