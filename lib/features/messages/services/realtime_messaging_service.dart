@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/notification_service.dart';
 import '../models/message_model.dart';
@@ -50,12 +50,8 @@ class RealtimeMessagingService {
         'content': messageText.trim(),
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
-
-      NotificationService().showMessageNotification(
-        chatId: receiverId,
-        senderName: senderName,
-        message: messageText.trim(),
-      );
+      // Aliciya bildirim zaten OneSignal push ile gonderilir.
+      // Burada yerel bildirim gondermek cift bildirimlere yol acar.
     } catch (e) {
       debugPrint('[RealtimeMessaging] Send error: $e');
     }

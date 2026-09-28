@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -289,7 +289,7 @@ class NotificationService with WidgetsBindingObserver {
         'mutable_content': true,
         'ios_interruption_level': 'time_sensitive',
         'android_sound': 'default',
-        'small_icon': 'ic_stat_onesignal_default',
+        'small_icon': 'ic_notification',
         'large_icon': 'ic_launcher',
         'android_accent_color': 'FF8B5CF6',
         'apns_priority': 10,
@@ -364,7 +364,7 @@ class NotificationService with WidgetsBindingObserver {
         'mutable_content': true,
         'ios_interruption_level': 'time_sensitive',
         'android_sound': 'default',
-        'small_icon': 'ic_stat_onesignal_default',
+        'small_icon': 'ic_notification',
         'large_icon': 'ic_launcher',
         'android_accent_color': 'FF8B5CF6',
         'apns_priority': 10,
@@ -426,6 +426,13 @@ class NotificationService with WidgetsBindingObserver {
 
     if (kIsWeb) {
       debugPrint('[NotificationService Web] $title: $message');
+      return;
+    }
+
+    // iOS'ta OneSignal zaten push bildirimi goesteriyor;
+    // flutter_local_notifications ile ikinci yerel bildirim gonderme = cift bildirim!
+    if (Platform.isIOS) {
+      debugPrint('[NotificationService] iOS: Yerel bildirim atlandi (OneSignal yeterli).');
       return;
     }
 
