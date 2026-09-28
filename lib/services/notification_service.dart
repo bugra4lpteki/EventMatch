@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -64,7 +64,7 @@ class NotificationService with WidgetsBindingObserver {
 
     try {
       // 1. Yerel Bildirim Motorunu Başlat (Local Notifications)
-      const androidSettings = AndroidInitializationSettings('@mipmap/launcher_icon');
+      const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
       const iosSettings = DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
@@ -442,7 +442,7 @@ class NotificationService with WidgetsBindingObserver {
       channelDescription: highImportanceChannel.description,
       importance: Importance.max,
       priority: Priority.max,
-      icon: '@mipmap/launcher_icon',
+      icon: '@drawable/ic_notification',
       largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
       color: const Color(0xFF8B5CF6),
       showWhen: true,
@@ -510,7 +510,7 @@ class NotificationService with WidgetsBindingObserver {
       channelDescription: '2 Adımlı Doğrulama Güvenlik Kodları',
       importance: Importance.max,
       priority: Priority.max,
-      icon: '@mipmap/launcher_icon',
+      icon: '@drawable/ic_notification',
       largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
       color: const Color(0xFF8B5CF6),
       showWhen: true,

@@ -61,13 +61,13 @@
             android:value="AIzaSyAM7zBJfV-D0b89985-26biQZMzSPXCxnU" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@drawable/ic_stat_onesignal_default" />
+            android:resource="@drawable/ic_notification" />
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/notification_accent_color" />
         <meta-data
             android:name="com.onesignal.NotificationIcon.DEFAULT"
-            android:value="ic_stat_onesignal_default" />
+            android:value="ic_notification" />
         <meta-data
             android:name="com.onesignal.NotificationAccentColor.DEFAULT"
             android:value="FF8B5CF6" />

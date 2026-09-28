@@ -268,7 +268,8 @@ class MockEventService extends ChangeNotifier {
               .select('user_id, storage_url')
               .inFilter('user_id', userIds)
               .eq('is_active', true)
-              .order('sort_order', ascending: true);
+              .order('sort_order', ascending: true)
+              .order('id', ascending: true);
           for (var p in photosRes) {
             final uid = p['user_id'].toString().toLowerCase();
             final photo = p['storage_url'].toString();
@@ -525,7 +526,7 @@ class MockEventService extends ChangeNotifier {
               final uRes = await _supabase.from('users').select('name, gender').eq('id', rawUserId).maybeSingle();
               String attendeeAvatar = '';
               try {
-                final pRes = await _supabase.from('user_photos').select('storage_url').eq('user_id', rawUserId).eq('is_active', true).order('sort_order', ascending: true).limit(1).maybeSingle();
+                final pRes = await _supabase.from('user_photos').select('storage_url').eq('user_id', rawUserId).eq('is_active', true).order('sort_order', ascending: true).order('id', ascending: true).limit(1).maybeSingle();
                 if (pRes != null && pRes['storage_url'] != null) {
                   final rawUrl = pRes['storage_url'].toString();
                   if (UserModel.isValidPhotoUrl(rawUrl)) {
@@ -973,12 +974,32 @@ class MockEventService extends ChangeNotifier {
         }
         
         try {
-          final photos = await _supabase.from('user_photos').select().eq('user_id', userId).eq('is_active', true).order('sort_order');
+          final photos = await _supabase
+              .from('user_photos')
+              .select('id, storage_url, sort_order')
+              .eq('user_id', userId)
+              .eq('is_active', true)
+              .order('sort_order', ascending: true)
+              .order('id', ascending: true);
           if (photos.isNotEmpty) {
-            final validUrls = photos
-                .map((p) => p['storage_url']?.toString() ?? '')
-                .where((u) => u.startsWith('http'))
-                .toList();
+            List<String> validUrls = [];
+            for (var p in photos) {
+              final u = p['storage_url']?.toString().trim() ?? '';
+              if (UserModel.isValidPhotoUrl(u) && !validUrls.contains(u)) {
+                validUrls.add(u);
+              }
+            }
+
+            final cachedUrls = prefs.getStringList('${userId}_userAvatarUrls');
+            final sortOrders = photos.map((p) => p['sort_order']).toSet();
+            if (cachedUrls != null && cachedUrls.isNotEmpty && sortOrders.length <= 1) {
+              final Set<String> validSet = validUrls.toSet();
+              final Set<String> cachedSet = cachedUrls.where(UserModel.isValidPhotoUrl).toSet();
+              if (validSet.isNotEmpty && validSet.containsAll(cachedSet) && cachedSet.containsAll(validSet)) {
+                validUrls = cachedUrls.where((u) => validSet.contains(u)).toList();
+              }
+            }
+
             if (validUrls.isNotEmpty) {
               currentUser.avatarUrls = validUrls;
               currentUser.avatarUrl = validUrls.first;
@@ -1361,6 +1382,12 @@ class MockEventService extends ChangeNotifier {
               'is_active': true
             }).toList();
             await _supabase.from('user_photos').insert(photosData);
+
+            try {
+              await _supabase.from('users').update({
+                'avatar_url': validHttpUrls.first,
+              }).eq('id', userId);
+            } catch (_) {}
           }
         }
       } catch (e) {
@@ -2244,7 +2271,7 @@ class MockEventService extends ChangeNotifier {
             }
           } catch (_) {}
           try {
-            final pRes = await _supabase.from('user_photos').select('user_id, storage_url').inFilter('user_id', senderIds).eq('is_active', true).order('sort_order');
+            final pRes = await _supabase.from('user_photos').select('user_id, storage_url').inFilter('user_id', senderIds).eq('is_active', true).order('sort_order', ascending: true).order('id', ascending: true);
             for (var p in pRes) {
               final uid = p['user_id'].toString().toLowerCase();
               if (!senderAvatars.containsKey(uid) && p['storage_url'] != null) {

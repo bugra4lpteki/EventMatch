@@ -82,10 +82,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
       final photosRes = await supabase
           .from('user_photos')
-          .select('storage_url')
+          .select('id, storage_url, sort_order')
           .eq('user_id', targetUserId)
           .eq('is_active', true)
-          .order('sort_order', ascending: true);
+          .order('sort_order', ascending: true)
+          .order('id', ascending: true);
 
       final List<String> loaded = [];
       for (var row in photosRes) {
@@ -96,11 +97,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       }
 
       if (loaded.isNotEmpty && mounted) {
+        // If viewing current user and local/service avatarUrls already has these photos,
+        // preserve the user-defined order rather than flipping unexpectedly.
+        if (isCurrentUser && eventService.currentUser.avatarUrls.isNotEmpty) {
+          final currentSet = eventService.currentUser.avatarUrls.toSet();
+          final loadedSet = loaded.toSet();
+          if (currentSet.length == loadedSet.length && currentSet.containsAll(loadedSet)) {
+            _fetchedPhotos = List<String>.from(eventService.currentUser.avatarUrls);
+            widget.user.avatarUrls = List<String>.from(eventService.currentUser.avatarUrls);
+            widget.user.avatarUrl = eventService.currentUser.avatarUrls.first;
+            setState(() {});
+            return;
+          }
+        }
+
         setState(() {
           _fetchedPhotos = loaded;
           widget.user.avatarUrls = loaded;
           if (loaded.isNotEmpty) {
             widget.user.avatarUrl = loaded.first;
+          }
+          if (isCurrentUser) {
+            eventService.currentUser.avatarUrls = loaded;
+            eventService.currentUser.avatarUrl = loaded.first;
           }
         });
       }

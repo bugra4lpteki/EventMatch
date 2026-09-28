@@ -92,10 +92,10 @@ class UserModel {
   bool get hasRealPhoto => isValidPhotoUrl(avatarUrl) || avatarUrls.any(isValidPhotoUrl);
 
   String get validAvatarUrl {
-    if (isValidPhotoUrl(avatarUrl)) return avatarUrl.trim();
     for (var u in avatarUrls) {
       if (isValidPhotoUrl(u)) return u.trim();
     }
+    if (isValidPhotoUrl(avatarUrl)) return avatarUrl.trim();
     return '';
   }
 

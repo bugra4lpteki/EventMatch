@@ -84,6 +84,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  void _movePhoto(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _avatarImages.length) return;
+    if (newIndex < 0 || newIndex >= _avatarImages.length) return;
+    setState(() {
+      final item = _avatarImages.removeAt(oldIndex);
+      _avatarImages.insert(newIndex, item);
+    });
+  }
+
+  void _setAsMainPhoto(int index) {
+    if (index <= 0 || index >= _avatarImages.length) return;
+    setState(() {
+      final item = _avatarImages.removeAt(index);
+      _avatarImages.insert(0, item);
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Fotoğraf ana profil fotoğrafı yapıldı.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   void _showPhotoOptions(int index) {
     showModalBottomSheet(
       context: context,
@@ -92,10 +117,41 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
+        final isMain = index == 0;
+        final canMoveLeft = index > 0;
+        final canMoveRight = index < _avatarImages.length - 1;
+
         return SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (!isMain)
+                ListTile(
+                  leading: const Icon(Icons.star, color: Colors.amber),
+                  title: const Text('Ana Profil Fotoğrafı Yap', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _setAsMainPhoto(index);
+                  },
+                ),
+              if (canMoveLeft)
+                ListTile(
+                  leading: Icon(Icons.arrow_back, color: AppColors.primary),
+                  title: Text('Sola / Öne Taşı', style: TextStyle(color: AppColors.textPrimary)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _movePhoto(index, index - 1);
+                  },
+                ),
+              if (canMoveRight)
+                ListTile(
+                  leading: Icon(Icons.arrow_forward, color: AppColors.primary),
+                  title: Text('Sağa / Arkaya Taşı', style: TextStyle(color: AppColors.textPrimary)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _movePhoto(index, index + 1);
+                  },
+                ),
               ListTile(
                 leading: Icon(Icons.photo_library, color: AppColors.primary),
                 title: Text('Galeriden Değiştir', style: TextStyle(color: AppColors.textPrimary)),
@@ -195,17 +251,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
         final tags = _tagsController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
         
-        await eventService.updateCurrentUser(
-          name: _nameController.text.trim(),
-          username: newUsername.isNotEmpty ? newUsername : _usernameController.text.trim(),
-          city: _cityController.text,
-          gender: _selectedGender,
-          aboutMe: _aboutController.text,
-          socialLinks: _socialControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList(),
-          avatarUrl: _avatarImages.isNotEmpty
-              ? (_avatarImages.first is String ? _avatarImages.first as String : '')
-              : '',
-          avatarImages: _avatarImages,
+          final firstUrl = _avatarImages.isNotEmpty
+              ? (_avatarImages.first is String
+                  ? _avatarImages.first as String
+                  : (_avatarImages.first is XFile ? (_avatarImages.first as XFile).path : ''))
+              : '';
+
+          await eventService.updateCurrentUser(
+            name: _nameController.text.trim(),
+            username: newUsername.isNotEmpty ? newUsername : _usernameController.text.trim(),
+            city: _cityController.text,
+            gender: _selectedGender,
+            aboutMe: _aboutController.text,
+            socialLinks: _socialControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList(),
+            avatarUrl: firstUrl,
+            avatarImages: _avatarImages,
           tags: tags,
           plannedEvents: _selectedPlannedEvents,
           pastEvents: _selectedPastEvents,
@@ -372,12 +432,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profil Fotoğrafları (Max 3, Sürükle-Bırak)
-              _buildLabel('Profil Fotoğrafları (Sürükleyip sıralayabilirsiniz)'),
+              // Profil Fotoğrafları (Max 3, Sürükle-Bırak veya Oklarla Sırala)
+              _buildLabel('Profil Fotoğrafları (1. fotoğraf profil fotoğrafınızdır)'),
               SizedBox(
-                height: 120,
+                height: 160,
                 child: ReorderableListView(
                   scrollDirection: Axis.horizontal,
+                  buildDefaultDragHandles: false,
                   onReorder: (oldIndex, newIndex) {
                     setState(() {
                       if (oldIndex < newIndex) {
@@ -390,59 +451,152 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   children: [
                     for (int index = 0; index < _avatarImages.length; index++)
                       Padding(
-                        key: ValueKey(_avatarImages[index]),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Stack(
-                          clipBehavior: Clip.none,
+                        key: ValueKey('photo_${_avatarImages[index].hashCode}_$index'),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            GestureDetector(
-                              onTap: () => _showPhotoOptions(index),
-                              child: Container(
-                                width: 80,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  color: AppColors.surface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: AppColors.primary.withOpacity(0.3)),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: _buildAvatarPreview(_avatarImages[index]),
-                                ),
+                            ReorderableDelayedDragStartListener(
+                              index: index,
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => _showPhotoOptions(index),
+                                    child: Container(
+                                      width: 86,
+                                      height: 106,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: index == 0
+                                              ? AppColors.primary
+                                              : AppColors.primary.withValues(alpha: 0.3),
+                                          width: index == 0 ? 2.2 : 1.0,
+                                        ),
+                                        boxShadow: index == 0
+                                            ? [
+                                                BoxShadow(
+                                                  color: AppColors.primary.withValues(alpha: 0.35),
+                                                  blurRadius: 10,
+                                                  spreadRadius: 1,
+                                                ),
+                                              ]
+                                            : null,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: _buildAvatarPreview(_avatarImages[index]),
+                                      ),
+                                    ),
+                                  ),
+                                  // Main Profile badge on index 0
+                                  if (index == 0)
+                                    Positioned(
+                                      top: 4,
+                                      left: 4,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                        decoration: BoxDecoration(
+                                          gradient: AppColors.primaryGradient,
+                                          borderRadius: BorderRadius.circular(6),
+                                          boxShadow: const [
+                                            BoxShadow(color: Colors.black45, blurRadius: 4),
+                                          ],
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.star, size: 9, color: Colors.white),
+                                            SizedBox(width: 2),
+                                            Text(
+                                              'Profil',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  // Edit / Scale Button
+                                  Positioned(
+                                    bottom: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () => _editImageScale(index),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.7),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: AppColors.primary, width: 1),
+                                        ),
+                                        child: Icon(Icons.crop_rotate, size: 12, color: AppColors.primary),
+                                      ),
+                                    ),
+                                  ),
+                                  // Remove Button
+                                  Positioned(
+                                    top: -4,
+                                    right: -4,
+                                    child: GestureDetector(
+                                      onTap: () => _removeImage(index),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.85),
+                                          shape: BoxShape.circle,
+                                          border: Border.all(color: Colors.white24, width: 1),
+                                        ),
+                                        child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            // Edit / Scale Button
-                            Positioned(
-                              bottom: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => _editImageScale(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.7),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: AppColors.primary, width: 1),
-                                  ),
-                                  child: Icon(Icons.crop_rotate, size: 12, color: AppColors.primary),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              top: -4,
-                              right: -4,
-                              child: GestureDetector(
-                                onTap: () => _removeImage(index),
-                                child: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.85),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white24, width: 1),
-                                  ),
-                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
-                                ),
-                              ),
+                            const SizedBox(height: 6),
+                            // Quick swap arrow buttons (one tap to reorder!)
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (index > 0)
+                                  GestureDetector(
+                                    onTap: () => _movePhoto(index, index - 1),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.white24, width: 0.8),
+                                      ),
+                                      child: const Icon(Icons.arrow_back, size: 14, color: Colors.white),
+                                    ),
+                                  )
+                                else
+                                  const SizedBox(width: 24),
+                                if (index < _avatarImages.length - 1)
+                                  GestureDetector(
+                                    onTap: () => _movePhoto(index, index + 1),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      margin: const EdgeInsets.symmetric(horizontal: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.surface,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: Colors.white24, width: 0.8),
+                                      ),
+                                      child: const Icon(Icons.arrow_forward, size: 14, color: Colors.white),
+                                    ),
+                                  )
+                                else
+                                  const SizedBox(width: 24),
+                              ],
                             ),
                           ],
                         ),

@@ -398,7 +398,8 @@ class LocationRadarService extends ChangeNotifier {
             .from('user_photos')
             .select('user_id, storage_url')
             .eq('is_active', true)
-            .order('sort_order', ascending: true);
+            .order('sort_order', ascending: true)
+            .order('id', ascending: true);
         for (var p in photosRes) {
           final uId = p['user_id']?.toString().toLowerCase();
           final url = p['storage_url']?.toString();

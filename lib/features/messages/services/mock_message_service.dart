@@ -720,7 +720,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               .select('storage_url')
               .eq('user_id', partnerId)
               .eq('is_active', true)
-              .order('sort_order', ascending: true);
+              .order('sort_order', ascending: true)
+              .order('id', ascending: true);
           for (var p in pRes) {
             final u = p['storage_url']?.toString() ?? '';
             if (u.isNotEmpty) photos.add(u);
@@ -856,7 +857,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           } catch (_) {}
         } else {
           chat.unreadCount += 1;
-          if (!chat.isMuted) {
+          // Yerel heads-up bildirimi: SADECE uygulama ön plandayken göster.
+          // Arka planda/kapalıyken Supabase trigger üzerinden OneSignal push zaten gönderiliyor.
+          // İkisi birden çalışması = çift bildirim!
+          if (!chat.isMuted && NotificationService().isAppInForeground) {
             NotificationService().showMessageNotification(
               chatId: partnerId,
               senderName: chat.participant.name,
@@ -1398,7 +1402,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               .select('user_id, storage_url')
               .inFilter('user_id', validUuidList)
               .eq('is_active', true)
-              .order('sort_order', ascending: true);
+              .order('sort_order', ascending: true)
+              .order('id', ascending: true);
 
           for (var photo in photosRes) {
             final uId = photo['user_id'].toString().toLowerCase();
@@ -2052,22 +2057,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      // Alıcıya anında Apple APNs & OneSignal kapalı durum/arka plan push bildirimi gönder
-      final senderName = _eventService.currentUser.name.isNotEmpty
-          ? _eventService.currentUser.name
-          : (_supabase.auth.currentUser?.userMetadata?['name'] as String? ?? 'Biri');
-
-      final pushContent = text.contains('[audio:')
-          ? '🎤 Sesli Mesaj'
-          : (text.contains('[image:') ? '📷 Fotoğraf' : MessageModel.parseEncodedContent(text).cleanText);
-
-      NotificationService().sendRemotePushNotification(
-        receiverId: partnerId,
-        senderName: senderName,
-        content: pushContent,
-        matchId: numericMatchId?.toString(),
-        senderId: effectiveSenderId,
-      );
+      // NOT: Push bildirimini Supabase DB trigger'ı (handle_new_message_push) zaten gönderiyor.
+      // Flutter tarafından ayrıca sendRemotePushNotification çağırmak ÇİFT BİLDİRİME yol açar.
+      // Bu yüzden burada ekstra push gönderilmiyor.
     } catch (e) {
       debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
       final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase());

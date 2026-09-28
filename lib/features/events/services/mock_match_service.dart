@@ -329,7 +329,8 @@ class MockMatchService extends ChangeNotifier {
                 .select('user_id, storage_url')
                 .inFilter('user_id', filteredUserIds)
                 .eq('is_active', true)
-                .order('sort_order', ascending: true);
+                .order('sort_order', ascending: true)
+                .order('id', ascending: true);
 
             for (var photo in photosRes) {
               final uId = photo['user_id']?.toString().trim() ?? '';
@@ -746,7 +747,8 @@ class MockMatchService extends ChangeNotifier {
                 .select('user_id, storage_url')
                 .inFilter('user_id', requesterIds)
                 .eq('is_active', true)
-                .order('sort_order', ascending: true);
+                .order('sort_order', ascending: true)
+                .order('id', ascending: true);
 
             for (var p in photosRes) {
               final uId = p['user_id']?.toString().toLowerCase() ?? '';
