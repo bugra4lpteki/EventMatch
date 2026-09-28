@@ -10,19 +10,30 @@ CREATE TABLE IF NOT EXISTS public.push_debug_logs (
   details JSONB
 );
 
--- Sadece yetkili ve sistem rollerinin okuyup yazabilmesi için izinleri sınırla (anon erişimi engellendi)
-REVOKE ALL ON public.push_debug_logs FROM anon;
-GRANT SELECT, INSERT ON public.push_debug_logs TO authenticated, service_role;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+-- Hata teşhisinin okunabilmesi ve yazılabilmesi için tüm rollere izin ver
+GRANT ALL ON public.push_debug_logs TO anon, authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
 
--- 2. Push Token ve FCM Token sütunlarını users tablosunda garantiye al
+-- 2. Engellenenler tablosunu garantiye al (Trigger hata vermesin)
+CREATE TABLE IF NOT EXISTS public.user_blocks (
+  id BIGSERIAL PRIMARY KEY,
+  blocker_id TEXT NOT NULL,
+  blocked_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(blocker_id, blocked_id)
+);
+GRANT ALL ON public.user_blocks TO anon, authenticated, service_role;
+
+-- 3. Push Token ve FCM Token sütunlarını users tablosunda garantiye al
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS push_token TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS fcm_token TEXT;
 
--- 3. Asenkron arka plan HTTP istekleri için pg_net eklentisini aç
+-- 4. Asenkron arka plan HTTP istekleri için pg_net eklentisini aç ve yetkilendir
 CREATE EXTENSION IF NOT EXISTS "pg_net";
+GRANT USAGE ON SCHEMA net TO postgres, anon, authenticated, service_role;
+GRANT ALL ON ALL FUNCTIONS IN SCHEMA net TO postgres, anon, authenticated, service_role;
 
--- 4. messages tablosuna her yeni mesaj geldiğinde doğrudan OneSignal API'sini tetikleyen fonksiyon
+-- 5. messages tablosuna her yeni mesaj geldiğinde doğrudan OneSignal API'sini tetikleyen fonksiyon
 CREATE OR REPLACE FUNCTION public.handle_new_message_push()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -32,6 +43,7 @@ DECLARE
   v_receiver_push_token TEXT;
   v_request_id BIGINT;
   v_payload JSONB;
+  v_clean_content TEXT;
 BEGIN
   -- Sadece geçerli bir alıcı (receiver_id) varsa bildirim gönder
   IF NEW.receiver_id IS NOT NULL AND NEW.receiver_id::text <> '' THEN
@@ -55,6 +67,15 @@ BEGIN
     FROM public.users
     WHERE id::text = NEW.receiver_id::text;
 
+    -- Mesaj içeriğini temizle (Ses, fotoğraf veya alıntı etiketlerini insan diline çevir)
+    v_clean_content := CASE 
+      WHEN NEW.content LIKE '%[audio:%' THEN '🎤 Sesli Mesaj'
+      WHEN NEW.content LIKE '%[image:%' THEN '📷 Fotoğraf'
+      WHEN NEW.content LIKE '[reply:%' THEN 
+        COALESCE(NULLIF(regexp_replace(NEW.content, '^\[reply:[^\]]*\]\s*', ''), ''), 'Yeni Mesaj')
+      ELSE COALESCE(NULLIF(NEW.content, ''), 'Yeni Mesaj')
+    END;
+
     v_payload := jsonb_build_object(
       'app_id', v_onesignal_app_id,
       'target_channel', 'push',
@@ -64,18 +85,18 @@ BEGIN
       'priority', 10,
       'android_priority', 5,
       'headings', jsonb_build_object(
-        'en', COALESCE(v_sender_name, 'New Message'),
+        'en', COALESCE(v_sender_name, 'Yeni Mesaj'),
         'tr', COALESCE(v_sender_name, 'Yeni Mesaj')
       ),
       'contents', jsonb_build_object(
-        'en', NEW.content,
-        'tr', NEW.content
+        'en', v_clean_content,
+        'tr', v_clean_content
       ),
       'data', jsonb_build_object(
         'chat_id', NEW.sender_id::text,
         'sender_id', NEW.sender_id::text,
         'sender_name', COALESCE(v_sender_name, 'Yeni Mesaj'),
-        'match_id', NEW.match_id,
+        'match_id', COALESCE(NEW.match_id::text, ''),
         'type', 'new_message'
       ),
       'ios_badgeType', 'Increase',
@@ -132,7 +153,7 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 5. Trigger'ı bağla
+-- 6. Trigger'ı bağla
 DROP TRIGGER IF EXISTS tr_new_message_push ON public.messages;
 CREATE TRIGGER tr_new_message_push
   AFTER INSERT ON public.messages
