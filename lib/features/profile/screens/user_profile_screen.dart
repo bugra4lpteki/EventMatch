@@ -38,6 +38,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     _pageController = PageController();
+    _targetUserHideEvents = widget.user.hideEvents;
     _checkTargetUserPrivacy();
     _loadAllUserPhotos();
   }
@@ -50,8 +51,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
   Future<void> _loadAllUserPhotos() async {
     final eventService = context.read<MockEventService>();
-    final isCurrentUser = (widget.user.id == eventService.currentUser.id ||
-        widget.user.name.toLowerCase() == eventService.currentUser.name.toLowerCase());
+    final isCurrentUser = (widget.user.id.toLowerCase().trim() == eventService.currentUser.id.toLowerCase().trim() ||
+        (widget.user.username != null && eventService.currentUser.username != null &&
+            widget.user.username!.toLowerCase().trim() == eventService.currentUser.username!.toLowerCase().trim()) ||
+        widget.user.name.toLowerCase().trim() == eventService.currentUser.name.toLowerCase().trim());
 
     if (isCurrentUser && eventService.currentUser.avatarUrls.isNotEmpty) {
       if (mounted) {
@@ -92,7 +95,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         }
       }
 
-        if (loaded.isNotEmpty && mounted) {
+      if (loaded.isNotEmpty && mounted) {
         setState(() {
           _fetchedPhotos = loaded;
           widget.user.avatarUrls = loaded;
@@ -105,16 +108,38 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       try {
         final uRes = await supabase
             .from('users')
-            .select('gender, city, bio, about_me')
+            .select('gender, city, bio, about_me, hide_events')
             .eq('id', targetUserId)
             .maybeSingle();
         if (uRes != null && mounted) {
           final g = uRes['gender']?.toString();
           if (g != null && g.isNotEmpty && (widget.user.gender == null || widget.user.gender!.isEmpty)) {
-            setState(() {
-              widget.user.gender = g;
-            });
+            widget.user.gender = g;
           }
+          if (uRes['hide_events'] != null && !isCurrentUser) {
+            final h = uRes['hide_events'] == true;
+            _targetUserHideEvents = h;
+            widget.user.hideEvents = h;
+          }
+          setState(() {});
+        }
+      } catch (_) {}
+
+      try {
+        final attendedRes = await supabase
+            .from('event_attendees')
+            .select('event_id')
+            .eq('user_id', targetUserId)
+            .eq('status', 'joined');
+        if (attendedRes.isNotEmpty && mounted) {
+          final fetchedEvents = attendedRes.map((r) => r['event_id'].toString()).toList();
+          setState(() {
+            for (var ev in fetchedEvents) {
+              if (!widget.user.plannedEvents.contains(ev)) {
+                widget.user.plannedEvents.add(ev);
+              }
+            }
+          });
         }
       } catch (_) {}
     } catch (e) {
@@ -123,9 +148,55 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _checkTargetUserPrivacy() async {
-    final prefs = await SharedPreferences.getInstance();
+    final eventService = context.read<MockEventService>();
     final user = widget.user;
+    final isMe = (user.id.toLowerCase().trim() == eventService.currentUser.id.toLowerCase().trim() ||
+        (user.username != null && eventService.currentUser.username != null &&
+            user.username!.toLowerCase().trim() == eventService.currentUser.username!.toLowerCase().trim()) ||
+        user.name.toLowerCase().trim() == eventService.currentUser.name.toLowerCase().trim());
 
+    if (isMe) {
+      if (mounted) {
+        setState(() {
+          _targetUserHideEvents = false;
+          widget.user.hideEvents = false;
+        });
+      }
+      return;
+    }
+
+    try {
+      final supabase = Supabase.instance.client;
+      String targetId = user.id;
+      final isUuid = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(targetId);
+      if (!isUuid) {
+        final q = user.username != null && user.username!.isNotEmpty
+            ? await supabase.from('users').select('id, hide_events').eq('username', user.username!).maybeSingle()
+            : await supabase.from('users').select('id, hide_events').ilike('name', user.name).maybeSingle();
+        if (q != null) {
+          if (q['hide_events'] != null && mounted) {
+            final h = q['hide_events'] == true;
+            setState(() {
+              _targetUserHideEvents = h;
+              widget.user.hideEvents = h;
+            });
+            return;
+          }
+        }
+      } else {
+        final q = await supabase.from('users').select('hide_events').eq('id', targetId).maybeSingle();
+        if (q != null && q['hide_events'] != null && mounted) {
+          final h = q['hide_events'] == true;
+          setState(() {
+            _targetUserHideEvents = h;
+            widget.user.hideEvents = h;
+          });
+          return;
+        }
+      }
+    } catch (_) {}
+
+    final prefs = await SharedPreferences.getInstance();
     final hideEventsPref = prefs.getBool('${user.id}_privacy_hide_events') ??
                            prefs.getBool('${user.name}_privacy_hide_events') ??
                            (user.username != null ? prefs.getBool('${user.username}_privacy_hide_events') : null) ??
@@ -134,6 +205,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     if (mounted) {
       setState(() {
         _targetUserHideEvents = hideEventsPref;
+        widget.user.hideEvents = hideEventsPref;
       });
     }
   }
@@ -285,8 +357,11 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     final eventService = context.watch<MockEventService>();
     final matchService = context.watch<MockMatchService>();
     final user = widget.user;
-    final isCurrentUser = (user.id == eventService.currentUser.id || user.name.toLowerCase() == eventService.currentUser.name.toLowerCase());
-    final hideEvents = isCurrentUser ? false : (_targetUserHideEvents || user.hideEvents);
+    final isCurrentUser = (user.id.toLowerCase().trim() == eventService.currentUser.id.toLowerCase().trim() ||
+        (user.username != null && eventService.currentUser.username != null &&
+            user.username!.toLowerCase().trim() == eventService.currentUser.username!.toLowerCase().trim()) ||
+        user.name.toLowerCase().trim() == eventService.currentUser.name.toLowerCase().trim());
+    final hideEvents = isCurrentUser ? false : _targetUserHideEvents;
 
     final msgService = context.watch<MockMessageService>();
     final effectiveEventId = widget.eventId ?? 'radar';
@@ -631,8 +706,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                   // Etkinlik Listeleri
                   _buildEventList(context, "Gitmeyi Düşündüğü Etkinlikler", user.plannedEvents, eventService, isHidden: hideEvents),
-                  const SizedBox(height: 24),
-                  _buildEventList(context, "Daha Önce Gittiği Etkinlikler", user.pastEvents, eventService, isHidden: hideEvents),
 
                   if (!isCurrentUser) ...[
                     const SizedBox(height: 32),

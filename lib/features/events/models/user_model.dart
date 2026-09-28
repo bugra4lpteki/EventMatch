@@ -121,6 +121,7 @@ class UserModel {
       'hideLastSeen': hideLastSeen,
       'isPrivateProfile': isPrivateProfile,
       'hideEvents': hideEvents,
+      'hide_events': hideEvents,
       'enableLocationSharing': enableLocationSharing,
       'enable_location_sharing': enableLocationSharing,
       'is_verified': isVerified,
@@ -158,7 +159,7 @@ class UserModel {
       isOnline: map['isOnline'] == true,
       hideLastSeen: map['hideLastSeen'] == true,
       isPrivateProfile: map['isPrivateProfile'] == true,
-      hideEvents: map['hideEvents'] == true,
+      hideEvents: map['hideEvents'] == true || map['hide_events'] == true,
       enableLocationSharing: map['enableLocationSharing'] != false && map['enable_location_sharing'] != false,
       isVerified: map['is_verified'] == true ||
           map['isVerified'] == true ||

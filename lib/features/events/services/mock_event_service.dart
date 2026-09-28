@@ -943,6 +943,16 @@ class MockEventService extends ChangeNotifier {
             currentUser.tags = List<String>.from(userData['interests'] as List);
           }
           currentUser.name = userData['name'] ?? authUser?.userMetadata?['name'] ?? 'Yeni Kullanıcı';
+          if (userData['hide_events'] != null) {
+            currentUser.hideEvents = userData['hide_events'] == true;
+            await prefs.setBool('${userId}_privacy_hide_events', currentUser.hideEvents);
+            await prefs.setBool('privacy_hide_events', currentUser.hideEvents);
+          }
+          if (userData['enable_location_sharing'] != null) {
+            currentUser.enableLocationSharing = userData['enable_location_sharing'] == true;
+            await prefs.setBool('${userId}_privacy_location_sharing', currentUser.enableLocationSharing);
+            await prefs.setBool('privacy_location_sharing', currentUser.enableLocationSharing);
+          }
         } else {
           final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
           currentUser.name = userName;
@@ -1141,12 +1151,40 @@ class MockEventService extends ChangeNotifier {
     if (hideEvents != null) {
       currentUser.hideEvents = hideEvents;
       await prefs.setBool('privacy_hide_events', hideEvents);
+      await prefs.setBool('${currentUser.id}_privacy_hide_events', hideEvents);
+      await prefs.setBool('${currentUser.name}_privacy_hide_events', hideEvents);
+      if (currentUser.username != null && currentUser.username!.isNotEmpty) {
+        await prefs.setBool('${currentUser.username}_privacy_hide_events', hideEvents);
+      }
+      if (_isValidUuid(currentUser.id)) {
+        try {
+          await _supabase.from('users').update({
+            'hide_events': hideEvents,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', currentUser.id);
+        } catch (e) {
+          debugPrint('[EventService] Supabase hide_events guncelleme hatasi: $e');
+        }
+      }
     }
     if (locationSharing != null) {
       currentUser.enableLocationSharing = locationSharing;
       await prefs.setBool('privacy_location_sharing', locationSharing);
       await prefs.setBool('${currentUser.id}_privacy_location_sharing', locationSharing);
       await prefs.setBool('${currentUser.name}_privacy_location_sharing', locationSharing);
+      if (currentUser.username != null && currentUser.username!.isNotEmpty) {
+        await prefs.setBool('${currentUser.username}_privacy_location_sharing', locationSharing);
+      }
+      if (_isValidUuid(currentUser.id)) {
+        try {
+          await _supabase.from('users').update({
+            'enable_location_sharing': locationSharing,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', currentUser.id);
+        } catch (e) {
+          debugPrint('[EventService] Supabase enable_location_sharing guncelleme hatasi: $e');
+        }
+      }
     }
     notifyListeners();
   }

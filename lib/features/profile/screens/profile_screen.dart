@@ -64,14 +64,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         .whereType<EventModel>()
         .toList();
 
-    final pastEvents = user.pastEvents
-        .map((id) => eventService.getEventById(id))
-        .whereType<EventModel>()
-        .toList();
-
     final rawPhotos = user.avatarUrls.isNotEmpty ? user.avatarUrls : (user.avatarUrl.isNotEmpty ? [user.avatarUrl] : <String>[]);
     final displayPhotos = rawPhotos.where(UserModel.isValidPhotoUrl).toList();
-    final recentVenues = plannedEvents.isNotEmpty ? plannedEvents : pastEvents;
+    final recentVenues = plannedEvents;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
