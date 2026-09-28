@@ -433,14 +433,60 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  late final PageController _pageController;
+  late final List<Widget> _pages;
 
-  final List<Widget> _pages = const [
-    ExploreScreen(key: PageStorageKey('ExploreScreen')),
-    SwipeScreen(key: PageStorageKey('SwipeScreen')),
-    RequestsScreen(key: PageStorageKey('RequestsScreen')),
-    MessagesScreen(key: PageStorageKey('MessagesScreen')),
-    ProfileScreen(key: PageStorageKey('ProfileScreen')),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(initialPage: _currentIndex);
+    _pages = const [
+      _KeepAlivePage(child: ExploreScreen(key: PageStorageKey('ExploreScreen'))),
+      _KeepAlivePage(child: SwipeScreen(key: PageStorageKey('SwipeScreen'))),
+      _KeepAlivePage(child: RequestsScreen(key: PageStorageKey('RequestsScreen'))),
+      _KeepAlivePage(child: MessagesScreen(key: PageStorageKey('MessagesScreen'))),
+      _KeepAlivePage(child: ProfileScreen(key: PageStorageKey('ProfileScreen'))),
+    ];
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _handleTabChange(int index) {
+    if (_currentIndex == index) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentIndex = index;
+    });
+    if (_pageController.hasClients) {
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    if (index == 2) {
+      context.read<MockMatchService>().loadIncomingRequests();
+    } else if (index == 3) {
+      context.read<MockMessageService>().reloadChats();
+    }
+  }
+
+  void _onPageSwiped(int index) {
+    if (_currentIndex == index) return;
+    HapticFeedback.selectionClick();
+    setState(() {
+      _currentIndex = index;
+    });
+    if (index == 2) {
+      context.read<MockMatchService>().loadIncomingRequests();
+    } else if (index == 3) {
+      context.read<MockMessageService>().reloadChats();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -501,8 +547,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
               ],
             ),
-            body: IndexedStack(
-              index: _currentIndex,
+            body: PageView(
+              controller: _pageController,
+              physics: const BouncingScrollPhysics(),
+              onPageChanged: _onPageSwiped,
               children: _pages,
             ),
             bottomNavigationBar: SafeArea(
@@ -546,19 +594,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final isSelected = _currentIndex == index;
     return Expanded(
       child: GestureDetector(
-        onTap: () {
-          HapticFeedback.selectionClick();
-          if (_currentIndex != index) {
-            setState(() {
-              _currentIndex = index;
-            });
-            if (index == 2) {
-              context.read<MockMatchService>().loadIncomingRequests();
-            } else if (index == 3) {
-              context.read<MockMessageService>().reloadChats();
-            }
-          }
-        },
+        onTap: () => _handleTabChange(index),
         behavior: HitTestBehavior.opaque,
         child: Center(
           child: AnimatedContainer(
@@ -620,19 +656,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final reqCount = matchService.incomingRequests.length;
         return Expanded(
           child: GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              if (_currentIndex != index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-                if (index == 2) {
-                  context.read<MockMatchService>().loadIncomingRequests();
-                } else if (index == 3) {
-                  context.read<MockMessageService>().reloadChats();
-                }
-              }
-            },
+            onTap: () => _handleTabChange(index),
             behavior: HitTestBehavior.opaque,
             child: Center(
               child: AnimatedContainer(
@@ -701,14 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final currentUser = eventService.currentUser;
         return Expanded(
           child: GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              if (_currentIndex != index) {
-                setState(() {
-                  _currentIndex = index;
-                });
-              }
-            },
+            onTap: () => _handleTabChange(index),
             behavior: HitTestBehavior.opaque,
             child: Center(
               child: AnimatedContainer(
@@ -769,5 +786,24 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       },
     );
+  }
+}
+
+class _KeepAlivePage extends StatefulWidget {
+  final Widget child;
+  const _KeepAlivePage({required this.child});
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
