@@ -105,8 +105,8 @@ BEGIN
       'mutable_content', true,
       'ios_interruption_level', 'time_sensitive',
       'android_sound', 'default',
-      'small_icon', 'ic_stat_onesignal_default',
-      'large_icon', 'ic_launcher',
+      'small_icon', 'ic_notification',
+      'large_icon', 'https://raw.githubusercontent.com/bugra4lpteki/EventMatch/main/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024%401x.png',
       'android_accent_color', 'FF8B5CF6',
       'apns_priority', 10,
       'content_available', true
