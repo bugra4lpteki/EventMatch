@@ -64,8 +64,8 @@ BEGIN
       'priority', 10,
       'android_priority', 5,
       'headings', jsonb_build_object(
-        'en', '💬 ' || COALESCE(v_sender_name, 'New Message'),
-        'tr', '💬 ' || COALESCE(v_sender_name, 'Yeni Mesaj')
+        'en', COALESCE(v_sender_name, 'New Message'),
+        'tr', COALESCE(v_sender_name, 'Yeni Mesaj')
       ),
       'contents', jsonb_build_object(
         'en', NEW.content,

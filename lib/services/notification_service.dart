@@ -246,8 +246,8 @@ class NotificationService with WidgetsBindingObserver {
         'priority': 10,
         'android_priority': 5,
         'headings': {
-          'en': '💬 $senderName',
-          'tr': '💬 $senderName',
+          'en': senderName,
+          'tr': senderName,
         },
         'contents': {
           'en': content.trim().isNotEmpty ? content : 'You have a new message',
@@ -284,7 +284,7 @@ class NotificationService with WidgetsBindingObserver {
           'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Key ${OneSignalConfig.restApiKey}',
         },
-        body: jsonEncode(payload),
+        body: utf8.encode(jsonEncode(payload)),
       );
 
       debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode} - ${response.body}');
@@ -324,11 +324,11 @@ class NotificationService with WidgetsBindingObserver {
         'priority': 10,
         'android_priority': 5,
         'headings': {
-          'en': '⚡ New Match Request!',
-          'tr': '⚡ Yeni Eşleşme İsteği!',
+          'en': 'Yeni Eşleşme İsteği',
+          'tr': 'Yeni Eşleşme İsteği',
         },
         'contents': {
-          'en': '$senderName sent you a match request!',
+          'en': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
           'tr': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
         },
         'data': {
@@ -359,7 +359,7 @@ class NotificationService with WidgetsBindingObserver {
           'Content-Type': 'application/json; charset=utf-8',
           'Authorization': 'Key ${OneSignalConfig.restApiKey}',
         },
-        body: jsonEncode(payload),
+        body: utf8.encode(jsonEncode(payload)),
       );
       debugPrint('[NotificationService] ⚡ Eşleşme isteği bildirimi gönderildi -> $receiverId: status ${response.statusCode} - ${response.body}');
     } catch (e) {
@@ -398,8 +398,8 @@ class NotificationService with WidgetsBindingObserver {
     }
 
     final String title = unreadCount > 1
-        ? '💬 $senderName ($unreadCount yeni mesaj)'
-        : '💬 $senderName';
+        ? '$senderName ($unreadCount yeni mesaj)'
+        : senderName;
 
     if (kIsWeb) {
       debugPrint('[NotificationService Web] $title: $message');

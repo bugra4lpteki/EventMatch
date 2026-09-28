@@ -147,7 +147,7 @@ serve(async (req) => {
         channel_for_external_user_ids: "push",
         priority: 10,
         android_priority: 5,
-        headings: { en: `💬 ${senderName}`, tr: `💬 ${senderName}` },
+        headings: { en: senderName, tr: senderName },
         contents: { en: content, tr: content },
         data: {
           chat_id: senderId,
