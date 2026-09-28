@@ -67,6 +67,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
     super.initState();
     _mapController = MapController();
     _checkPermissionAndGetLocation();
+    // Canlı İBB İspark verilerini arka planda hazırla
+    MapPoiService().fetchIbbParkingLots().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -624,15 +628,20 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     );
                   }).toList(),
                 ),
-                // 🅿️ OTOPARKLAR MARKER KATMANI
+                // 🅿️ OTOPARKLAR MARKER KATMANI (İBB İSPARK CANLI DOLULUK DESTEĞİ)
                 if (_showParking)
                   MarkerLayer(
                     markers: MapPoiService().getParkingLots().map((poi) {
                       final isSelected = _selectedPoi?.id == poi.id;
+                      final isFull = poi.isFull;
+                      final primaryColor = isFull ? const Color(0xFFDC2626) : const Color(0xFF2563EB);
+                      final secondaryColor = isFull ? const Color(0xFF991B1B) : const Color(0xFF1D4ED8);
+                      final highlightColor = isFull ? const Color(0xFFFCA5A5) : const Color(0xFF93C5FD);
+
                       return Marker(
                         point: LatLng(poi.latitude, poi.longitude),
-                        width: isSelected ? 40 : 32,
-                        height: isSelected ? 40 : 32,
+                        width: isSelected ? 42 : 32,
+                        height: isSelected ? 42 : 32,
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
@@ -645,19 +654,19 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)],
+                              gradient: LinearGradient(
+                                colors: [primaryColor, secondaryColor],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
                               shape: BoxShape.circle,
                               border: Border.all(
-                                color: isSelected ? const Color(0xFF93C5FD) : Colors.white,
+                                color: isSelected ? highlightColor : Colors.white,
                                 width: isSelected ? 2.5 : 1.5,
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: const Color(0xFF2563EB).withValues(alpha: 0.5),
+                                  color: primaryColor.withValues(alpha: 0.5),
                                   blurRadius: isSelected ? 10 : 5,
                                   spreadRadius: isSelected ? 2 : 0,
                                   offset: const Offset(0, 2),
@@ -667,7 +676,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             child: Icon(
                               Icons.local_parking_rounded,
                               color: Colors.white,
-                              size: isSelected ? 21 : 16,
+                              size: isSelected ? 22 : 16,
                             ),
                           ),
                         ),
@@ -961,7 +970,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             ),
                           );
                         }),
-                        // 🅿️ OTOPARKLAR FİLTRE ÇİPİ
+                        // 🅿️ OTOPARKLAR FİLTRE ÇİPİ (İBB İSPARK DESTEKLİ)
                         GestureDetector(
                           onTap: () {
                             setState(() {
@@ -970,6 +979,11 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 _selectedPoi = null;
                               }
                             });
+                            if (_showParking) {
+                              MapPoiService().fetchIbbParkingLots().then((_) {
+                                if (mounted) setState(() {});
+                              });
+                            }
                           },
                           child: Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -1004,13 +1018,26 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  'Otoparklar',
+                                  MapPoiService().isLoadingIbb
+                                      ? 'İBB İspark Yükleniyor...'
+                                      : (_showParking ? 'İBB İspark' : 'Otoparklar'),
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 12.5,
                                     fontWeight: _showParking ? FontWeight.bold : FontWeight.w500,
                                   ),
                                 ),
+                                if (_showParking) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: Color(0xFF10B981),
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                ],
                               ],
                             ),
                           ),
@@ -1421,8 +1448,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
                     color: _selectedPoi!.type == PoiType.parking
-                        ? const Color(0xFF3B82F6).withValues(alpha: 0.6)
-                        : const Color(0xFF10B981).withValues(alpha: 0.6),
+                        ? (_selectedPoi!.isFull
+                            ? const Color(0xFFDC2626).withValues(alpha: 0.8)
+                            : const Color(0xFF3B82F6).withValues(alpha: 0.8))
+                        : const Color(0xFF10B981).withValues(alpha: 0.8),
                     width: 1.5,
                   ),
                   boxShadow: [
@@ -1441,7 +1470,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: _selectedPoi!.type == PoiType.parking
-                              ? [const Color(0xFF2563EB), const Color(0xFF1D4ED8)]
+                              ? (_selectedPoi!.isFull
+                                  ? [const Color(0xFFDC2626), const Color(0xFF991B1B)]
+                                  : [const Color(0xFF2563EB), const Color(0xFF1D4ED8)])
                               : [const Color(0xFF059669), const Color(0xFF047857)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -1450,7 +1481,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                         boxShadow: [
                           BoxShadow(
                             color: (_selectedPoi!.type == PoiType.parking
-                                    ? const Color(0xFF2563EB)
+                                    ? (_selectedPoi!.isFull ? const Color(0xFFDC2626) : const Color(0xFF2563EB))
                                     : const Color(0xFF059669))
                                 .withValues(alpha: 0.35),
                             blurRadius: 8,
@@ -1486,6 +1517,48 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
+                              if (_selectedPoi!.isIbb) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: _selectedPoi!.isFull
+                                        ? const Color(0xFF7F1D1D)
+                                        : const Color(0xFF1E3A8A),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: _selectedPoi!.isFull
+                                          ? const Color(0xFFDC2626)
+                                          : const Color(0xFF60A5FA),
+                                      width: 0.8,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: _selectedPoi!.isFull
+                                              ? const Color(0xFFEF4444)
+                                              : const Color(0xFF10B981),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Text(
+                                        'İBB Canlı',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9.5,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                               GestureDetector(
                                 onTap: () {
                                   setState(() {
@@ -1516,14 +1589,16 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.08),
+                                    color: _selectedPoi!.isFull
+                                        ? const Color(0xFF7F1D1D).withValues(alpha: 0.5)
+                                        : Colors.white.withValues(alpha: 0.08),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
                                     _selectedPoi!.feeOrCapacity!,
                                     style: TextStyle(
                                       color: _selectedPoi!.type == PoiType.parking
-                                          ? const Color(0xFF93C5FD)
+                                          ? (_selectedPoi!.isFull ? const Color(0xFFFCA5A5) : const Color(0xFF93C5FD))
                                           : const Color(0xFF6EE7B7),
                                       fontSize: 10.5,
                                       fontWeight: FontWeight.w600,

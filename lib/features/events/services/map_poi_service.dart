@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import '../models/map_poi_model.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -6,7 +9,95 @@ class MapPoiService {
   factory MapPoiService() => _instance;
   MapPoiService._internal();
 
-  final List<MapPoiModel> _pois = const [
+  List<MapPoiModel> _ibbParkingLots = [];
+  bool _isLoadingIbb = false;
+  bool get isLoadingIbb => _isLoadingIbb;
+  DateTime? _lastIbbFetchTime;
+
+  /// İBB Açık Veri Portalı İspark Canlı REST API'sinden anlık otoparkları çeker
+  Future<List<MapPoiModel>> fetchIbbParkingLots({bool forceRefresh = false}) async {
+    if (!forceRefresh && _ibbParkingLots.isNotEmpty && _lastIbbFetchTime != null) {
+      if (DateTime.now().difference(_lastIbbFetchTime!) < const Duration(minutes: 5)) {
+        return _ibbParkingLots;
+      }
+    }
+
+    _isLoadingIbb = true;
+    try {
+      final response = await http.get(
+        Uri.parse('https://api.ibb.gov.tr/ispark/Park'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is List) {
+          final List<MapPoiModel> list = [];
+          for (var item in decoded) {
+            if (item is! Map) continue;
+            final lat = double.tryParse(item['lat']?.toString() ?? '');
+            final lng = double.tryParse(item['lng']?.toString() ?? '');
+            if (lat == null || lng == null || lat < 40.5 || lat > 41.6 || lng < 28.0 || lng > 30.0) {
+              continue;
+            }
+            final int? total = item['capacity'] is int
+                ? item['capacity']
+                : int.tryParse(item['capacity']?.toString() ?? '');
+            final int? empty = item['emptyCapacity'] is int
+                ? item['emptyCapacity']
+                : int.tryParse(item['emptyCapacity']?.toString() ?? '');
+            final String rawName = (item['parkName']?.toString() ?? 'İspark Otoparkı').trim();
+            final String parkName = rawName.toLowerCase().startsWith('ispark') || rawName.toLowerCase().startsWith('i̇spark')
+                ? rawName
+                : 'İspark $rawName';
+            final String parkType = (item['parkType']?.toString() ?? 'Otopark').trim();
+            final String district = (item['district']?.toString() ?? 'İstanbul').trim();
+            final String workHours = (item['workHours']?.toString() ?? '24 Saat').trim();
+            final int freeTime = item['freeTime'] is int
+                ? item['freeTime']
+                : (int.tryParse(item['freeTime']?.toString() ?? '') ?? 0);
+
+            String feeOrCapText = '';
+            if (empty != null) {
+              feeOrCapText = empty > 0 ? '$empty Boş Yer • $parkType' : 'DOLU (0 Boş) • $parkType';
+            } else {
+              feeOrCapText = parkType;
+            }
+
+            list.add(
+              MapPoiModel(
+                id: 'ibb_${item['parkID'] ?? list.length}',
+                title: parkName,
+                description: '$district • $workHours${freeTime > 0 ? ' • İlk $freeTime dk ücretsiz' : ''}',
+                latitude: lat,
+                longitude: lng,
+                type: PoiType.parking,
+                brandOrOperator: 'İBB / İspark',
+                feeOrCapacity: feeOrCapText,
+                totalCapacity: total,
+                emptyCapacity: empty,
+                workHours: workHours,
+                district: district,
+                isIbb: true,
+              ),
+            );
+          }
+          if (list.isNotEmpty) {
+            _ibbParkingLots = list;
+            _lastIbbFetchTime = DateTime.now();
+            debugPrint('[MapPoiService] İBB İspark API: ${list.length} otopark başarıyla yüklendi.');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[MapPoiService] İBB İspark API bağlantı hatası: $e');
+    } finally {
+      _isLoadingIbb = false;
+    }
+    return _ibbParkingLots;
+  }
+
+  final List<MapPoiModel> _curatedPois = const [
     // ==========================================
     // 🅿️ OTOPARKLAR - İSTANBUL
     // ==========================================
@@ -19,6 +110,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark / Zorlu',
       feeOrCapacity: 'Kapalı • 2500+ Araç ⚡',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_2',
@@ -29,6 +121,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Açık & Katlı • 600 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_3',
@@ -59,6 +152,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Geniş Zemin • 800 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_6',
@@ -69,6 +163,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Katlı Otopark • 450 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_7',
@@ -89,6 +184,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Park Et Devam Et • 650 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_9',
@@ -99,6 +195,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Geniş Açık Alan • 1000 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_10',
@@ -109,6 +206,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Zemin Otopark • 350 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_11',
@@ -119,6 +217,7 @@ class MapPoiService {
       type: PoiType.parking,
       brandOrOperator: 'İspark',
       feeOrCapacity: 'Sahil Zemin • 300 Araç',
+      isIbb: true,
     ),
     MapPoiModel(
       id: 'park_12',
@@ -344,14 +443,19 @@ class MapPoiService {
     ),
   ];
 
-  List<MapPoiModel> get allPois => _pois;
+  List<MapPoiModel> get allPois => [...getParkingLots(), ...getGasStations()];
 
   List<MapPoiModel> getParkingLots() {
-    return _pois.where((p) => p.type == PoiType.parking).toList();
+    if (_ibbParkingLots.isNotEmpty) {
+      // İBB otoparkları ile diğer şehirlerin otoparklarını birleştir
+      final nonIstanbul = _curatedPois.where((p) => p.type == PoiType.parking && (p.latitude < 40.5 || p.latitude > 41.6 || p.longitude < 28.0 || p.longitude > 30.0)).toList();
+      return [..._ibbParkingLots, ...nonIstanbul];
+    }
+    return _curatedPois.where((p) => p.type == PoiType.parking).toList();
   }
 
   List<MapPoiModel> getGasStations() {
-    return _pois.where((p) => p.type == PoiType.gasStation).toList();
+    return _curatedPois.where((p) => p.type == PoiType.gasStation).toList();
   }
 
   List<MapPoiModel> getNearbyPois({
@@ -360,8 +464,11 @@ class MapPoiService {
     double maxKm = 25.0,
     PoiType? type,
   }) {
-    return _pois.where((p) {
-      if (type != null && p.type != type) return false;
+    final list = type == PoiType.parking
+        ? getParkingLots()
+        : (type == PoiType.gasStation ? getGasStations() : allPois);
+
+    return list.where((p) {
       final distanceInMeters = Geolocator.distanceBetween(lat, lng, p.latitude, p.longitude);
       return distanceInMeters <= (maxKm * 1000);
     }).toList();

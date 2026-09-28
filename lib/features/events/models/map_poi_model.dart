@@ -12,6 +12,11 @@ class MapPoiModel {
   final PoiType type;
   final String brandOrOperator;
   final String? feeOrCapacity;
+  final int? totalCapacity;
+  final int? emptyCapacity;
+  final String? workHours;
+  final String? district;
+  final bool isIbb;
 
   const MapPoiModel({
     required this.id,
@@ -22,5 +27,12 @@ class MapPoiModel {
     required this.type,
     required this.brandOrOperator,
     this.feeOrCapacity,
+    this.totalCapacity,
+    this.emptyCapacity,
+    this.workHours,
+    this.district,
+    this.isIbb = false,
   });
+
+  bool get isFull => emptyCapacity != null && emptyCapacity == 0;
 }
