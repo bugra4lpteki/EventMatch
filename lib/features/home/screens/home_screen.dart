@@ -530,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
                       _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
                       _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
-                      _buildNavItem(4, Icons.person_outline_rounded, Icons.person_rounded, 'Profil'),
+                      _buildProfileNavItem(4, 'Profil'),
                     ],
                   ),
                 ),
@@ -665,6 +665,83 @@ class _HomeScreenState extends State<HomeScreen> {
                         isSelected ? activeIcon : icon,
                         color: isSelected ? Colors.white : AppColors.textSecondary.withOpacity(0.7),
                         size: 20,
+                      ),
+                    ),
+                    if (isSelected) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileNavItem(int index, String label) {
+    final isSelected = _currentIndex == index;
+    return Consumer<MockEventService>(
+      builder: (context, eventService, child) {
+        final currentUser = eventService.currentUser;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () {
+              HapticFeedback.selectionClick();
+              if (_currentIndex != index) {
+                setState(() {
+                  _currentIndex = index;
+                });
+              }
+            },
+            behavior: HitTestBehavior.opaque,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(horizontal: isSelected ? 12 : 8, vertical: 8),
+                decoration: isSelected
+                    ? BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      )
+                    : BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Opacity(
+                      opacity: isSelected ? 1.0 : 0.82,
+                      child: UserAvatar(
+                        user: currentUser,
+                        radius: 11,
+                        border: Border.all(
+                          color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.35),
+                          width: isSelected ? 1.6 : 1.2,
+                        ),
                       ),
                     ),
                     if (isSelected) ...[
