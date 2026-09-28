@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -75,14 +76,31 @@ class _EventMapScreenState extends State<EventMapScreen> {
     super.dispose();
   }
 
-  Future<void> _checkPermissionAndGetLocation() async {
+  Future<void> _checkPermissionAndGetLocation({bool forceCenter = false}) async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) return;
+      // 1. Kullanıcı mock/profil konumunu anında hazırda tut (anında gösterim için)
+      if (_currentPosition == null && mounted) {
+        final currentUser = context.read<MockEventService>().currentUser;
+        if (currentUser.latitude != null && currentUser.longitude != null) {
+          if (forceCenter) {
+            _mapController.move(LatLng(currentUser.latitude!, currentUser.longitude!), 13.5);
+          }
+        }
+      }
+
+      bool serviceEnabled = false;
+      try {
+        serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      } catch (_) {
+        serviceEnabled = true; // Web'de bazen UnsupportedError/istisna fırlatabilir
+      }
+
+      if (!serviceEnabled && !kIsWeb) return;
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        if (mounted) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied && mounted) {
           final granted = await LocationPermissionDialog.requestLocationWithPreDialog(context);
           if (!granted) return;
         }
@@ -90,37 +108,45 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
       if (permission == LocationPermission.deniedForever) return;
 
-      // 1. Önce cihazdaki son bilinen konumu al (0 milisaniye bekleme, donmayı ve kasılmayı tamamen önler)
-      final lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null && mounted) {
-        setState(() {
-          _currentPosition = lastPos;
-        });
-        _mapController.move(
-          LatLng(lastPos.latitude, lastPos.longitude),
-          12.5,
-        );
+      // 2. Mobil cihazlarda varsa son bilinen konumu anında al (Web'de patlamaması için kIsWeb kontrolü)
+      if (!kIsWeb) {
+        try {
+          final lastPos = await Geolocator.getLastKnownPosition();
+          if (lastPos != null && mounted) {
+            setState(() {
+              _currentPosition = lastPos;
+            });
+            _mapController.move(
+              LatLng(lastPos.latitude, lastPos.longitude),
+              13.5,
+            );
+          }
+        } catch (_) {}
       }
 
-      // 2. Ardından hassas konumu hafif modda ve zaman aşımı korumasıyla al
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 4),
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-        });
-        if (lastPos == null) {
+      // 3. Canlı konumu al
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          locationSettings: LocationSettings(
+            accuracy: kIsWeb ? LocationAccuracy.high : LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 8),
+          ),
+        );
+        if (mounted) {
+          setState(() {
+            _currentPosition = position;
+          });
           _mapController.move(
             LatLng(position.latitude, position.longitude),
-            12.5,
+            13.5,
           );
         }
+      } catch (e) {
+        debugPrint('[EventMapScreen] Canlı GPS alma hatası: $e');
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[EventMapScreen] Konum servisi genel hatası: $e');
+    }
   }
 
   void _fitBoundsToEvents(List<EventModel> events) {
@@ -595,28 +621,74 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
               // =================== ETKİNLİKLER MODU PINLERI ===================
               if (_currentMapMode == MapMode.events) ...[
-                if (_currentPosition != null)
+                // 📍 KULLANICININ CANLI KONUM PİNİ (PARLAK, GÖRÜNÜR & ETİKETLİ)
+                if (userLat != null && userLng != null)
                   MarkerLayer(
                     markers: [
                       Marker(
-                        point: LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                        width: 28,
-                        height: 28,
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.blueAccent,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 10,
-                              height: 10,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
+                        point: LatLng(userLat, userLng),
+                        width: 52,
+                        height: 64,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: const Color(0xFF0284C7).withValues(alpha: 0.25),
+                                  ),
+                                ),
+                                Container(
+                                  width: 26,
+                                  height: 26,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF00F2FE), Color(0xFF0284C7)],
+                                    ),
+                                    border: Border.all(color: Colors.white, width: 2.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFF0284C7).withValues(alpha: 0.6),
+                                        blurRadius: 10,
+                                        spreadRadius: 2,
+                                      ),
+                                    ],
+                                  ),
+                                  child: const Center(
+                                    child: Icon(Icons.my_location_rounded, color: Colors.white, size: 14),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0284C7),
+                                borderRadius: BorderRadius.circular(8),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.35),
+                                    blurRadius: 4,
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                'Konumun 📍',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ),
                     ],
@@ -2114,6 +2186,28 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 ),
               ),
             ),
+
+          // 5. "BENİ BUL / KONUMUMA GİT" YÜZEN BUTON (TEK TIKLA MERKEZLEME)
+          Positioned(
+            right: 16,
+            bottom: (_selectedEvent != null || _selectedPoi != null || _selectedUser != null) ? 140 : 24,
+            child: FloatingActionButton.small(
+              heroTag: 'map_my_location_fab',
+              backgroundColor: AppColors.surface,
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.6), width: 1.3),
+              ),
+              onPressed: () {
+                _checkPermissionAndGetLocation(forceCenter: true);
+                if (userLat != null && userLng != null) {
+                  _mapController.move(LatLng(userLat, userLng), 14.5);
+                }
+              },
+              child: const Icon(Icons.my_location_rounded, color: Color(0xFF0284C7), size: 20),
+            ),
+          ),
         ],
       ),
     );
