@@ -577,7 +577,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
                       _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
                       _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
-                      _buildNavItem(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
+                      _buildMessagesNavItemWithBadge(3, Icons.chat_bubble_outline_rounded, Icons.chat_bubble_rounded, 'Mesajlar'),
                       _buildProfileNavItem(4, 'Profil'),
                     ],
                   ),
@@ -688,6 +688,82 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Icon(
                         isSelected ? activeIcon : icon,
                         color: isSelected ? Colors.white : AppColors.textSecondary.withOpacity(0.7),
+                        size: 20,
+                      ),
+                    ),
+                    if (isSelected) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 12,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMessagesNavItemWithBadge(int index, IconData icon, IconData activeIcon, String label) {
+    final isSelected = _currentIndex == index;
+    return Consumer<MockMessageService>(
+      builder: (context, messageService, child) {
+        final unreadCount = messageService.unreadChatsCount;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => _handleTabChange(index),
+            behavior: HitTestBehavior.opaque,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.symmetric(horizontal: isSelected ? 12 : 8, vertical: 8),
+                decoration: isSelected
+                    ? BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.4),
+                            blurRadius: 10,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      )
+                    : BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Badge(
+                      isLabelVisible: unreadCount > 0,
+                      label: Text(
+                        unreadCount > 99 ? '99+' : unreadCount.toString(),
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      backgroundColor: const Color(0xFFFF3B30),
+                      child: Icon(
+                        isSelected ? activeIcon : icon,
+                        color: isSelected ? Colors.white : AppColors.textSecondary.withValues(alpha: 0.7),
                         size: 20,
                       ),
                     ),

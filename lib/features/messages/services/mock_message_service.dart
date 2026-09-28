@@ -65,6 +65,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           c.isArchived)
       .toList();
 
+  /// Kaç farklı sohbetten okunmamış mesaj olduğunu döndürür
+  int get unreadChatsCount => individualChats.where((c) => c.unreadCount > 0).length;
+
   void toggleArchiveChat(String chatId) {
     final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
     if (idx >= 0) {
