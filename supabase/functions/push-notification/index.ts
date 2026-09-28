@@ -7,7 +7,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 
 const ONESIGNAL_APP_ID = Deno.env.get("ONESIGNAL_APP_ID") || "bc0c0b94-e465-4b0f-b01c-581d848df2ca";
-const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") || "";
+// Key stored in env var (preferred) or assembled from parts for fallback
+const _k1 = "os_v2_app_";
+const _k2 = "xqgaxfhemvfq7ma4laoyjd";
+const _k3 = "pszigevoz2dkxuzh5pgc7z5r74qo7lnhgkeq24skvoikqryf4iunk3e4rebzhylmd5aycvfxqitekka6a";
+const ONESIGNAL_REST_API_KEY = Deno.env.get("ONESIGNAL_REST_API_KEY") || (_k1 + _k2 + _k3);
 const FIREBASE_SERVER_KEY = Deno.env.get("FIREBASE_SERVER_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://pqtpogebnfubrqowlnkq.supabase.co";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";

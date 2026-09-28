@@ -169,24 +169,33 @@ class NotificationService with WidgetsBindingObserver {
       void checkAndSaveToken() {
         final pushSubId = OneSignal.User.pushSubscription.id;
         final pushTok = OneSignal.User.pushSubscription.token;
+        // id: OneSignal Subscription ID (tercih edilen), token: APNs/FCM raw token
         final token = pushSubId ?? pushTok;
+        debugPrint('[OneSignal] 🔍 Token kontrolü → id=$pushSubId | token=$pushTok');
         if (token != null && token.isNotEmpty) {
           registerDeviceToken(userId, token);
+        } else {
+          debugPrint('[OneSignal] ⚠️ Token henüz null — retry bekliyor...');
         }
       }
 
       checkAndSaveToken();
 
-      // Kısa bir gecikmeyle tekrar dene (APNs token gecikmeli atanabilir)
+      // APNs token iOS'ta gecikmeli gelir, birden fazla retry yap
       Future.delayed(const Duration(milliseconds: 1500), checkAndSaveToken);
       Future.delayed(const Duration(seconds: 4), checkAndSaveToken);
-      Future.delayed(const Duration(seconds: 8), checkAndSaveToken);
+      Future.delayed(const Duration(seconds: 10), checkAndSaveToken);
+      Future.delayed(const Duration(seconds: 20), checkAndSaveToken);
+      Future.delayed(const Duration(seconds: 40), checkAndSaveToken);
 
-      // Subscription değişikliklerini dinle
+      // Subscription değişikliklerini dinle (id VEYA token değişirse kaydet)
       OneSignal.User.pushSubscription.addObserver((state) {
         final newId = state.current.id;
-        if (newId != null && newId.isNotEmpty) {
-          registerDeviceToken(userId, newId);
+        final newToken = state.current.token;
+        final best = newId ?? newToken;
+        debugPrint('[OneSignal] 📡 Subscription Observer → id=$newId | token=$newToken');
+        if (best != null && best.isNotEmpty) {
+          registerDeviceToken(userId, best);
         }
       });
     } catch (e) {
@@ -201,12 +210,26 @@ class NotificationService with WidgetsBindingObserver {
       await prefs.setString('device_push_token', pushToken);
 
       final supabase = Supabase.instance.client;
-      await supabase.from('users').update({
+
+      // Önce UPDATE dene
+      final res = await supabase.from('users').update({
         'push_token': pushToken,
         'fcm_token': pushToken,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', userId);
-      debugPrint('[NotificationService] 📱 OneSignal/Push token veritabanında users/$userId güncellendi: $pushToken');
+      }).eq('id', userId).select('id').maybeSingle();
+
+      if (res == null) {
+        // UPDATE satır bulamadı (kullanıcı yok?), upsert ile tekrar dene
+        await supabase.from('users').upsert({
+          'id': userId,
+          'push_token': pushToken,
+          'fcm_token': pushToken,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }, onConflict: 'id');
+        debugPrint('[NotificationService] ↩️ UPSERT ile push token kaydedildi: $userId → $pushToken');
+      } else {
+        debugPrint('[NotificationService] ✅ Push token DB\'de güncellendi: $userId → $pushToken');
+      }
     } catch (e) {
       debugPrint('[NotificationService] ❌ Push token kaydetme hatası: $e');
     }
