@@ -621,74 +621,51 @@ class _EventMapScreenState extends State<EventMapScreen> {
 
               // =================== ETKİNLİKLER MODU PINLERI ===================
               if (_currentMapMode == MapMode.events) ...[
-                // 📍 KULLANICININ CANLI KONUM PİNİ (PARLAK, GÖRÜNÜR & ETİKETLİ)
+                // 📍 KULLANICININ CANLI KONUM PİNİ (ZARİF, PARLAK & TAŞMASIZ)
                 if (userLat != null && userLng != null)
                   MarkerLayer(
                     markers: [
                       Marker(
                         point: LatLng(userLat, userLng),
-                        width: 52,
-                        height: 64,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: const Color(0xFF0284C7).withValues(alpha: 0.25),
-                                  ),
+                        width: 44,
+                        height: 44,
+                        child: Center(
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: const Color(0xFF0284C7).withValues(alpha: 0.25),
                                 ),
-                                Container(
-                                  width: 26,
-                                  height: 26,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    gradient: const LinearGradient(
-                                      colors: [Color(0xFF00F2FE), Color(0xFF0284C7)],
+                              ),
+                              Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF00F2FE), Color(0xFF0284C7)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  border: Border.all(color: Colors.white, width: 2.5),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF0284C7).withValues(alpha: 0.65),
+                                      blurRadius: 10,
+                                      spreadRadius: 2,
                                     ),
-                                    border: Border.all(color: Colors.white, width: 2.2),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(0xFF0284C7).withValues(alpha: 0.6),
-                                        blurRadius: 10,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Center(
-                                    child: Icon(Icons.my_location_rounded, color: Colors.white, size: 14),
-                                  ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF0284C7),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.35),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                              child: const Text(
-                                'Konumun 📍',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 9.5,
-                                  fontWeight: FontWeight.bold,
+                                child: const Center(
+                                  child: Icon(Icons.my_location_rounded, color: Colors.white, size: 15),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -855,7 +832,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           _currentPosition?.longitude ?? currentUser.longitude ?? 28.9784,
                         ),
                         width: 56,
-                        height: 72,
+                        height: 80,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
