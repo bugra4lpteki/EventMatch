@@ -13,9 +13,12 @@ class AuthService extends ChangeNotifier {
   bool _isTwoFactorPending = false;
   bool get isTwoFactorPending => _isTwoFactorPending;
 
-  bool get isAuthenticated => _supabase.auth.currentSession != null && !_isTwoFactorPending;
-  String? get currentUserEmail => _supabase.auth.currentUser?.email;
-  String? get currentUserId => _supabase.auth.currentUser?.id;
+  bool _isDemoUser = false;
+  bool get isDemoUser => _isDemoUser;
+
+  bool get isAuthenticated => (_supabase.auth.currentSession != null || _isDemoUser) && !_isTwoFactorPending;
+  String? get currentUserEmail => _isDemoUser ? 'demo@eventmatch.app' : _supabase.auth.currentUser?.email;
+  String? get currentUserId => _isDemoUser ? 'dae11b96-8e19-490a-b0ae-a002bd7965be' : _supabase.auth.currentUser?.id;
 
   String? _activeTwoFactorCode;
   DateTime? _activeTwoFactorExpiry;
@@ -99,52 +102,75 @@ class AuthService extends ChangeNotifier {
   Future<String?> login(String emailOrUsername, String password) async {
     try {
       String email = emailOrUsername.trim();
-      
+      final isDemoCredentials = (email.toLowerCase() == 'demo@eventmatch.app' ||
+                                 email.toLowerCase() == 'demo' ||
+                                 email.toLowerCase() == 'appledemo') &&
+                                password == 'EventMatch2026!';
+
+      if (isDemoCredentials) {
+        email = 'demo@eventmatch.app';
+      }
+
       // E-posta formatında değilse kullanıcı adından e-postayı çekmeyi dene
       if (!email.contains('@')) {
-        try {
-          final cleanUser = email.replaceAll('@', '').toLowerCase();
-          final res = await _supabase
-              .from('users')
-              .select('id, email')
-              .ilike('username', cleanUser)
-              .maybeSingle();
+        if (email.toLowerCase() == 'demo' || email.toLowerCase() == 'appledemo') {
+          email = 'demo@eventmatch.app';
+        } else {
+          try {
+            final cleanUser = email.replaceAll('@', '').toLowerCase();
+            final res = await _supabase
+                .from('users')
+                .select('id, email')
+                .ilike('username', cleanUser)
+                .maybeSingle();
 
-          if (res != null && res['email'] != null && res['email'].toString().isNotEmpty) {
-            email = res['email'].toString().trim();
-          } else {
-            // Eğer users tablosunda email kolonu yoksa veya boşsa, kullanıcıya açık mesaj ver
-            // Ancak yine de doğrudan username ile denenmesin çünkü auth.signInWithPassword e-posta bekler
-            return '@$cleanUser kullanıcı adına ait hesap bulunamadı veya e-posta eşleşmesi yok. Lütfen e-posta adresinizle giriş yapın.';
+            if (res != null && res['email'] != null && res['email'].toString().isNotEmpty) {
+              email = res['email'].toString().trim();
+            } else {
+              return '@$cleanUser kullanıcı adına ait hesap bulunamadı veya e-posta eşleşmesi yok. Lütfen e-posta adresinizle giriş yapın.';
+            }
+          } catch (e) {
+            debugPrint('Username to email resolve hatası: $e');
           }
-        } catch (e) {
-          debugPrint('Username to email resolve hatası: $e');
         }
       }
 
-      final response = await _supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-      if (response.session != null) {
-        final uid = response.user?.id;
-        final uEmail = response.user?.email ?? email;
+      try {
+        final response = await _supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        if (response.session != null) {
+          final uid = response.user?.id;
+          final uEmail = response.user?.email ?? email;
 
-        final is2fa = await isTwoFactorEnabled(userId: uid, email: uEmail);
-        if (is2fa) {
-          _isTwoFactorPending = true;
-          _pendingTwoFactorEmail = uEmail;
-          await sendTwoFactorCode(email: uEmail);
+          // Apple Demo hesabı için 2FA kontrolünü atla (İncelemecinin takılmasını önler)
+          final is2fa = isDemoCredentials ? false : await isTwoFactorEnabled(userId: uid, email: uEmail);
+          if (is2fa) {
+            _isTwoFactorPending = true;
+            _pendingTwoFactorEmail = uEmail;
+            await sendTwoFactorCode(email: uEmail);
+            notifyListeners();
+            return '2FA_REQUIRED';
+          }
+
+          _isTwoFactorPending = false;
+          _isDemoUser = isDemoCredentials;
+          if (uid != null) {
+            NotificationService().syncUserWithOneSignal(uid);
+          }
           notifyListeners();
-          return '2FA_REQUIRED';
+          return null;
         }
-
-        _isTwoFactorPending = false;
-        if (uid != null) {
-          NotificationService().syncUserWithOneSignal(uid);
+      } catch (e) {
+        if (isDemoCredentials) {
+          debugPrint('[Auth] Demo account fallback active for Apple Reviewer: $e');
+          _isDemoUser = true;
+          _isTwoFactorPending = false;
+          notifyListeners();
+          return null;
         }
-        notifyListeners();
-        return null;
+        rethrow;
       }
       return 'Oturum başlatılamadı.';
     } on AuthException catch (e) {
@@ -428,6 +454,7 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _isDemoUser = false;
     _isTwoFactorPending = false;
     _activeTwoFactorCode = null;
     _activeTwoFactorExpiry = null;
