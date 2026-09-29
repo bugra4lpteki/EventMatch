@@ -12,6 +12,7 @@ import 'notification_settings_screen.dart';
 import 'themes_screen.dart';
 import 'help_settings_screen.dart';
 import 'about_settings_screen.dart';
+import '../../legal/screens/terms_and_permissions_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -122,6 +123,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Hakkında',
               subtitle: 'Uygulama sürümü, gizlilik ve kullanım koşulları',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutSettingsScreen())),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // Section 4: Yasal & İzinler
+          _buildSectionHeader('YASAL & İZİNLER'),
+          const SizedBox(height: 8),
+          _buildGroupedCard([
+            _buildSettingsTile(
+              icon: Icons.policy_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              title: 'İzin Merkezi',
+              subtitle: 'EULA, Gizlilik Politikası, İzinler ve Topluluk Kuralları',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Görüntüle',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const TermsAndPermissionsScreen(),
+                ),
+              ),
             ),
           ]),
 

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
+import '../../legal/screens/terms_and_permissions_screen.dart';
 
 class AboutSettingsScreen extends StatefulWidget {
   const AboutSettingsScreen({super.key});
@@ -170,36 +171,24 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                     leading: Icon(Icons.description_outlined, color: AppColors.primary),
                     title: Text('Kullanıcı Sözleşmesi', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15)),
                     trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-                    onTap: () {
-                      _showLegalModal(
-                        context,
-                        'Kullanıcı Sözleşmesi (EULA)',
-                        'EventMatch Son Kullanıcı Lisans Sözleşmesi (EULA) & Kullanım Şartları:\n\n'
-                        '1. Sıfır Tolerans Politikası (UGC): EventMatch platformunda taciz edici, hakaret içeren, müstehcen, nefret söylemi barındıran veya yasadışı hiçbir kullanıcı içeriğine veya davranışına tolerans gösterilmez (Zero Tolerance Policy).\n\n'
-                        '2. Moderasyon & Şikayet İnceleme: Kullanıcılar tarafından şikayet edilen veya uygunsuz bulunan içerik ve hesaplar, moderasyon ekibimiz tarafından en geç 24 saat içerisinde incelenir, gerekli görüldüğünde içerik kaldırılır ve ilgili hesap kalıcı olarak engellenir/yasaklanır.\n\n'
-                        '3. Engelleme & Güvenlik: Her kullanıcı, rahatsızlık duyduğu diğer kullanıcıları anında engelleme ve şikayet etme hakkına ve aracına sahiptir. Engellenen kullanıcılar birbirlerinin profillerini ve mesajlarını göremez.\n\n'
-                        '4. Etkinlik Kuralları: Etkinlik oluşturucuları ve katılımcıları topluluk kurallarına uymakla yükümlüdür.\n\n'
-                        '5. Yaş Sınırı: Hizmetlerimizden faydalanmak için en az 18 yaşında olmanız gerekmektedir.\n\n'
-                        'Tüm hakları saklıdır. © 2026 EventMatch Inc.',
-                      );
-                    },
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TermsAndPermissionsScreen(),
+                      ),
+                    ),
                   ),
                   Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                   ListTile(
                     leading: Icon(Icons.shield_outlined, color: AppColors.primary),
                     title: Text('Gizlilik Politikası', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15)),
                     trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-                    onTap: () {
-                      _showLegalModal(
-                        context,
-                        'Gizlilik Politikası',
-                        'EventMatch KVKK ve Kişisel Verilerin Korunması Politikası:\n\n'
-                        '1. Veri Toplama: EventMatch hesabınız oluşturulurken verdiğiniz isim, kullanıcı adı, e-posta ve tercih ettiğiniz etkinlik kategorileri veritabanımızda güvenle saklanır.\n\n'
-                        '2. Konum İzinleri: Konum bilginiz yalnızca etrafınızdaki etkinlikleri listelemek ve yakınlarınızdaki kullanıcıları önermek için kullanılır, 3. taraflarla paylaşılmaz.\n\n'
-                        '3. Veri Güvenliği: Tüm parola ve kimlik verileri Supabase endüstri standardı şifreleme yöntemleri (SSL/TLS) ile korunmaktadır.\n\n'
-                        '4. Veri Silme Talebi: Ayarlar sayfasından "Hesabımı Sil" seçeneği ile tüm kişisel verilerinizi kalıcı olarak silebilirsiniz.',
-                      );
-                    },
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TermsAndPermissionsScreen(),
+                      ),
+                    ),
                   ),
                   Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                   ListTile(

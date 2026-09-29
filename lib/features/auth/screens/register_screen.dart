@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../legal/widgets/user_consent_widget.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -27,6 +28,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   DateTime? _selectedDate;
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _consentAccepted = false;
 
   @override
   void initState() {
@@ -492,6 +494,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       return;
     }
 
+    // ── İzin & Sözleşme Onayı ──────────────────────────────────────────────
+    if (!_consentAccepted) {
+      final accepted = await UserConsentWidget.show(context);
+      if (accepted != true || !mounted) return;
+      setState(() => _consentAccepted = true);
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     setState(() => _isLoading = true);
 
     final authService = context.read<AuthService>();
@@ -511,6 +521,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         await prefs.setString('${userId}_userBirthDate', _selectedDate!.toIso8601String());
         await prefs.setString('${userId}_userName', _nameController.text.trim());
         await prefs.setString('${userId}_userUsername', _usernameController.text.trim());
+        await prefs.setBool('${userId}_consentAccepted', true);
         if (mounted) {
           context.read<MockEventService>().loadUserProfile();
           _showSnackBar('Kayıt başarılı! Aramıza hoş geldiniz.');
@@ -932,11 +943,94 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ),
                                   ),
 
-                                  const SizedBox(height: 28),
+                                  const SizedBox(height: 20),
+
+                                  // ── İzin & Koşullar Özeti ───────────────
+                                  GestureDetector(
+                                    onTap: () async {
+                                      final accepted = await UserConsentWidget.show(context);
+                                      if (accepted == true && mounted) {
+                                        setState(() => _consentAccepted = true);
+                                      }
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 250),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                      decoration: BoxDecoration(
+                                        color: _consentAccepted
+                                            ? AppColors.success.withOpacity(0.08)
+                                            : AppColors.primary.withOpacity(0.06),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: _consentAccepted
+                                              ? AppColors.success.withOpacity(0.4)
+                                              : AppColors.primary.withOpacity(0.25),
+                                          width: 1.3,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          AnimatedContainer(
+                                            duration: const Duration(milliseconds: 250),
+                                            width: 22,
+                                            height: 22,
+                                            decoration: BoxDecoration(
+                                              color: _consentAccepted
+                                                  ? AppColors.success
+                                                  : Colors.transparent,
+                                              borderRadius: BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: _consentAccepted
+                                                    ? AppColors.success
+                                                    : AppColors.primary.withOpacity(0.4),
+                                                width: 1.5,
+                                              ),
+                                            ),
+                                            child: _consentAccepted
+                                                ? const Icon(Icons.check_rounded,
+                                                    color: Colors.white, size: 14)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _consentAccepted
+                                                  ? 'Kullanım koşulları ve gizlilik politikası kabul edildi ✓'
+                                                  : 'Kullanım Koşulları, Gizlilik ve Topluluk Kurallarını oku & kabul et',
+                                              style: GoogleFonts.outfit(
+                                                color: _consentAccepted
+                                                    ? AppColors.success
+                                                    : AppColors.primaryVariant,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                decoration: _consentAccepted
+                                                    ? null
+                                                    : TextDecoration.underline,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Icon(
+                                            _consentAccepted
+                                                ? Icons.verified_rounded
+                                                : Icons.chevron_right_rounded,
+                                            color: _consentAccepted
+                                                ? AppColors.success
+                                                : AppColors.textMuted,
+                                            size: 18,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 16),
 
                                   // Gradient Register Button
                                   Container(
                                     height: 54,
+
                                     decoration: BoxDecoration(
                                       gradient: AppColors.primaryGradient,
                                       borderRadius: BorderRadius.circular(16),
