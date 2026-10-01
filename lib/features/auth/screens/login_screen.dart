@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../services/auth_service.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
@@ -469,63 +470,42 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 20),
 
-                      // Social Auth Buttons Row
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _isLoading ? null : _loginWithGoogle,
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: AppColors.surface.withOpacity(0.5),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              icon: const FaIcon(
-                                FontAwesomeIcons.google,
-                                size: 18,
-                                color: Color(0xFFEA4335),
-                              ),
-                              label: Text(
-                                'Google',
-                                style: GoogleFonts.outfit(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
+                      // Apple Sign In (Apple HIG uyumlu resmi buton)
+                      SignInWithAppleButton(
+                        onPressed: _isLoading ? null : _loginWithApple,
+                        style: SignInWithAppleButtonStyle.white,
+                        borderRadius: const BorderRadius.all(Radius.circular(16)),
+                        height: 50,
+                        text: 'Apple ile Giriş Yap',
+                      ),
+                      const SizedBox(height: 12),
+                      // Google Sign In
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _loginWithGoogle,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: AppColors.surface.withOpacity(0.5),
+                            side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: _isLoading ? null : _loginWithApple,
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: AppColors.surface.withOpacity(0.5),
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              icon: const FaIcon(
-                                FontAwesomeIcons.apple,
-                                size: 20,
-                                color: Colors.white,
-                              ),
-                              label: Text(
-                                'Apple',
-                                style: GoogleFonts.outfit(
-                                  color: AppColors.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
-                                ),
-                              ),
+                          icon: const FaIcon(
+                            FontAwesomeIcons.google,
+                            size: 18,
+                            color: Color(0xFFEA4335),
+                          ),
+                          label: Text(
+                            'Google ile Devam Et',
+                            style: GoogleFonts.outfit(
+                              color: AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
                             ),
                           ),
-                        ],
+                        ),
                       ),
 
                       const SizedBox(height: 32),

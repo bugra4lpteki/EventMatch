@@ -41,6 +41,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription<AuthState>? _authSubscription;
   bool _isLoading = false;
   bool get isLoading => _isLoading;
+  final Set<String> _archivedChatIds = {};
 
   bool isUserOnline(String userId) => _onlineUserIds.contains(userId.toLowerCase().trim());
   bool isPartnerTyping(String partnerId) => _typingPartners[partnerId.toLowerCase().trim()] == true;
@@ -68,10 +69,45 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   /// Kaç farklı sohbetten okunmamış mesaj olduğunu döndürür
   int get unreadChatsCount => individualChats.where((c) => c.unreadCount > 0).length;
 
+  Future<void> _saveArchivedChatIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_archived_ids_$id' : 'eventmatch_archived_ids_default';
+      await prefs.setStringList(key, _archivedChatIds.toList());
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ Archive save error: $e');
+    }
+  }
+
+  Future<void> _loadArchivedChatIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_archived_ids_$id' : 'eventmatch_archived_ids_default';
+      final list = prefs.getStringList(key) ?? [];
+      _archivedChatIds.addAll(list.map((e) => e.toLowerCase()));
+    } catch (_) {}
+  }
+
   void toggleArchiveChat(String chatId) {
-    final idx = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == chatId.toLowerCase());
+    final lowerId = chatId.toLowerCase();
+    final idx = _chats.indexWhere((c) =>
+        c.id.toLowerCase() == lowerId ||
+        c.participant.id.toLowerCase() == lowerId);
     if (idx >= 0) {
-      _chats[idx].isArchived = !_chats[idx].isArchived;
+      final newArchivedState = !_chats[idx].isArchived;
+      _chats[idx].isArchived = newArchivedState;
+      final partId = _chats[idx].participant.id.toLowerCase();
+      final cId = _chats[idx].id.toLowerCase();
+      if (newArchivedState) {
+        _archivedChatIds.add(partId);
+        _archivedChatIds.add(cId);
+      } else {
+        _archivedChatIds.remove(partId);
+        _archivedChatIds.remove(cId);
+      }
+      _saveArchivedChatIds();
       _saveChatsToLocalStorage();
       notifyListeners();
     }
@@ -222,6 +258,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _loadChatsFromLocalStorage() async {
     try {
+      await _loadArchivedChatIds();
       final prefs = await SharedPreferences.getInstance();
       final cacheKey = _getCacheKey();
       final jsonStr = prefs.getString(cacheKey);
@@ -239,6 +276,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                 chat.participant.avatarUrl = '';
               }
               chat.participant.avatarUrls = chat.participant.avatarUrls.where(UserModel.isValidPhotoUrl).toList();
+              final isArchivedLocally = _archivedChatIds.contains(chat.participant.id.toLowerCase()) ||
+                  _archivedChatIds.contains(chat.id.toLowerCase()) ||
+                  chat.isArchived;
+              chat.isArchived = isArchivedLocally;
+              if (isArchivedLocally) {
+                _archivedChatIds.add(chat.participant.id.toLowerCase());
+                _archivedChatIds.add(chat.id.toLowerCase());
+              }
               loadedChats.add(chat);
             }
           } catch (e) {
@@ -1624,6 +1669,15 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             ? 0
             : (existingChat?.unreadCount ?? 0);
 
+        final isChatArchived = _archivedChatIds.contains(lowerPartnerId) ||
+            _archivedChatIds.contains(matchId.toLowerCase()) ||
+            (existingChat?.isArchived ?? false);
+        if (isChatArchived) {
+          _archivedChatIds.add(lowerPartnerId);
+          _archivedChatIds.add(matchId.toLowerCase());
+        }
+        final isChatMuted = existingChat?.isMuted ?? false;
+
         consolidatedChats[lowerPartnerId] = ChatModel(
           id: matchId,
           participant: participant,
@@ -1633,6 +1687,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           messages: dedupedMessages,
           expiresAt: expiresByPartner[partnerId],
           isOnline: isUserOnline(partnerId),
+          isArchived: isChatArchived,
+          isMuted: isChatMuted,
         );
       }
 

@@ -549,7 +549,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             body: PageView(
               controller: _pageController,
-              physics: const BouncingScrollPhysics(),
+              physics: _currentIndex == 1
+                  ? const NeverScrollableScrollPhysics()
+                  : const BouncingScrollPhysics(),
               onPageChanged: _onPageSwiped,
               children: _pages,
             ),

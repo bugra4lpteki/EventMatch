@@ -2180,7 +2180,6 @@ class MockEventService extends ChangeNotifier {
 
   void checkIn(String eventId) {
     currentUser.checkedInEventId = eventId;
-    currentUser.points += 50;
     _saveCheckedInEvent(eventId);
     notifyListeners();
   }

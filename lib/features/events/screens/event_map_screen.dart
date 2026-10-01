@@ -1417,20 +1417,28 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                FloatingActionButton.small(
-                  heroTag: 'my_location_btn',
-                  backgroundColor: AppColors.surface,
-                  child: Icon(Icons.my_location, color: AppColors.primary),
-                  onPressed: () {
-                    if (_currentPosition != null) {
-                      _mapController.move(
-                        LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
-                        14,
-                      );
-                    } else {
-                      _checkPermissionAndGetLocation();
-                    }
-                  },
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.6), width: 1.3),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 6),
+                    ],
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      _checkPermissionAndGetLocation(forceCenter: true);
+                      if (userLat != null && userLng != null) {
+                        _mapController.move(LatLng(userLat, userLng), 14.5);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Icon(Icons.my_location_rounded, color: Color(0xFF0284C7), size: 20),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -1763,26 +1771,30 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 const SizedBox(width: 6),
                               ],
                               if (_selectedPoi!.feeOrCapacity != null)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: _selectedPoi!.isFull
-                                        ? const Color(0xFF7F1D1D).withValues(alpha: 0.5)
-                                        : Colors.white.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    _selectedPoi!.feeOrCapacity!,
-                                    style: TextStyle(
-                                      color: _selectedPoi!.type == PoiType.parking
-                                          ? (_selectedPoi!.isFull ? const Color(0xFFFCA5A5) : const Color(0xFF93C5FD))
-                                          : const Color(0xFF6EE7B7),
-                                      fontSize: 10.5,
-                                      fontWeight: FontWeight.w600,
+                                Flexible(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: _selectedPoi!.isFull
+                                          ? const Color(0xFF7F1D1D).withValues(alpha: 0.5)
+                                          : Colors.white.withValues(alpha: 0.08),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _selectedPoi!.feeOrCapacity!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _selectedPoi!.type == PoiType.parking
+                                            ? (_selectedPoi!.isFull ? const Color(0xFFFCA5A5) : const Color(0xFF93C5FD))
+                                            : const Color(0xFF6EE7B7),
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              const Spacer(),
+                              const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () async {
                                   final mapsUrl =
@@ -1793,15 +1805,15 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                   decoration: BoxDecoration(
                                     gradient: AppColors.primaryGradient,
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.directions_car_rounded, color: Colors.white, size: 13),
+                                      Icon(Icons.directions_car_rounded, color: Colors.white, size: 12),
                                       SizedBox(width: 4),
                                       Text(
-                                        'Yol Tarifi Al',
+                                        'Yol Tarifi',
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 11,
@@ -2163,28 +2175,6 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 ),
               ),
             ),
-
-          // 5. "BENİ BUL / KONUMUMA GİT" YÜZEN BUTON (TEK TIKLA MERKEZLEME)
-          Positioned(
-            right: 16,
-            bottom: (_selectedEvent != null || _selectedPoi != null || _selectedUser != null) ? 140 : 24,
-            child: FloatingActionButton.small(
-              heroTag: 'map_my_location_fab',
-              backgroundColor: AppColors.surface,
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-                side: BorderSide(color: const Color(0xFF0284C7).withValues(alpha: 0.6), width: 1.3),
-              ),
-              onPressed: () {
-                _checkPermissionAndGetLocation(forceCenter: true);
-                if (userLat != null && userLng != null) {
-                  _mapController.move(LatLng(userLat, userLng), 14.5);
-                }
-              },
-              child: const Icon(Icons.my_location_rounded, color: Color(0xFF0284C7), size: 20),
-            ),
-          ),
         ],
       ),
     );

@@ -1450,7 +1450,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                     service.checkIn(widget.event.id);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: const Text('Check-in yapıldı! (+50 Puan) 🎉 Canlı sohbete yazabilirsin.'),
+                        content: const Text('Check-in yapıldı! 🎉 Canlı sohbete yazabilirsin.'),
                         backgroundColor: const Color(0xFF10B981),
                         behavior: SnackBarBehavior.floating,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1557,6 +1557,11 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                       hintText: 'Mekandakilere canlı mesaj yaz...',
                       hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 13),
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     onSubmitted: (_) => _sendMessage(),

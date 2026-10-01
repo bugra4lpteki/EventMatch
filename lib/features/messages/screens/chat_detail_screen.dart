@@ -18,6 +18,7 @@ import '../services/mock_message_service.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../widgets/chat_wallpaper_background.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final ChatModel chat;
@@ -827,7 +828,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
+        children: [
+          const ChatWallpaperBackground(),
+          Column(
         children: [
           if (isBlocked)
             Container(
@@ -1014,7 +1018,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           _buildMessageComposer(msgService, currentChat.id, isBlocked),
         ],
       ),
-    );
+    ],
+  ),
+);
   }
 
   bool _isSameDay(DateTime a, DateTime b) {

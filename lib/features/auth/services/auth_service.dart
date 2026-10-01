@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/notification_service.dart';
 
@@ -71,6 +75,39 @@ class AuthService extends ChangeNotifier {
 
   Future<bool> signInWithApple() async {
     try {
+      if (!kIsWeb && Platform.isIOS) {
+        try {
+          final rawNonce = _supabase.auth.generateRawNonce();
+          final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
+
+          final credential = await SignInWithApple.getAppleIDCredential(
+            scopes: [
+              AppleIDAuthorizationScopes.email,
+              AppleIDAuthorizationScopes.fullName,
+            ],
+            nonce: hashedNonce,
+          );
+
+          final idToken = credential.identityToken;
+          if (idToken != null) {
+            final res = await _supabase.auth.signInWithIdToken(
+              provider: OAuthProvider.apple,
+              idToken: idToken,
+              nonce: rawNonce,
+            );
+            notifyListeners();
+            return res.user != null;
+          }
+        } catch (nativeErr) {
+          debugPrint('Native Apple Sign In error/fallback: $nativeErr');
+          final str = nativeErr.toString().toLowerCase();
+          if (str.contains('canceled') || str.contains('cancelled') || str.contains('1001')) {
+            return false;
+          }
+          // If native failed, fallback to OAuth flow below
+        }
+      }
+
       final res = await _supabase.auth.signInWithOAuth(
         OAuthProvider.apple,
         redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
