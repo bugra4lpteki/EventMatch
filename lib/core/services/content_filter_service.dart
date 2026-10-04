@@ -64,7 +64,7 @@ class ContentFilterService {
         .replaceAll('3', 'e')
         .replaceAll('4', 'a')
         .replaceAll('@', 'a')
-        .replaceAll('$', 's')
+        .replaceAll(r'$', 's')
         .replaceAll(RegExp(r'[^a-z\s]'), '');
     return output;
   }
