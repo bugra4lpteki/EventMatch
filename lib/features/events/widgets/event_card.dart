@@ -7,6 +7,7 @@ import '../models/event_model.dart';
 import '../screens/event_detail_screen.dart';
 import '../services/mock_event_service.dart';
 import '../services/spotify_service.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 
 /// Performance-optimized Event Card with Spotify Artist Banner support.
 /// Music/concert events show the artist's Spotify/Deezer banner image.
@@ -147,6 +148,15 @@ class _EventCardState extends State<EventCard> {
                 ),
               );
             },
+        onLongPress: () {
+          ReportBlockSheet.showEventOptionsModal(
+            context,
+            eventId: widget.event.id,
+            eventTitle: widget.event.title,
+            organizerId: widget.event.creatorId,
+            organizerName: 'Düzenleyici',
+          );
+        },
         child: Container(
           margin: const EdgeInsets.only(bottom: 20),
           decoration: BoxDecoration(
@@ -227,6 +237,35 @@ class _EventCardState extends State<EventCard> {
                     top: 14,
                     right: 14,
                     child: _LiveEventBadge(event: widget.event),
+                  ),
+                  // Options / Moderation Button (Hide / Report)
+                  Positioned(
+                    top: 14,
+                    left: 14,
+                    child: GestureDetector(
+                      onTap: () {
+                        ReportBlockSheet.showEventOptionsModal(
+                          context,
+                          eventId: widget.event.id,
+                          eventTitle: widget.event.title,
+                          organizerId: widget.event.creatorId,
+                          organizerName: 'Düzenleyici',
+                        );
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                        ),
+                        child: const Icon(
+                          Icons.more_horiz_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
                   ),
                 ],
               ),

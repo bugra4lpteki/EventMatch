@@ -9,6 +9,7 @@ import '../models/message_model.dart';
 import '../../events/models/user_model.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../events/services/moderation_service.dart';
+import '../../../core/services/content_filter_service.dart';
 
 class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   final MockEventService _eventService;
@@ -1744,8 +1745,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     String? receiverUserId,
     MessageModel? replyToMessage,
   }) async {
-    final trimmedText = text.trim();
-    if (trimmedText.isEmpty) return;
+    final rawText = text.trim();
+    if (rawText.isEmpty) return;
+
+    // Apple Guideline 1.2: Sakıncalı kelime filtresi
+    final trimmedText = ContentFilterService.instance.censorText(rawText);
 
     try {
       final currentId = currentUserId.isNotEmpty ? currentUserId : 'user_mobile';

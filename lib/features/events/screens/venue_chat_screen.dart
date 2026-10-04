@@ -12,8 +12,10 @@ import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
+import '../services/moderation_service.dart';
 
 /// Floating Reaction Particle Model for Streamer Live Chat
 class _FloatingReaction {
@@ -934,7 +936,13 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
             children: [
               Consumer<MockEventService>(
                 builder: (context, service, child) {
-                  final messages = service.getVenueMessages(widget.event.id);
+                  final rawMessages = service.getVenueMessages(widget.event.id);
+                  final mod = ModerationService();
+                  final messages = rawMessages.where((m) {
+                    final uid = (m['userId'] ?? '').toString();
+                    return !mod.isBlocked(uid);
+                  }).toList();
+
                   if (messages.isEmpty) {
                     return _buildEmptyStreamPlaceholder();
                   }
@@ -1117,19 +1125,34 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-        decoration: BoxDecoration(
-          color: isMe
-              ? AppColors.primary.withValues(alpha: 0.18)
-              : const Color(0xFF141724).withValues(alpha: 0.7),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
+      child: GestureDetector(
+        onLongPress: isMe
+            ? null
+            : () {
+                ReportBlockSheet.showMessageOptionsModal(
+                  context,
+                  messageId: msg['id']?.toString() ?? 'venue_msg_$index',
+                  senderId: (msg['userId'] ?? '').toString(),
+                  senderName: senderName,
+                  messageText: messageText,
+                  onActionDone: () {
+                    if (mounted) setState(() {});
+                  },
+                );
+              },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
             color: isMe
-                ? AppColors.primary.withValues(alpha: 0.35)
-                : Colors.white.withValues(alpha: 0.06),
+                ? AppColors.primary.withValues(alpha: 0.18)
+                : const Color(0xFF141724).withValues(alpha: 0.7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isMe
+                  ? AppColors.primary.withValues(alpha: 0.35)
+                  : Colors.white.withValues(alpha: 0.06),
+            ),
           ),
-        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1199,6 +1222,24 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                         timeStr,
                         style: const TextStyle(color: Colors.white30, fontSize: 10),
                       ),
+                      if (!isMe) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: () {
+                            ReportBlockSheet.showMessageOptionsModal(
+                              context,
+                              messageId: msg['id']?.toString() ?? 'venue_msg_$index',
+                              senderId: (msg['userId'] ?? '').toString(),
+                              senderName: senderName,
+                              messageText: messageText,
+                              onActionDone: () {
+                                if (mounted) setState(() {});
+                              },
+                            );
+                          },
+                          child: const Icon(Icons.more_vert_rounded, color: Colors.white38, size: 14),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 5),

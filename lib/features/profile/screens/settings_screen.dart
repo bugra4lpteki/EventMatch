@@ -12,6 +12,7 @@ import 'notification_settings_screen.dart';
 import 'themes_screen.dart';
 import 'help_settings_screen.dart';
 import 'about_settings_screen.dart';
+import 'blocked_users_screen.dart';
 import '../../legal/screens/terms_and_permissions_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -128,15 +129,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 24),
 
-          // Section 4: Yasal & İzinler
-          _buildSectionHeader('YASAL & İZİNLER'),
+          // Section 4: Yasal & Güvenlik
+          _buildSectionHeader('GÜVENLİK & YASAL'),
           const SizedBox(height: 8),
           _buildGroupedCard([
             _buildSettingsTile(
+              icon: Icons.block_rounded,
+              iconColor: Colors.redAccent,
+              title: 'Engellenen Kullanıcılar',
+              subtitle: 'Engellediğiniz kişileri yönetin',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const BlockedUsersScreen()),
+              ),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
               icon: Icons.policy_rounded,
               iconColor: const Color(0xFF8B5CF6),
-              title: 'İzin Merkezi',
-              subtitle: 'EULA, Gizlilik Politikası, İzinler ve Topluluk Kuralları',
+              title: 'İzin Merkezi & EULA',
+              subtitle: 'Kullanım Koşulları, Gizlilik Politikası ve Sıfır Tolerans',
               trailing: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(

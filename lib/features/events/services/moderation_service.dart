@@ -17,11 +17,43 @@ class ModerationService extends ChangeNotifier {
       return null;
     }
   }
+  static const String moderationContactEmail = 'guvenlik@eventmatch.app';
+  static const String supportEmail = 'destek@eventmatch.app';
+  static const int moderationActionHours = 24;
+
   final Set<String> _blockedUserIds = {};
   final Map<String, String> _blockedUserNames = {};
+  final Set<String> _hiddenEventIds = {};
 
   Set<String> get blockedUserIds => Set.unmodifiable(_blockedUserIds);
   Map<String, String> get blockedUserNames => Map.unmodifiable(_blockedUserNames);
+  Set<String> get hiddenEventIds => Set.unmodifiable(_hiddenEventIds);
+
+  bool isEventHidden(String eventId) {
+    if (eventId.trim().isEmpty) return false;
+    return _hiddenEventIds.contains(eventId.trim());
+  }
+
+  Future<void> hideEvent(String eventId) async {
+    final cleanId = eventId.trim();
+    if (cleanId.isEmpty) return;
+    _hiddenEventIds.add(cleanId);
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('hidden_event_ids', _hiddenEventIds.toList());
+    } catch (_) {}
+  }
+
+  Future<void> unhideEvent(String eventId) async {
+    final cleanId = eventId.trim();
+    _hiddenEventIds.remove(cleanId);
+    notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList('hidden_event_ids', _hiddenEventIds.toList());
+    } catch (_) {}
+  }
 
   bool isBlocked(String userId) {
     if (userId.trim().isEmpty) return false;
@@ -46,6 +78,13 @@ class ModerationService extends ChangeNotifier {
       for (var id in list) {
         if (id.trim().isNotEmpty) {
           _blockedUserIds.add(id.trim());
+        }
+      }
+
+      final hiddenList = prefs.getStringList('hidden_event_ids') ?? [];
+      for (var id in hiddenList) {
+        if (id.trim().isNotEmpty) {
+          _hiddenEventIds.add(id.trim());
         }
       }
 
@@ -232,4 +271,87 @@ class ModerationService extends ChangeNotifier {
       return false;
     }
   }
+
+  /// Sakıncalı bir etkinliği şikayet et ve akıştan hemen kaldır
+  Future<bool> reportEvent({
+    required String eventId,
+    required String eventTitle,
+    required String reason,
+    String? organizerId,
+    String? details,
+  }) async {
+    try {
+      final client = _supabase;
+      final currentUserId = client?.auth.currentUser?.id ?? 'guest_user';
+
+      if (client != null) {
+        try {
+          await client.from('event_reports').insert({
+            'reporter_id': currentUserId,
+            'reported_event_id': eventId,
+            'event_title': eventTitle,
+            'reason': reason,
+            'details': details ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'status': 'pending_review',
+          });
+        } catch (_) {}
+      }
+
+      // Kullanıcının akışından anında kaldır
+      await hideEvent(eventId);
+
+      // İstenirse etkinlik düzenleyicisini de engelle
+      if (organizerId != null && organizerId.trim().isNotEmpty) {
+        await blockUser(organizerId.trim());
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[ModerationService] Error reporting event: $e');
+      return false;
+    }
+  }
+
+  /// Sohbet veya mekân mesajını şikayet et
+  Future<bool> reportMessage({
+    required String messageId,
+    required String senderId,
+    required String senderName,
+    required String messageContent,
+    required String reason,
+    String? details,
+  }) async {
+    try {
+      final client = _supabase;
+      final currentUserId = client?.auth.currentUser?.id ?? 'guest_user';
+
+      if (client != null) {
+        try {
+          await client.from('message_reports').insert({
+            'reporter_id': currentUserId,
+            'message_id': messageId,
+            'sender_id': senderId,
+            'sender_name': senderName,
+            'content': messageContent,
+            'reason': reason,
+            'details': details ?? '',
+            'created_at': DateTime.now().toIso8601String(),
+            'status': 'pending_review',
+          });
+        } catch (_) {}
+      }
+
+      // Mesaj sahibini de engelle
+      if (senderId.trim().isNotEmpty) {
+        await blockUser(senderId.trim(), userName: senderName);
+      }
+
+      return true;
+    } catch (e) {
+      debugPrint('[ModerationService] Error reporting message: $e');
+      return false;
+    }
+  }
 }
+

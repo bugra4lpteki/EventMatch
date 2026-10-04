@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import '../../legal/screens/terms_and_permissions_screen.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 
 class AboutSettingsScreen extends StatefulWidget {
   const AboutSettingsScreen({super.key});
@@ -158,6 +158,46 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
 
             const SizedBox(height: 36),
 
+            // Zero Tolerance & Safety Notice Box
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.orangeAccent.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.orangeAccent.withOpacity(0.25)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.security_rounded, color: Colors.orangeAccent, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Sıfır Tolerans & 24 Saat Güvencesi',
+                        style: GoogleFonts.outfit(
+                          color: Colors.orangeAccent,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'EventMatch, sakıncalı içeriklere (UGC) ve kötü niyetli kullanıcılara karşı sıfır tolerans politikası uygulamaktadır. Şikayet edilen içerikler en geç 24 saat içinde incelenir, ihlal yapan kullanıcılar platformdan ihraç edilir.',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white70,
+                      fontSize: 11.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Legal & Terms Grouped Card
             Container(
               decoration: BoxDecoration(
@@ -169,7 +209,8 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                 children: [
                   ListTile(
                     leading: Icon(Icons.description_outlined, color: AppColors.primary),
-                    title: Text('Kullanıcı Sözleşmesi', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15)),
+                    title: Text('Kullanıcı Sözleşmesi (EULA)', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15)),
+                    subtitle: Text('Sıfır tolerans ve topluluk kuralları', style: GoogleFonts.outfit(color: Colors.white38, fontSize: 11)),
                     trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
                     onTap: () => Navigator.push(
                       context,
@@ -177,6 +218,14 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                         builder: (_) => const TermsAndPermissionsScreen(),
                       ),
                     ),
+                  ),
+                  Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
+                  ListTile(
+                    leading: const Icon(Icons.open_in_browser_rounded, color: Colors.cyanAccent),
+                    title: Text('Apple Standart EULA', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15)),
+                    subtitle: Text('Apple Standart Lisans Sözleşmesi', style: GoogleFonts.outfit(color: Colors.white38, fontSize: 11)),
+                    trailing: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 18),
+                    onTap: () => UrlLauncherHelper.launchURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
                   ),
                   Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                   ListTile(
@@ -189,6 +238,14 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                         builder: (_) => const TermsAndPermissionsScreen(),
                       ),
                     ),
+                  ),
+                  Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
+                  ListTile(
+                    leading: const Icon(Icons.mail_outline_rounded, color: Colors.amberAccent),
+                    title: Text('Uygunsuz İçerik Bildirimi & İletişim', style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 14)),
+                    subtitle: Text('guvenlik@eventmatch.app', style: GoogleFonts.outfit(color: Colors.white54, fontSize: 11)),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                    onTap: () => UrlLauncherHelper.launchURL('mailto:guvenlik@eventmatch.app?subject=EventMatch%20Uygunsuz%20Icerik%20Bildirimi'),
                   ),
                   Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                   ListTile(

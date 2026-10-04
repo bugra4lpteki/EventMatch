@@ -9,6 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import '../models/event_model.dart';
 import '../models/user_model.dart';
 import 'external_event_service.dart';
+import 'moderation_service.dart';
+import '../../../core/services/content_filter_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -41,6 +43,9 @@ class MockEventService extends ChangeNotifier {
     // Uygulama açılır açılmaz anında vitrin etkinliklerini hazırla (ekranda "etkinlik bulunmuyor" gözükmesini önler)
     _populateFallbackEvents();
     _events.sort((a, b) => a.dateTime.compareTo(b.dateTime));
+
+    // Moderasyon ve gizlenen etkinlik değişikliklerini dinle
+    ModerationService().addListener(notifyListeners);
 
     _initAuthListener();
     _loadCarouselSettings();
@@ -1528,7 +1533,13 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> getCarouselEvents() {
     final now = DateTime.now();
-    final active = _events.where((e) => e.isValidForDisplay).toList();
+    final mod = ModerationService();
+    final active = _events.where((e) {
+      if (!e.isValidForDisplay) return false;
+      if (mod.isEventHidden(e.id)) return false;
+      if (e.creatorId != null && mod.isBlocked(e.creatorId!)) return false;
+      return true;
+    }).toList();
     if (active.isEmpty) return [];
 
     // 1. Şehir ve Konum Önceliği Belirleme:
@@ -1778,7 +1789,13 @@ class MockEventService extends ChangeNotifier {
 
   List<EventModel> get filteredEvents {
     final now = DateTime.now();
-    List<EventModel> activeEvents = _events.where((e) => e.isValidForDisplay).toList();
+    final mod = ModerationService();
+    List<EventModel> activeEvents = _events.where((e) {
+      if (!e.isValidForDisplay) return false;
+      if (mod.isEventHidden(e.id)) return false;
+      if (e.creatorId != null && mod.isBlocked(e.creatorId!)) return false;
+      return true;
+    }).toList();
 
     // 1. Arama sorgusu varsa: Tüm şehirler ve tüm kategoriler genelinde arama yap ve doğrudan döndür!
     if (_searchQuery.trim().isNotEmpty) {
@@ -2410,8 +2427,11 @@ class MockEventService extends ChangeNotifier {
     int? audioDuration,
     String? userAvatar,
   }) async {
-    final text = message.trim();
-    if (text.isEmpty && (imageUrl == null || imageUrl.isEmpty) && (audioUrl == null || audioUrl.isEmpty)) return;
+    final rawText = message.trim();
+    if (rawText.isEmpty && (imageUrl == null || imageUrl.isEmpty) && (audioUrl == null || audioUrl.isEmpty)) return;
+
+    // Apple Guideline 1.2: Otomatik sakıncalı içerik filtreleme
+    final text = ContentFilterService.instance.censorText(rawText);
 
     final uid = currentUserId;
     final uName = currentUser.name;

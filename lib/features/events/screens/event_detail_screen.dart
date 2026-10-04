@@ -19,6 +19,7 @@ import '../services/spotify_service.dart';
 import '../services/external_event_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -489,6 +490,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 onTap: () => Navigator.pop(context),
               ),
             ),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: _buildGlassIconButton(
+                  icon: Icons.more_vert_rounded,
+                  onTap: () {
+                    ReportBlockSheet.showEventOptionsModal(
+                      context,
+                      eventId: event.id,
+                      eventTitle: event.title,
+                      organizerId: event.creatorId,
+                      organizerName: 'Düzenleyici',
+                      onEventHidden: () {
+                        if (mounted) Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
