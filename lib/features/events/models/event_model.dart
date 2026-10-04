@@ -15,6 +15,7 @@ class EventModel {
   final double? longitude;
   final String? ticketUrl;
   final String? ticketProvider;
+  final String? creatorId;
   bool isActive;
 
   EventModel({
@@ -29,6 +30,7 @@ class EventModel {
     this.longitude,
     this.ticketUrl,
     this.ticketProvider,
+    this.creatorId,
     this.isActive = true,
     this.atmosphere = 'Sakin',
     this.isPopular = false,
@@ -391,6 +393,7 @@ class EventModel {
         longitude: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null),
         ticketUrl: json['ticketUrl']?.toString() ?? json['ticket_url']?.toString() ?? json['url']?.toString(),
         ticketProvider: json['ticketProvider']?.toString() ?? json['ticket_provider']?.toString() ?? json['provider']?.toString(),
+        creatorId: json['creator_id']?.toString() ?? json['creatorId']?.toString() ?? json['user_id']?.toString(),
         isActive: json['isActive'] as bool? ?? true,
         isPopular: json['isPopular'] is bool ? json['isPopular'] as bool : (json['tag']?.toString().toLowerCase().contains('popüler') ?? false),
         atmosphere: json['atmosphere']?.toString() ?? json['tag']?.toString() ?? 'Canlı',
@@ -681,6 +684,7 @@ class EventModel {
     double? longitude,
     String? ticketUrl,
     String? ticketProvider,
+    String? creatorId,
     bool? isActive,
     String? atmosphere,
     bool? isPopular,
@@ -698,6 +702,7 @@ class EventModel {
       longitude: longitude ?? this.longitude,
       ticketUrl: ticketUrl ?? this.ticketUrl,
       ticketProvider: ticketProvider ?? this.ticketProvider,
+      creatorId: creatorId ?? this.creatorId,
       isActive: isActive ?? this.isActive,
       atmosphere: atmosphere ?? this.atmosphere,
       isPopular: isPopular ?? this.isPopular,
@@ -717,6 +722,7 @@ class EventModel {
       'longitude': longitude,
       'ticketUrl': ticketUrl,
       'ticketProvider': ticketProvider,
+      'creator_id': creatorId,
       'isActive': isActive,
       'atmosphere': atmosphere,
       'isPopular': isPopular,

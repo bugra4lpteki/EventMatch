@@ -1276,8 +1276,9 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildUserAvatarWidget(String? userAvatar, String senderName, Color senderColor) {
     return Container(
