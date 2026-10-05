@@ -229,11 +229,7 @@ class AuthService extends ChangeNotifier {
             final sendErr = await sendTwoFactorCode(email: uEmail);
             _isPasswordLoginInProgress = false;
             if (sendErr != null) {
-              _isTwoFactorPending = false;
-              _pendingTwoFactorEmail = null;
-              await _supabase.auth.signOut();
-              notifyListeners();
-              return sendErr;
+              debugPrint('[Auth] 2FA e-posta gönderim uyarısı: $sendErr');
             }
             notifyListeners();
             return '2FA_REQUIRED';
