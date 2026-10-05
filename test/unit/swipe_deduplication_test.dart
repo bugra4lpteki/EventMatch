@@ -76,5 +76,32 @@ void main() {
       expect(remaining.contains(userA), isFalse);
       expect(remaining.contains(userB), isFalse);
     });
+
+    test('Hayalet ve içi boş UUID profilleri eşleşme havuzundan elenir', () {
+      final rawProfiles = [
+        {'id': '5f5895dd-3f1b-4f27-9fbc-ee5244cd5f99', 'name': null, 'username': null, 'avatar_url': null, 'bio': null},
+        {'id': 'ac192b56-440c-416a-8f9d-adca394a188f', 'name': 'Buğrahan Alpteki', 'username': 'bugra', 'avatar_url': 'https://example.com/avatar.jpg', 'bio': 'Müzik ve konserler'},
+        {'id': '77777777-3f1b-4f27-9fbc-ee5244cd5f99', 'name': 'Kullanıcı 77777777-3f1b-4f27-9fbc-ee5244cd5f99', 'username': null, 'avatar_url': null, 'bio': null},
+      ];
+
+      final filtered = <Map<String, dynamic>>[];
+      for (final row in rawProfiles) {
+        final id = (row['id'] ?? '').toString();
+        final rawName = row['name']?.toString().trim() ?? '';
+        final rawUsername = row['username']?.toString().trim() ?? '';
+        final bio = row['bio']?.toString().trim() ?? '';
+        final avatar = row['avatar_url']?.toString().trim() ?? '';
+
+        if (rawName.isEmpty && rawUsername.isEmpty) continue;
+
+        final isUuidName = rawName.contains(id) || (rawName.toLowerCase().startsWith('kullanıcı ') && rawName.length > 15);
+        if (isUuidName && avatar.isEmpty && bio.isEmpty) continue;
+
+        filtered.add(row);
+      }
+
+      expect(filtered.length, 1);
+      expect(filtered.first['name'], 'Buğrahan Alpteki');
+    });
   });
 }

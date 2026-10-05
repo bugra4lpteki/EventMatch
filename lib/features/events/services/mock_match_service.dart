@@ -369,25 +369,47 @@ class MockMatchService extends ChangeNotifier {
           if (lowerId.isEmpty || addedIds.contains(lowerId) || excludedUserIds.contains(lowerId) || _seenUserIds.contains(lowerId)) {
             continue;
           }
-          addedIds.add(lowerId);
 
-          final name = row['name']?.toString() ?? 'Kullanıcı $id';
-          final username = row['username']?.toString();
-          final bio = row['bio']?.toString() ?? row['about_me']?.toString() ?? '';
-          final city = row['city']?.toString() ?? '';
-          final gender = row['gender']?.toString() ?? '';
+          final rawName = row['name']?.toString().trim() ?? '';
+          final rawUsername = row['username']?.toString().trim() ?? '';
+          final bio = row['bio']?.toString().trim() ?? row['about_me']?.toString().trim() ?? '';
+          final city = row['city']?.toString().trim() ?? '';
+          final gender = row['gender']?.toString().trim() ?? '';
 
-          DateTime? birthDate;
-          if (row['birth_date'] != null) {
-            birthDate = DateTime.tryParse(row['birth_date'].toString());
-          }
-
+          // Fotoğrafları çöz
           final List<String> rawAvatarUrls = userPhotosMap[id.toLowerCase()] ?? [];
           final List<String> avatarUrls = rawAvatarUrls.where(UserModel.isValidPhotoUrl).toList();
           final rawAvatar = avatarUrls.isNotEmpty
               ? avatarUrls.first
               : (row['avatar_url']?.toString() ?? '');
           final String avatarUrl = UserModel.isValidPhotoUrl(rawAvatar) ? rawAvatar : '';
+
+          // --- HAYALET / İÇİ BOŞ TEST KAYITLARINI FİLTRELE ---
+          // 1. Ne adı ne de kullanıcı adı var -> Henüz profilini tamamlamamış hayalet hesap, eşleşme kartlarına sokma
+          if (rawName.isEmpty && rawUsername.isEmpty) {
+            continue;
+          }
+
+          // 2. İsim doğrudan UUID içeriyor veya "Kullanıcı <UUID>" formatındaysa
+          final isUuidName = rawName.contains(id) ||
+              _isValidUuid(rawName) ||
+              (rawName.toLowerCase().startsWith('kullanıcı ') && rawName.length > 15);
+
+          // İsim UUID formatında ve ne fotoğrafı ne de biyografisi var -> Boş test kaydı, atla
+          if (isUuidName && avatarUrl.isEmpty && bio.isEmpty && city.isEmpty) {
+            continue;
+          }
+
+          final String name = rawName.isNotEmpty && !isUuidName
+              ? rawName
+              : (rawUsername.isNotEmpty ? '@$rawUsername' : (rawName.isNotEmpty ? rawName : 'Katılımcı'));
+
+          addedIds.add(lowerId);
+
+          DateTime? birthDate;
+          if (row['birth_date'] != null) {
+            birthDate = DateTime.tryParse(row['birth_date'].toString());
+          }
 
           List<String> socialLinks = List<String>.from(userSocialLinksMap[id.toLowerCase()] ?? []);
 
@@ -420,7 +442,7 @@ class MockMatchService extends ChangeNotifier {
           loadedMatches.add(UserModel(
             id: id,
             name: name,
-            username: username,
+            username: rawUsername.isNotEmpty ? rawUsername : null,
             avatarUrl: avatarUrl,
             avatarUrls: avatarUrls,
             aboutMe: bio,
