@@ -1056,8 +1056,7 @@ class SpotifyService {
           final t = c.tracks[i];
           final preview = (t.previewUrl != null &&
                   t.previewUrl!.isNotEmpty &&
-                  !t.previewUrl!.contains('soundhelix') &&
-                  !t.previewUrl!.contains('itunes.apple.com'))
+                  !t.previewUrl!.contains('soundhelix'))
               ? t.previewUrl!
               : null;
           return SpotifyTrack(
@@ -1170,8 +1169,7 @@ class SpotifyService {
           final t = c.tracks[i];
           final preview = (t.previewUrl != null &&
                   t.previewUrl!.isNotEmpty &&
-                  !t.previewUrl!.contains('soundhelix') &&
-                  !t.previewUrl!.contains('itunes.apple.com'))
+                  !t.previewUrl!.contains('soundhelix'))
               ? t.previewUrl!
               : null;
           return SpotifyTrack(
