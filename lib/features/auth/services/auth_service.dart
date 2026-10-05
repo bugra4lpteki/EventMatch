@@ -386,9 +386,11 @@ class AuthService extends ChangeNotifier {
         debugPrint('[Auth] Supabase signInWithOtp exception: $e');
       }
 
-      // 2. Supabase Standart Recovery E-postası (Yedek hat)
       try {
-        await _supabase.auth.resetPasswordForEmail(cleanEmail);
+        await _supabase.auth.resetPasswordForEmail(
+          cleanEmail,
+          redirectTo: kIsWeb ? null : 'io.supabase.eventmatch://login-callback/',
+        );
         debugPrint('[Auth] ✅ Supabase resetPasswordForEmail talebi iletildi: $cleanEmail');
         sentAny = true;
       } on AuthException catch (e) {

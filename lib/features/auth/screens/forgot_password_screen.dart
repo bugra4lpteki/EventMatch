@@ -452,7 +452,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                   // Email Field
                                   TextField(
                                     controller: _emailController,
-                                    enabled: !_isCodeSent,
                                     keyboardType: TextInputType.emailAddress,
                                     style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 15),
                                     decoration: InputDecoration(
