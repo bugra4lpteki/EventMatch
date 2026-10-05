@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/notification_service.dart';
+import '../../../services/email_service.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -226,16 +228,12 @@ class AuthService extends ChangeNotifier {
             _isTwoFactorPending = true;
             _pendingTwoFactorEmail = uEmail;
 
-            // 2FA tamamlanmadan anasayfaya sızmayı engellemek için geçici oturumu temizle
-            await _supabase.auth.signOut();
-            _isTwoFactorPending = true;
-            _pendingTwoFactorEmail = uEmail;
-
             final sendErr = await sendTwoFactorCode(email: uEmail);
             _isPasswordLoginInProgress = false;
             if (sendErr != null) {
               _isTwoFactorPending = false;
               _pendingTwoFactorEmail = null;
+              await _supabase.auth.signOut();
               notifyListeners();
               return sendErr;
             }
@@ -521,25 +519,23 @@ class AuthService extends ChangeNotifier {
   Future<String?> sendTwoFactorCode({required String email}) async {
     final cleanEmail = email.trim();
     _pendingTwoFactorEmail = cleanEmail;
+
+    // 6 haneli rastgele güçlü güvenlik kodu üret (100000 - 999999)
+    final random = Random.secure();
+    final code = (100000 + random.nextInt(900000)).toString();
+    _activeTwoFactorCode = code;
     _activeTwoFactorExpiry = DateTime.now().add(const Duration(minutes: 5));
 
     try {
-      debugPrint('[Auth] 🔐 2FA Güvenlik Kodu $cleanEmail e-posta adresine gönderiliyor...');
-      await _supabase.auth.signInWithOtp(
-        email: cleanEmail,
-        shouldCreateUser: false,
+      debugPrint('[Auth] 🔐 2FA Güvenlik Kodu ($code) $cleanEmail adresine gönderiliyor...');
+      await EmailService().sendTwoFactorOtp(
+        toEmail: cleanEmail,
+        otpCode: code,
       );
-      debugPrint('[Auth] ✅ 2FA Güvenlik Kodu e-posta olarak gönderildi: $cleanEmail');
+      debugPrint('[Auth] ✅ 2FA Güvenlik Kodu başarıyla gönderildi: $cleanEmail');
       return null;
-    } on AuthException catch (e) {
-      debugPrint('[Auth] 2FA signInWithOtp AuthException: ${e.message}');
-      final msg = e.message.toLowerCase();
-      if (msg.contains('rate limit') || msg.contains('too many requests')) {
-        return 'Çok fazla kod talep edildi. Lütfen birkaç dakika sonra tekrar deneyin.';
-      }
-      return e.message;
     } catch (e) {
-      debugPrint('[Auth] 2FA signInWithOtp Error: $e');
+      debugPrint('[Auth] 2FA sendTwoFactorOtp Error: $e');
       return 'Güvenlik kodu e-postanıza gönderilemedi: $e';
     }
   }
@@ -549,14 +545,36 @@ class AuthService extends ChangeNotifier {
     final email = _pendingTwoFactorEmail ?? currentUserEmail;
     if (email == null || email.isEmpty) return false;
 
-    // Apple Reviewer / Acil Test Bypass Kodu
+    // 1. Apple Reviewer / Acil Test Bypass Kodu
     if (cleanInput == '582914') {
       _isTwoFactorPending = false;
       _pendingTwoFactorEmail = null;
+      _activeTwoFactorCode = null;
+      _activeTwoFactorExpiry = null;
       notifyListeners();
       return true;
     }
 
+    // 2. Doğrudan E-posta OTP Kodu Doğrulaması (Option 2)
+    if (_activeTwoFactorCode != null && cleanInput == _activeTwoFactorCode) {
+      if (_activeTwoFactorExpiry != null && DateTime.now().isAfter(_activeTwoFactorExpiry!)) {
+        debugPrint('[Auth] 2FA kodu süresi dolmuş.');
+        return false;
+      }
+      debugPrint('[Auth] ✅ 2FA kodu başarıyla doğrulandı.');
+      _isTwoFactorPending = false;
+      _pendingTwoFactorEmail = null;
+      _activeTwoFactorCode = null;
+      _activeTwoFactorExpiry = null;
+      final uid = currentUserId;
+      if (uid != null) {
+        NotificationService().syncUserWithOneSignal(uid);
+      }
+      notifyListeners();
+      return true;
+    }
+
+    // 3. Supabase OTP Yedek Doğrulaması (Eğer Supabase OTP kullanılmışsa)
     try {
       final response = await _supabase.auth.verifyOTP(
         email: email,
@@ -567,6 +585,8 @@ class AuthService extends ChangeNotifier {
       if (response.session != null || response.user != null) {
         _isTwoFactorPending = false;
         _pendingTwoFactorEmail = null;
+        _activeTwoFactorCode = null;
+        _activeTwoFactorExpiry = null;
         final uid = response.user?.id ?? currentUserId;
         if (uid != null) {
           NotificationService().syncUserWithOneSignal(uid);
@@ -577,6 +597,7 @@ class AuthService extends ChangeNotifier {
     } catch (e) {
       debugPrint('[Auth] 2FA verifyOTP Error: $e');
     }
+
     return false;
   }
 
