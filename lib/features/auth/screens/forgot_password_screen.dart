@@ -3,13 +3,19 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../services/auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   final String? initialEmail;
+  final bool isFromRecoveryLink;
 
-  const ForgotPasswordScreen({super.key, this.initialEmail});
+  const ForgotPasswordScreen({
+    super.key,
+    this.initialEmail,
+    this.isFromRecoveryLink = false,
+  });
 
   @override
   State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -36,6 +42,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     super.initState();
     if (widget.initialEmail != null && widget.initialEmail!.isNotEmpty) {
       _emailController.text = widget.initialEmail!;
+    }
+    if (widget.isFromRecoveryLink || Supabase.instance.client.auth.currentSession != null) {
+      _isCodeSent = true;
+      _successMessage = 'Kurtarma bağlantınız doğrulandı! Lütfen yeni şifrenizi belirleyin.';
     }
   }
 
@@ -107,7 +117,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       } else {
         _isCodeSent = true;
         _startResendTimer();
-        _successMessage = 'Şifre sıfırlama kodu gönderildi! Lütfen e-posta gelen kutunuzu ve Spam klasörünü kontrol edin.';
+        _successMessage = 'Şifre sıfırlama talebi gönderildi! Lütfen e-posta gelen kutunuzu (ve Spam klasörünü) kontrol edin.';
       }
     });
   }
@@ -117,13 +127,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final otp = _otpController.text.trim();
     final newPassword = _newPasswordController.text;
     final confirmPassword = _confirmPasswordController.text;
-
-    if (otp.isEmpty) {
-      setState(() {
-        _errorMessage = 'Lütfen e-postanıza gelen 6 haneli kodu girin.';
-      });
-      return;
-    }
 
     if (newPassword.length < 6) {
       setState(() {
@@ -139,6 +142,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       return;
     }
 
+    final hasRecoverySession = Supabase.instance.client.auth.currentSession != null;
+
+    if (otp.isEmpty && !widget.isFromRecoveryLink && !hasRecoverySession) {
+      setState(() {
+        _errorMessage = 'Lütfen e-postanıza gelen 6 haneli kodu girin veya e-postanızdaki bağlantıya tıklayın.';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -146,11 +158,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     });
 
     final authService = context.read<AuthService>();
-    final error = await authService.verifyOtpAndResetPassword(
-      email: email,
-      token: otp,
-      newPassword: newPassword,
-    );
+    String? error;
+
+    if (hasRecoverySession && (widget.isFromRecoveryLink || otp.isEmpty)) {
+      // E-postadaki linke tıklandıysa oturum zaten açılmıştır, şifreyi doğrudan güncelle
+      error = await authService.updatePassword(newPassword);
+    } else {
+      // 6 Haneli OTP kodu veya bypass ile doğrulama yap ve şifreyi güncelle
+      error = await authService.verifyOtpAndResetPassword(
+        email: email,
+        token: otp,
+        newPassword: newPassword,
+      );
+    }
 
     if (!mounted) return;
 
@@ -215,6 +235,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final hasRecoverySession = Supabase.instance.client.auth.currentSession != null || widget.isFromRecoveryLink;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -341,9 +362,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            _isCodeSent
-                                ? 'E-postanıza gelen 6 haneli kodu ve belirleyeceğiniz yeni şifreyi girin.'
-                                : 'Hesabınıza kayıtlı e-posta adresinizi girin. Size 6 haneli şifre sıfırlama kodu göndereceğiz.',
+                            hasRecoverySession
+                                ? 'E-postanızdaki bağlantı doğrulandı. Yeni şifrenizi belirleyin.'
+                                : _isCodeSent
+                                    ? 'E-postanıza gelen 6 haneli kodu veya e-postanızdaki sıfırlama bağlantısını kullanabilirsiniz.'
+                                    : 'Hesabınıza kayıtlı e-posta adresinizi girin. Size sıfırlama bağlantısı ve kodu göndereceğiz.',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.outfit(
                               fontSize: 14,
@@ -477,9 +500,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                                 ),
                                               )
                                             : Text(
-                                                'Sıfırlama Kodu Gönder',
+                                                'Sıfırlama Bağlantısı ve Kodu Gönder',
                                                 style: GoogleFonts.outfit(
-                                                  fontSize: 16,
+                                                  fontSize: 15,
                                                   fontWeight: FontWeight.w700,
                                                   color: Colors.white,
                                                 ),
@@ -497,7 +520,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           });
                                         },
                                         child: Text(
-                                          'Zaten bir kodum var',
+                                          'Zaten bir kodum veya bağlantım var',
                                           style: GoogleFonts.outfit(
                                             color: AppColors.primaryVariant,
                                             fontSize: 14,
@@ -508,27 +531,51 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                     ),
                                   ] else ...[
                                     const SizedBox(height: 16),
-                                    // OTP Code Field
-                                    TextField(
-                                      controller: _otpController,
-                                      keyboardType: TextInputType.number,
-                                      maxLength: 8,
-                                      style: GoogleFonts.outfit(
-                                        color: AppColors.textPrimary,
-                                        fontSize: 18,
-                                        letterSpacing: 4,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                      decoration: InputDecoration(
-                                        counterText: '',
-                                        labelText: '6 Haneli Kurtarma Kodu',
-                                        prefixIcon: Icon(
-                                          Icons.pin_rounded,
-                                          color: AppColors.primaryVariant,
-                                          size: 22,
+
+                                    // OTP Code Field (If session is already verified from email link, show verified indicator)
+                                    if (hasRecoverySession) ...[
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.blue.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(Icons.link_rounded, color: Colors.blueAccent, size: 20),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Text(
+                                                'E-posta bağlantısı aktif. Kod girmenize gerek yoktur.',
+                                                style: GoogleFonts.outfit(color: Colors.blueAccent, fontSize: 13),
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ),
+                                    ] else ...[
+                                      TextField(
+                                        controller: _otpController,
+                                        keyboardType: TextInputType.number,
+                                        maxLength: 8,
+                                        style: GoogleFonts.outfit(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 18,
+                                          letterSpacing: 4,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        decoration: InputDecoration(
+                                          counterText: '',
+                                          labelText: '6 Haneli Kurtarma Kodu',
+                                          prefixIcon: Icon(
+                                            Icons.pin_rounded,
+                                            color: AppColors.primaryVariant,
+                                            size: 22,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                     const SizedBox(height: 16),
 
                                     // New Password Field
@@ -624,7 +671,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
                                     const SizedBox(height: 14),
 
-                                    // Spam Tip Banner
+                                    // Tip Banner
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                       decoration: BoxDecoration(
@@ -639,7 +686,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
-                                              'E-posta ulaşmadıysa lütfen Gereksiz / Spam klasörünüzü de kontrol edin.',
+                                              'E-postadaki mavi "Reset password" bağlantısına tıklayarak da doğrudan şifrenizi yenileyebilirsiniz.',
                                               style: GoogleFonts.outfit(color: Colors.amber.shade200, fontSize: 12.5),
                                             ),
                                           ),

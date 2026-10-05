@@ -164,8 +164,9 @@ class _EventMatchAppState extends State<EventMatchApp> {
           );
         }
       } else if (event == AuthChangeEvent.passwordRecovery) {
+        debugPrint('[Auth] passwordRecovery event yakalandı! Doğrudan yeni şifre belirleme ekranına yönlendiriliyor.');
         navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen(isFromRecoveryLink: true)),
         );
       }
     });
