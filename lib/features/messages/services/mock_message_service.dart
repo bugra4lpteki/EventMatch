@@ -788,10 +788,6 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     required DateTime timestamp,
   }) {
     if (content.trim().isEmpty || partnerId.isEmpty) return;
-    final cleanMsgId = msgId.toLowerCase().trim();
-    if (_hiddenMessageIdsForMe.contains(cleanMsgId) || _deletedForEveryoneIds.contains(cleanMsgId)) {
-      return;
-    }
     if (partnerId.toLowerCase().startsWith('venue_') ||
         receiverId.toLowerCase().startsWith('venue_') ||
         senderId.toLowerCase().startsWith('venue_')) {
@@ -881,8 +877,28 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
 
-      // 1. KESİN ID KONTROLÜ: Aynı mesaj ID'si varsa kesinlikle mükerrerdir, yok say
-      if (chat.messages.any((m) => m.id == msgId)) {
+      // 1. KESİN ID KONTROLÜ: Aynı mesaj ID'si varsa kontrol et (silinmiş olarak güncellenmiş olabilir)
+      final existingIndex = chat.messages.indexWhere((m) => m.id == msgId);
+      final cleanMsgId = msgId.toLowerCase().trim();
+      final parsed = MessageModel.parseEncodedContent(content);
+      final isDeleted = parsed.isDeleted ||
+          content == '[deleted]' ||
+          content == '[deleted_for_everyone]' ||
+          _deletedForEveryoneIds.contains(cleanMsgId) ||
+          _hiddenMessageIdsForMe.contains(cleanMsgId);
+
+      if (existingIndex >= 0) {
+        if (isDeleted && !chat.messages[existingIndex].isDeleted) {
+          final isSenderMe = chat.messages[existingIndex].senderId.toLowerCase().trim() == lowerCurrent;
+          chat.messages[existingIndex] = chat.messages[existingIndex].copyWith(
+            isDeleted: true,
+            text: isSenderMe ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi',
+            mediaUrl: null,
+          );
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(partnerId);
+          notifyListeners();
+        }
         return;
       }
 
@@ -926,24 +942,29 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
-      final parsed = MessageModel.parseEncodedContent(content);
       final isActiveInThisChat = NotificationService().activeChatId?.toLowerCase().trim() == lowerPartnerId;
       final initialStatus = isActiveInThisChat ? MessageStatus.read : MessageStatus.delivered;
+
+      final isSenderMe = lowerSender == lowerCurrent;
+      final displayText = isDeleted
+          ? (isSenderMe && _hiddenMessageIdsForMe.contains(cleanMsgId) ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi')
+          : (parsed.cleanText.isNotEmpty ? parsed.cleanText : content);
 
       final newMsg = MessageModel(
         id: msgId,
         senderId: senderId,
         receiverId: receiverId,
-        text: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
+        text: displayText,
         timestamp: timestamp,
         status: initialStatus,
         replyToSenderName: parsed.replySender,
         replyToText: parsed.replyText,
-        mediaUrl: parsed.mediaUrl,
+        mediaUrl: isDeleted ? null : parsed.mediaUrl,
         audioDurationSeconds: parsed.audioDuration,
-        messageType: parsed.messageType,
-        isViewOnce: parsed.isViewOnce,
+        messageType: isDeleted ? 'text' : parsed.messageType,
+        isViewOnce: isDeleted ? false : parsed.isViewOnce,
         isViewOnceOpened: parsed.isViewOnceOpened,
+        isDeleted: isDeleted,
       );
       chat.messages.add(newMsg);
       _deduplicateMessagesList(chat.messages);
@@ -1243,26 +1264,31 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
             final mId = row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
             final cleanMid = mId.toLowerCase().trim();
-            if (_hiddenMessageIdsForMe.contains(cleanMid) || _deletedForEveryoneIds.contains(cleanMid)) {
-              continue;
-            }
             final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
             final sender = row['sender_id']?.toString() ?? '';
             final receiver = row['receiver_id']?.toString() ?? '';
             final ts = row['created_at'] != null ? DateTime.tryParse(row['created_at'].toString()) ?? DateTime.now() : DateTime.now();
 
-            if (text.trim().isEmpty) continue;
+            final parsed = MessageModel.parseEncodedContent(text);
+            final isDeleted = _hiddenMessageIdsForMe.contains(cleanMid) ||
+                _deletedForEveryoneIds.contains(cleanMid) ||
+                parsed.isDeleted ||
+                text == '[deleted]' ||
+                text == '[deleted_for_everyone]';
+
+            final isFromMe = sender.toLowerCase().trim() == lowerCurrent;
+            final cleanMsgText = isDeleted
+                ? (isFromMe && _hiddenMessageIdsForMe.contains(cleanMid) ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi')
+                : (parsed.cleanText.isNotEmpty ? parsed.cleanText : text);
+
+            if (cleanMsgText.trim().isEmpty) continue;
 
             final isRead = row['is_read'] == true || row['status'] == 'read';
-            final isFromMe = sender.toLowerCase().trim() == lowerCurrent;
             final calculatedStatus = isRead
                 ? MessageStatus.read
                 : (isFromMe ? MessageStatus.sent : MessageStatus.delivered);
 
-            final parsed = MessageModel.parseEncodedContent(text);
-            final cleanMsgText = parsed.cleanText.isNotEmpty ? parsed.cleanText : text;
-
-            // 1. Zaten aynı kesin veritabanı ID'si varsa, durumunu (okundu/iletildi) güncelle
+            // 1. Zaten aynı kesin veritabanı ID'si varsa, durumunu (okundu/iletildi/silindi) güncelle
             final exactIdIndex = chat.messages.indexWhere((m) => m.id == mId);
             if (exactIdIndex >= 0) {
               final currentStatus = chat.messages[exactIdIndex].status;
@@ -1270,8 +1296,20 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               final effectiveStatus = (currentStatus == MessageStatus.read && calculatedStatus != MessageStatus.read)
                   ? MessageStatus.read
                   : calculatedStatus;
+              bool updated = false;
               if (chat.messages[exactIdIndex].status != effectiveStatus) {
                 chat.messages[exactIdIndex].status = effectiveStatus;
+                updated = true;
+              }
+              if (isDeleted && !chat.messages[exactIdIndex].isDeleted) {
+                chat.messages[exactIdIndex] = chat.messages[exactIdIndex].copyWith(
+                  isDeleted: true,
+                  text: cleanMsgText,
+                  mediaUrl: null,
+                );
+                updated = true;
+              }
+              if (updated) {
                 hasNew = true;
               }
               continue;
@@ -1296,8 +1334,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                 id: mId,
                 timestamp: ts,
                 status: effectiveStatus,
-                isViewOnce: parsed.isViewOnce,
+                isViewOnce: isDeleted ? false : parsed.isViewOnce,
                 isViewOnceOpened: parsed.isViewOnceOpened,
+                isDeleted: isDeleted,
+                text: isDeleted ? cleanMsgText : null,
+                mediaUrl: isDeleted ? null : old.mediaUrl,
               );
               hasNew = true;
               continue;
@@ -1325,11 +1366,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               status: calculatedStatus,
               replyToSenderName: parsed.replySender,
               replyToText: parsed.replyText,
-              mediaUrl: parsed.mediaUrl,
+              mediaUrl: isDeleted ? null : parsed.mediaUrl,
               audioDurationSeconds: parsed.audioDuration,
-              messageType: parsed.messageType,
-              isViewOnce: parsed.isViewOnce,
+              messageType: isDeleted ? 'text' : parsed.messageType,
+              isViewOnce: isDeleted ? false : parsed.isViewOnce,
               isViewOnceOpened: parsed.isViewOnceOpened,
+              isDeleted: isDeleted,
             ));
             hasNew = true;
           } catch (e) {
@@ -1629,9 +1671,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         try {
           final mId = msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
           final cleanMId = mId.toLowerCase().trim();
-          if (_hiddenMessageIdsForMe.contains(cleanMId) || _deletedForEveryoneIds.contains(cleanMId)) {
-            continue;
-          }
+          final rawText = msg['content']?.toString() ?? msg['message']?.toString() ?? msg['text']?.toString() ?? '';
+          final parsed = MessageModel.parseEncodedContent(rawText);
+
+          final isDeleted = _hiddenMessageIdsForMe.contains(cleanMId) ||
+              _deletedForEveryoneIds.contains(cleanMId) ||
+              parsed.isDeleted ||
+              rawText == '[deleted]' ||
+              rawText == '[deleted_for_everyone]';
 
           final isRead = msg['is_read'] == true || msg['status'] == 'read';
           final isFromMe = lowerSender == lowerCurrent;
@@ -1639,25 +1686,27 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               ? MessageStatus.read
               : (isFromMe ? MessageStatus.sent : MessageStatus.delivered);
 
-          final rawText = msg['content']?.toString() ?? msg['message']?.toString() ?? msg['text']?.toString() ?? '';
-          final parsed = MessageModel.parseEncodedContent(rawText);
+          final cleanMsgText = isDeleted
+              ? (isFromMe && _hiddenMessageIdsForMe.contains(cleanMId) ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi')
+              : (parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText);
 
           final msgModel = MessageModel(
             id: mId,
             senderId: sender,
             receiverId: receiver,
-            text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
+            text: cleanMsgText,
             timestamp: msg['created_at'] != null
                 ? DateTime.tryParse(msg['created_at'].toString())?.toLocal() ?? DateTime.now()
                 : DateTime.now(),
             status: calculatedStatus,
             replyToSenderName: parsed.replySender,
             replyToText: parsed.replyText,
-            mediaUrl: parsed.mediaUrl,
+            mediaUrl: isDeleted ? null : parsed.mediaUrl,
             audioDurationSeconds: parsed.audioDuration,
-            messageType: parsed.messageType,
-            isViewOnce: parsed.isViewOnce,
+            messageType: isDeleted ? 'text' : parsed.messageType,
+            isViewOnce: isDeleted ? false : parsed.isViewOnce,
             isViewOnceOpened: parsed.isViewOnceOpened,
+            isDeleted: isDeleted,
           );
 
           messagesByPartner.putIfAbsent(partnerId.toLowerCase(), () => []).add(msgModel);
@@ -2273,7 +2322,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
-      chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
+      final mIdx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
+      if (mIdx >= 0) {
+        chat.messages[mIdx] = chat.messages[mIdx].copyWith(
+          isDeleted: true,
+          text: 'Bu mesajı sildiniz',
+          mediaUrl: null,
+        );
+      }
       _saveChatsToLocalStorage();
       _emitRoomUpdate(chat.participant.id);
       notifyListeners();
@@ -2297,7 +2353,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
-      chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
+      final mIdx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
+      if (mIdx >= 0) {
+        chat.messages[mIdx] = chat.messages[mIdx].copyWith(
+          isDeleted: true,
+          text: 'Bu mesajı sildiniz',
+          mediaUrl: null,
+        );
+      }
       _saveChatsToLocalStorage();
       _emitRoomUpdate(chat.participant.id);
       notifyListeners();
@@ -2319,9 +2382,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('[MessageService] ⚠️ delete_message broadcast error: $e');
     }
 
-    // Veritabanından tamamen sil
+    // Veritabanında içeriği '[deleted]' olarak güncelle (böylece silindiği belli olsun ve karşı tarafta da 'Bu mesaj silindi' görünsün)
     try {
-      await _supabase.from('messages').delete().eq('id', cleanId);
+      await _supabase.from('messages').update({'content': '[deleted]'}).eq('id', cleanId);
     } catch (e) {
       debugPrint('[MessageService] ❌ deleteMessageForEveryone DB error: $e');
     }
@@ -2480,9 +2543,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       _saveDeletedForEveryoneIds();
 
       for (var chat in _chats) {
-        final initialLen = chat.messages.length;
-        chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == msgId);
-        if (chat.messages.length != initialLen) {
+        final mIdx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == msgId);
+        if (mIdx >= 0) {
+          final isSenderMe = chat.messages[mIdx].senderId.toLowerCase().trim() == currentId;
+          chat.messages[mIdx] = chat.messages[mIdx].copyWith(
+            isDeleted: true,
+            text: isSenderMe ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi',
+            mediaUrl: null,
+          );
           _saveChatsToLocalStorage();
           _emitRoomUpdate(chat.participant.id);
           notifyListeners();
@@ -2503,10 +2571,17 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       _deletedForEveryoneIds.add(msgId);
       _saveDeletedForEveryoneIds();
 
+      final currentId = currentUserId.toLowerCase().trim();
+
       for (var chat in _chats) {
-        final initialLen = chat.messages.length;
-        chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == msgId);
-        if (chat.messages.length != initialLen) {
+        final mIdx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == msgId);
+        if (mIdx >= 0) {
+          final isSenderMe = chat.messages[mIdx].senderId.toLowerCase().trim() == currentId;
+          chat.messages[mIdx] = chat.messages[mIdx].copyWith(
+            isDeleted: true,
+            text: isSenderMe ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi',
+            mediaUrl: null,
+          );
           _saveChatsToLocalStorage();
           _emitRoomUpdate(chat.participant.id);
           notifyListeners();

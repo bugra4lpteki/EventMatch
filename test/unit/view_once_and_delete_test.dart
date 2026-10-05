@@ -76,39 +76,82 @@ void main() {
     });
   });
 
-  group('2. Mesaj Silme (Benden Sil & Herkes İçin Sil) Mantık Testleri', () {
-    test('Benden Sil: Gizlenen mesaj kimliği diğer kullanıcıların listesini etkilemeden filtrelenir', () {
-      final hiddenSet = <String>{};
-      const msgToDeleteForMe = 'msg_for_me_123';
-
-      hiddenSet.add(msgToDeleteForMe.toLowerCase());
-
-      final incomingMessages = [
-        {'id': 'msg_for_me_123', 'content': 'Gizli mesaj'},
-        {'id': 'msg_keep_456', 'content': 'Kalan mesaj'},
-      ];
-
-      final filtered = incomingMessages.where((m) => !hiddenSet.contains(m['id']!.toLowerCase())).toList();
-
-      expect(filtered.length, equals(1));
-      expect(filtered.first['id'], equals('msg_keep_456'));
+  group('2. Mesaj Silme (Benden Sil & Herkes İçin Sil) ve "Bu mesaj silindi" Testleri', () {
+    test('Raw [deleted] content parses to isDeleted: true and cleanText: Bu mesaj silindi', () {
+      final parsed = MessageModel.parseEncodedContent('[deleted]');
+      expect(parsed.isDeleted, isTrue);
+      expect(parsed.cleanText, equals('Bu mesaj silindi'));
+      expect(parsed.mediaUrl, isNull);
     });
 
-    test('Herkes İçin Sil: Silinen mesaj kimliği broadcast ve senkronizasyonda elenir', () {
-      final deletedForEveryone = <String>{};
-      const broadcastDeletedId = 'msg_everyone_999';
+    test('Raw "Bu mesajı sildiniz" preserves self-deleted message text', () {
+      final parsed = MessageModel.parseEncodedContent('Bu mesajı sildiniz');
+      expect(parsed.isDeleted, isTrue);
+      expect(parsed.cleanText, equals('Bu mesajı sildiniz'));
+    });
 
-      deletedForEveryone.add(broadcastDeletedId.toLowerCase());
+    test('Deleted message suppresses isAudio and isImage flags', () {
+      final deletedVoice = MessageModel(
+        id: 'del_voice_1',
+        senderId: 'u1',
+        text: 'Bu mesaj silindi',
+        timestamp: DateTime.now(),
+        messageType: 'audio',
+        mediaUrl: 'https://example.com/audio.m4a',
+        isDeleted: true,
+      );
 
+      expect(deletedVoice.isAudio, isFalse);
+      expect(deletedVoice.isImage, isFalse);
+      expect(deletedVoice.isDeleted, isTrue);
+      expect(deletedVoice.text, equals('Bu mesaj silindi'));
+
+      final deletedImage = MessageModel(
+        id: 'del_img_1',
+        senderId: 'u1',
+        text: 'Bu mesajı sildiniz',
+        timestamp: DateTime.now(),
+        messageType: 'image',
+        mediaUrl: 'https://example.com/photo.jpg',
+        isDeleted: true,
+      );
+
+      expect(deletedImage.isImage, isFalse);
+      expect(deletedImage.isAudio, isFalse);
+      expect(deletedImage.isDeleted, isTrue);
+      expect(deletedImage.text, equals('Bu mesajı sildiniz'));
+    });
+
+    test('Soft delete retains message in chat list with "Bu mesaj silindi" status', () {
       final localMessages = [
-        MessageModel(id: 'msg_everyone_999', senderId: 'u1', text: 'Silinecek', timestamp: DateTime.now()),
-        MessageModel(id: 'msg_valid_111', senderId: 'u1', text: 'Normal', timestamp: DateTime.now()),
+        MessageModel(id: 'msg_1', senderId: 'u1', text: 'Merhaba', timestamp: DateTime.now()),
+        MessageModel(id: 'msg_2', senderId: 'u1', text: 'Önemli bilgi', timestamp: DateTime.now()),
       ];
 
-      localMessages.removeWhere((m) => deletedForEveryone.contains(m.id.toLowerCase()));
+      // Mesajı tamamen silmek yerine 'Bu mesaj silindi' olarak güncelle
+      final idx = localMessages.indexWhere((m) => m.id == 'msg_2');
+      expect(idx, equals(1));
+      localMessages[idx] = localMessages[idx].copyWith(
+        isDeleted: true,
+        text: 'Bu mesaj silindi',
+        mediaUrl: null,
+      );
 
-      expect(localMessages.length, equals(1));
-      expect(localMessages.first.id, equals('msg_valid_111'));
+      expect(localMessages.length, equals(2));
+      expect(localMessages[1].isDeleted, isTrue);
+      expect(localMessages[1].text, equals('Bu mesaj silindi'));
+    });
+
+    test('fromMap parses is_deleted flag and [deleted] content correctly', () {
+      final msgFromDb = MessageModel.fromMap({
+        'id': 'm_db_1',
+        'sender_id': 'u1',
+        'content': '[deleted]',
+        'is_read': true,
+      });
+
+      expect(msgFromDb.isDeleted, isTrue);
+      expect(msgFromDb.text, equals('Bu mesaj silindi'));
     });
   });
 

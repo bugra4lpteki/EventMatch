@@ -25,6 +25,7 @@ class MessageModel {
   final String messageType; // 'text' | 'audio' | 'image' | 'view_once'
   final bool isViewOnce;
   bool isViewOnceOpened;
+  final bool isDeleted;
 
   MessageModel({
     required this.id,
@@ -42,11 +43,13 @@ class MessageModel {
     this.messageType = 'text',
     this.isViewOnce = false,
     this.isViewOnceOpened = false,
+    this.isDeleted = false,
   }) : reactions = reactions ?? {};
 
   bool get isRead => status == MessageStatus.read;
   
   bool get isAudio {
+    if (isDeleted) return false;
     if (messageType == 'audio') return true;
     if (mediaUrl != null && mediaUrl!.isNotEmpty) {
       final m = mediaUrl!.toLowerCase();
@@ -62,6 +65,7 @@ class MessageModel {
   }
 
   bool get isImage {
+    if (isDeleted) return false;
     if (isViewOnce || messageType == 'view_once') return false;
     if (messageType == 'image') return true;
     if (mediaUrl != null && mediaUrl!.isNotEmpty) {
@@ -114,6 +118,7 @@ class MessageModel {
     String? messageType,
     bool? isViewOnce,
     bool? isViewOnceOpened,
+    bool? isDeleted,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -131,6 +136,7 @@ class MessageModel {
       messageType: messageType ?? this.messageType,
       isViewOnce: isViewOnce ?? this.isViewOnce,
       isViewOnceOpened: isViewOnceOpened ?? this.isViewOnceOpened,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 
@@ -152,6 +158,7 @@ class MessageModel {
       'message_type': messageType,
       'is_view_once': isViewOnce,
       'is_view_once_opened': isViewOnceOpened,
+      'is_deleted': isDeleted,
     };
   }
 
@@ -164,6 +171,7 @@ class MessageModel {
     String messageType,
     bool isViewOnce,
     bool isViewOnceOpened,
+    bool isDeleted,
   }) parseEncodedContent(String rawContent) {
     String currentText = rawContent.trim();
     String? replySender;
@@ -173,6 +181,28 @@ class MessageModel {
     String messageType = 'text';
     bool isViewOnce = false;
     bool isViewOnceOpened = false;
+    bool isDeleted = false;
+
+    // 0. Parse [deleted] / Bu mesaj silindi
+    if (currentText == '[deleted]' ||
+        currentText == '[deleted_for_everyone]' ||
+        currentText == 'Bu mesaj silindi' ||
+        currentText == 'Bu mesajı sildiniz' ||
+        currentText == '🚫 Bu mesaj silindi' ||
+        currentText == '🚫 Bu mesajı sildiniz') {
+      final isSelfDeleted = currentText.contains('sildiniz');
+      return (
+        cleanText: isSelfDeleted ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi',
+        replySender: null,
+        replyText: null,
+        mediaUrl: null,
+        audioDuration: null,
+        messageType: 'text',
+        isViewOnce: false,
+        isViewOnceOpened: false,
+        isDeleted: true,
+      );
+    }
 
     // 1. Parse [reply:Sender:Text]
     if (currentText.startsWith('[reply:')) {
@@ -246,6 +276,7 @@ class MessageModel {
       messageType: messageType,
       isViewOnce: isViewOnce,
       isViewOnceOpened: isViewOnceOpened,
+      isDeleted: isDeleted,
     );
   }
 
@@ -281,17 +312,25 @@ class MessageModel {
         ? map['audio_duration'] as int
         : (int.tryParse(map['audio_duration']?.toString() ?? '') ?? parsed.audioDuration);
 
-    final bool isViewOnce = map['is_view_once'] == true ||
+    final bool isDeleted = map['is_deleted'] == true ||
+        parsed.isDeleted ||
+        rawContent == '[deleted]' ||
+        rawContent == 'Bu mesaj silindi' ||
+        rawContent == '🚫 Bu mesaj silindi';
+
+    final bool isViewOnce = !isDeleted && (map['is_view_once'] == true ||
         parsed.isViewOnce ||
         map['message_type'] == 'view_once' ||
-        (rawContent.startsWith('[view_once:'));
+        (rawContent.startsWith('[view_once:')));
 
     final bool isViewOnceOpened = map['is_view_once_opened'] == true ||
         parsed.isViewOnceOpened ||
         rawContent.contains('|||opened');
 
     String determinedType = 'text';
-    if (isViewOnce) {
+    if (isDeleted) {
+      determinedType = 'text';
+    } else if (isViewOnce) {
       determinedType = 'view_once';
     } else if (parsed.messageType != 'text') {
       determinedType = parsed.messageType;
@@ -320,7 +359,9 @@ class MessageModel {
       id: map['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
       senderId: map['sender_id']?.toString() ?? '',
       receiverId: map['receiver_id']?.toString(),
-      text: parsed.cleanText.isNotEmpty ? parsed.cleanText : (isViewOnceOpened ? 'Açıldı' : (isViewOnce ? 'Fotoğraf' : rawContent)),
+      text: isDeleted
+          ? (rawContent.contains('sildiniz') || parsed.cleanText.contains('sildiniz') ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi')
+          : (parsed.cleanText.isNotEmpty ? parsed.cleanText : (isViewOnceOpened ? 'Açıldı' : (isViewOnce ? 'Fotoğraf' : rawContent))),
       timestamp: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString())?.toLocal() ?? DateTime.now()
           : (map['timestamp'] != null
@@ -331,11 +372,12 @@ class MessageModel {
       replyToMessageId: replyId,
       replyToText: replyText,
       replyToSenderName: replySender,
-      mediaUrl: mediaUrl,
+      mediaUrl: isDeleted ? null : mediaUrl,
       audioDurationSeconds: audioDuration,
       messageType: determinedType,
       isViewOnce: isViewOnce,
       isViewOnceOpened: isViewOnceOpened,
+      isDeleted: isDeleted,
     );
   }
 }

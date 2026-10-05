@@ -508,14 +508,19 @@ class _MessagesScreenState extends State<MessagesScreen> {
         subtitle: Text(
           isBlocked
               ? '🚫 Bu kullanıcı engellendi'
-              : lastMsg?.text ?? 'Eşleşme sağlandı! Sohbet başlatın.',
+              : (lastMsg?.isDeleted == true
+                  ? '🚫 Bu mesaj silindi'
+                  : (lastMsg?.text ?? 'Eşleşme sağlandı! Sohbet başlatın.')),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: isBlocked
                 ? Colors.redAccent.withValues(alpha: 0.7)
-                : (chat.unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary),
-            fontWeight: chat.unreadCount > 0 ? FontWeight.w600 : FontWeight.normal,
+                : (lastMsg?.isDeleted == true
+                    ? AppColors.textSecondary.withValues(alpha: 0.8)
+                    : (chat.unreadCount > 0 ? AppColors.textPrimary : AppColors.textSecondary)),
+            fontStyle: lastMsg?.isDeleted == true ? FontStyle.italic : FontStyle.normal,
+            fontWeight: chat.unreadCount > 0 && lastMsg?.isDeleted != true ? FontWeight.w600 : FontWeight.normal,
             fontSize: 13.5,
           ),
         ),

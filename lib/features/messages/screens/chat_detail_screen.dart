@@ -1409,6 +1409,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     MockMessageService msgService,
     String currentChatId,
   ) {
+    if (message.isDeleted) {
+      final timeStr = DateFormat('HH:mm').format(message.timestamp.toLocal());
+      return _buildDeletedMessageBubble(message, isMe, timeStr);
+    }
+
     return Dismissible(
       key: ValueKey('msg_${message.id}_${message.timestamp.millisecondsSinceEpoch}'),
       direction: DismissDirection.startToEnd,
@@ -1779,6 +1784,70 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  /// WhatsApp Tarzı Silinmiş Mesaj Görünümü (🚫 Bu mesaj silindi / Bu mesajı sildiniz)
+  Widget _buildDeletedMessageBubble(MessageModel message, bool isMe, String timeStr) {
+    final displayText = message.text.isNotEmpty && (message.text.contains('sil') || message.text.contains('Sil'))
+        ? message.text
+        : (isMe ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi');
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.78,
+        ),
+        decoration: BoxDecoration(
+          color: isMe
+              ? const Color(0xFF4C1D95).withValues(alpha: 0.35)
+              : const Color(0xFF1E2235).withValues(alpha: 0.75),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 2),
+            bottomRight: Radius.circular(isMe ? 2 : 16),
+          ),
+          border: Border.all(
+            color: Colors.white12,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.block_rounded,
+              size: 14.5,
+              color: Colors.white38,
+            ),
+            const SizedBox(width: 7),
+            Flexible(
+              child: Text(
+                displayText,
+                style: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 13.5,
+                  fontStyle: FontStyle.italic,
+                  fontWeight: FontWeight.normal,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              timeStr,
+              style: const TextStyle(
+                color: Colors.white30,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// WhatsApp Tarzı Sade, Zarif ve Kompakt Mesaj Balonu
   Widget _buildWhatsAppMessageBubble(
     MessageModel message,
@@ -1788,12 +1857,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
   ) {
     final timeStr = DateFormat('HH:mm').format(message.timestamp.toLocal());
 
-    // 0. TEK OYNATIMLIK (VIEW-ONCE) FOTOĞRAF MESAJI
+    // 0. SİLİNMİŞ MESAJ
+    if (message.isDeleted) {
+      return _buildDeletedMessageBubble(message, isMe, timeStr);
+    }
+
+    // 1. TEK OYNATIMLIK (VIEW-ONCE) FOTOĞRAF MESAJI
     if (message.isViewOnce) {
       return _buildViewOnceBubble(message, isMe, msgService, currentChatId, timeStr);
     }
 
-    // 1. FOTOĞRAF MESAJI
+    // 2. FOTOĞRAF MESAJI
     if (message.isImage && message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
       return Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
