@@ -411,10 +411,22 @@ class LocationRadarService extends ChangeNotifier {
 
       for (var row in rows) {
         final uid = row['id']?.toString() ?? '';
-        final uname = row['name']?.toString() ?? '';
+        final uname = row['name']?.toString().trim() ?? '';
+        final uUsername = row['username']?.toString().trim() ?? '';
 
         if (uid.isEmpty || uid.toLowerCase() == currentId || uname.toLowerCase() == currentName) {
           continue;
+        }
+
+        // Hesap açılırken yarıda kalan, adı/kullanıcı adı olmayan veya UUID olan profilleri geçersiz say
+        if (uname.isEmpty && uUsername.isEmpty) {
+          continue;
+        }
+        if (uname.length < 2 && uUsername.length < 2) {
+          continue;
+        }
+        if (UserModel.isUuid(uname) || uname.contains(uid) || (uname.toLowerCase().startsWith('kullanıcı ') && uname.length > 15)) {
+          if (uUsername.isEmpty) continue;
         }
 
         final bool isSharing = row['enable_location_sharing'] != false && row['enableLocationSharing'] != false;

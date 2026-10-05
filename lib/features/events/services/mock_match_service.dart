@@ -439,7 +439,7 @@ class MockMatchService extends ChangeNotifier {
             }
           }
 
-          loadedMatches.add(UserModel(
+          final user = UserModel(
             id: id,
             name: name,
             username: rawUsername.isNotEmpty ? rawUsername : null,
@@ -451,7 +451,14 @@ class MockMatchService extends ChangeNotifier {
             birthDate: birthDate,
             tags: tags,
             socialLinks: socialLinks,
-          ));
+          );
+
+          // Hesap açılırken yarıda kalan profilleri kesinlikle geçersiz say ve atla
+          if (!user.isProfileComplete) {
+            continue;
+          }
+
+          loadedMatches.add(user);
         }
       }
 

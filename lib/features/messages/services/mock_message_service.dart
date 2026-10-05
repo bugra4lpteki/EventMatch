@@ -1599,9 +1599,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             break;
           }
         }
-
-        final name = profile?['name'] ?? existingChat?.participant.name ?? 'Kullanıcı $partnerId';
-        final username = profile?['username'] ?? existingChat?.participant.username;
+        final rawName = profile?['name']?.toString().trim() ?? existingChat?.participant.name.trim() ?? '';
+        final username = profile?['username']?.toString().trim() ?? existingChat?.participant.username?.trim();
+        final name = rawName.isNotEmpty && !rawName.contains(partnerId) && !UserModel.isUuid(rawName)
+            ? rawName
+            : (username != null && username.isNotEmpty ? '@$username' : 'Katılımcı');
         final bio = profile?['bio'] ?? existingChat?.participant.aboutMe;
         final city = profile?['city'] ?? existingChat?.participant.city;
         final gender = profile?['gender']?.toString() ?? existingChat?.participant.gender;

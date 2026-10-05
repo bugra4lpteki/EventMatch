@@ -101,6 +101,38 @@ class UserModel {
 
   List<String> get validAvatarUrls => avatarUrls.where(isValidPhotoUrl).toList();
 
+  /// Profilin eksiksiz ve geçerli bir kullanıcıya ait olup olmadığını doğrular.
+  /// Hesap açılırken yarıda bırakılmış, adı/kullanıcı adı olmayan veya sadece UUID olan
+  /// hayalet hesapları geçersiz sayar.
+  bool get isProfileComplete {
+    final cleanName = name.trim();
+    final cleanUsername = (username ?? '').trim();
+
+    // 1. İsim veya kullanıcı adı zorunludur ve en az 2 karakter olmalıdır
+    if (cleanName.length < 2 && cleanUsername.length < 2) return false;
+
+    // 2. İsim doğrudan UUID olamaz
+    if (isUuid(cleanName)) return false;
+
+    // 3. İsim "Kullanıcı <UUID>" şeklinde sistem fallback'i olamaz
+    if (cleanName.toLowerCase().startsWith('kullanıcı ') && cleanName.length > 15) {
+      if (cleanUsername.isEmpty && !hasRealPhoto && (aboutMe == null || aboutMe!.trim().isEmpty)) {
+        return false;
+      }
+    }
+
+    // 4. İsim doğrudan kullanıcı ID'sini içeriyorsa ve fotoğraf/bio yoksa geçersizdir
+    if (cleanName.contains(id) && !hasRealPhoto && (aboutMe == null || aboutMe!.trim().isEmpty)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static bool isUuid(String str) {
+    return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str.trim());
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
