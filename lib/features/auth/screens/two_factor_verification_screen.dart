@@ -37,6 +37,10 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
   void initState() {
     super.initState();
     _startTimer();
+    final auth = context.read<AuthService>();
+    if (auth.lastTwoFactorError != null) {
+      _errorMessage = auth.lastTwoFactorError;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _focusNode.requestFocus();

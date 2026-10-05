@@ -34,10 +34,12 @@ class AuthService extends ChangeNotifier {
   String? _activeTwoFactorCode;
   DateTime? _activeTwoFactorExpiry;
   String? _pendingTwoFactorEmail;
+  String? _lastTwoFactorError;
 
   String? get pendingTwoFactorEmail => _pendingTwoFactorEmail;
   String? get activeTwoFactorCode => _activeTwoFactorCode;
   DateTime? get activeTwoFactorExpiry => _activeTwoFactorExpiry;
+  String? get lastTwoFactorError => _lastTwoFactorError;
 
   AuthService() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
@@ -521,17 +523,22 @@ class AuthService extends ChangeNotifier {
         shouldCreateUser: false,
       );
       debugPrint('[Auth] ✅ Supabase 2FA kodu başarıyla gönderildi: $cleanEmail');
+      _lastTwoFactorError = null;
       return null;
     } on AuthException catch (e) {
       debugPrint('[Auth] Supabase signInWithOtp AuthException: ${e.message}');
       final msg = e.message.toLowerCase();
+      String err = e.message;
       if (msg.contains('rate limit') || msg.contains('too many requests') || msg.contains('over_email_send_rate_limit')) {
-        return 'Çok fazla kod talep edildi. Lütfen 1-2 dakika bekleyip tekrar deneyin.';
+        err = 'Çok fazla kod talep edildi. Lütfen 1-2 dakika bekleyip tekrar deneyin.';
       }
-      return e.message;
+      _lastTwoFactorError = err;
+      return err;
     } catch (e) {
       debugPrint('[Auth] 2FA sendTwoFactorCode Error: $e');
-      return 'Doğrulama kodu gönderilemedi: $e';
+      final err = 'Doğrulama kodu gönderilemedi: $e';
+      _lastTwoFactorError = err;
+      return err;
     }
   }
 
