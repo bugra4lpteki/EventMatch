@@ -1,14 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/notification_service.dart';
-import '../../../services/email_service.dart';
 
 class AuthService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -520,40 +518,24 @@ class AuthService extends ChangeNotifier {
     final cleanEmail = email.trim();
     _pendingTwoFactorEmail = cleanEmail;
 
-    // 6 haneli rastgele güçlü güvenlik kodu üret (100000 - 999999)
-    final random = Random.secure();
-    final code = (100000 + random.nextInt(900000)).toString();
-    _activeTwoFactorCode = code;
-    _activeTwoFactorExpiry = DateTime.now().add(const Duration(minutes: 5));
-
     try {
-      debugPrint('[Auth] 🔐 2FA Güvenlik Kodu ($code) $cleanEmail adresine gönderiliyor...');
-
-      // 1. Supabase Dahili E-posta Servisi (Kullanıcının gerçek gelen kutusuna anında iletir)
-      try {
-        await _supabase.auth.signInWithOtp(
-          email: cleanEmail,
-          shouldCreateUser: false,
-        );
-        debugPrint('[Auth] ✅ Supabase dahili e-posta gönderimi tamamlandı: $cleanEmail');
-      } catch (se) {
-        debugPrint('[Auth] ℹ️ Supabase signInWithOtp: $se');
-      }
-
-      // 2. Özel HTML E-posta Servisi (Resend / Brevo / SMTP yapılandırılmışsa)
-      try {
-        await EmailService().sendTwoFactorOtp(
-          toEmail: cleanEmail,
-          otpCode: code,
-        );
-      } catch (ee) {
-        debugPrint('[Auth] ℹ️ EmailService: $ee');
-      }
-
+      debugPrint('[Auth] 🔐 Supabase 2FA Doğrulama Kodu $cleanEmail adresine gönderiliyor...');
+      await _supabase.auth.signInWithOtp(
+        email: cleanEmail,
+        shouldCreateUser: false,
+      );
+      debugPrint('[Auth] ✅ Supabase 2FA kodu başarıyla gönderildi: $cleanEmail');
       return null;
+    } on AuthException catch (e) {
+      debugPrint('[Auth] Supabase signInWithOtp AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('rate limit') || msg.contains('too many requests') || msg.contains('over_email_send_rate_limit')) {
+        return 'Çok fazla kod talep edildi. Lütfen 1-2 dakika bekleyip tekrar deneyin.';
+      }
+      return e.message;
     } catch (e) {
       debugPrint('[Auth] 2FA sendTwoFactorCode Error: $e');
-      return 'Güvenlik kodu gönderilemedi: $e';
+      return 'Doğrulama kodu gönderilemedi: $e';
     }
   }
 
@@ -572,26 +554,7 @@ class AuthService extends ChangeNotifier {
       return true;
     }
 
-    // 2. Doğrudan E-posta OTP Kodu Doğrulaması (Option 2)
-    if (_activeTwoFactorCode != null && cleanInput == _activeTwoFactorCode) {
-      if (_activeTwoFactorExpiry != null && DateTime.now().isAfter(_activeTwoFactorExpiry!)) {
-        debugPrint('[Auth] 2FA kodu süresi dolmuş.');
-        return false;
-      }
-      debugPrint('[Auth] ✅ 2FA kodu başarıyla doğrulandı.');
-      _isTwoFactorPending = false;
-      _pendingTwoFactorEmail = null;
-      _activeTwoFactorCode = null;
-      _activeTwoFactorExpiry = null;
-      final uid = currentUserId;
-      if (uid != null) {
-        NotificationService().syncUserWithOneSignal(uid);
-      }
-      notifyListeners();
-      return true;
-    }
-
-    // 3. Supabase OTP Yedek Doğrulaması (Eğer Supabase OTP kullanılmışsa)
+    // 2. Supabase Yerleşik OTP Doğrulaması (1. Yol)
     try {
       final response = await _supabase.auth.verifyOTP(
         email: email,
@@ -612,7 +575,7 @@ class AuthService extends ChangeNotifier {
         return true;
       }
     } catch (e) {
-      debugPrint('[Auth] 2FA verifyOTP Error: $e');
+      debugPrint('[Auth] Supabase 2FA verifyOTP Error: $e');
     }
 
     return false;
