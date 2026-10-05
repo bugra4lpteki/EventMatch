@@ -89,7 +89,7 @@ class _TwoFactorVerificationSheetState extends State<TwoFactorVerificationSheet>
     });
 
     final authService = context.read<AuthService>();
-    final isValid = authService.verifyTwoFactorCode(code);
+    final isValid = await authService.verifyTwoFactorCode(code);
 
     if (isValid) {
       HapticFeedback.mediumImpact();
@@ -109,14 +109,14 @@ class _TwoFactorVerificationSheetState extends State<TwoFactorVerificationSheet>
     if (!_canResend) return;
 
     final authService = context.read<AuthService>();
-    final newCode = await authService.sendTwoFactorCode(email: widget.email);
+    final error = await authService.sendTwoFactorCode(email: widget.email);
     _startTimer();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Yeni güvenlik kodu ${widget.email} adresine gönderildi. (Kod: $newCode)',
+            error != null ? error : 'Yeni güvenlik kodu ${widget.email} adresinize gönderildi. Lütfen gelen kutunuzu kontrol edin.',
             style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500),
           ),
           backgroundColor: const Color(0xFF38BDF8),
@@ -283,39 +283,7 @@ class _TwoFactorVerificationSheetState extends State<TwoFactorVerificationSheet>
 
             const SizedBox(height: 16),
 
-            // Active Code Helper (For Instant Testing / Fallback)
-            if (activeCode != null) ...[
-              GestureDetector(
-                onTap: () {
-                  _codeController.text = activeCode;
-                  _verifyCode();
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.touch_app_rounded, color: Color(0xFF38BDF8), size: 16),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Kod: $activeCode (Dokun ve Doldur)',
-                        style: GoogleFonts.outfit(
-                          color: const Color(0xFF38BDF8),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            const SizedBox(height: 8),
 
             // Resend Countdown
             Row(

@@ -147,6 +147,11 @@ class _EventMatchAppState extends State<EventMatchApp> {
       if (ctx == null || !ctx.mounted) return;
 
       if (event == AuthChangeEvent.signedIn) {
+        final authService = ctx.read<AuthService>();
+        if (authService.isTwoFactorPending) {
+          debugPrint('[Auth] 2FA beklemede: Otomatik anasayfa yönlendirmesi engellendi.');
+          return;
+        }
         ctx.read<MockEventService>().loadUserProfile();
         navigatorKey.currentState?.pushAndRemoveUntil(
           MaterialPageRoute(builder: (_) => const HomeScreen()),

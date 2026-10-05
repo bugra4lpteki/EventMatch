@@ -10,7 +10,7 @@ import 'forgot_password_screen.dart';
 import '../../home/screens/home_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
-import '../widgets/two_factor_verification_sheet.dart';
+import 'two_factor_verification_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -49,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (errorMessage != null) {
       if (errorMessage == '2FA_REQUIRED') {
-        _showTwoFactorModal();
+        _openTwoFactorScreen();
         return;
       }
       _showSnackBar(
@@ -69,31 +69,28 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _showTwoFactorModal() {
+  void _openTwoFactorScreen() {
     final authService = context.read<AuthService>();
     final email = authService.pendingTwoFactorEmail ?? _emailController.text.trim();
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      isDismissible: false,
-      enableDrag: false,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => TwoFactorVerificationSheet(
-        email: email,
-        onSuccess: () {
-          Navigator.pop(sheetContext);
-          context.read<MockEventService>().loadUserProfile();
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const HomeScreen()),
-            (route) => false,
-          );
-        },
-        onCancel: () {
-          Navigator.pop(sheetContext);
-          _showSnackBar('İki adımlı doğrulama tamamlanmadı. Giriş iptal edildi.', isError: true);
-        },
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TwoFactorVerificationScreen(
+          email: email,
+          onSuccess: () {
+            context.read<MockEventService>().loadUserProfile();
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+              (route) => false,
+            );
+          },
+          onCancel: () {
+            Navigator.pop(context);
+            _showSnackBar('İki adımlı doğrulama tamamlanmadı. Giriş iptal edildi.', isError: true);
+          },
+        ),
       ),
     );
   }

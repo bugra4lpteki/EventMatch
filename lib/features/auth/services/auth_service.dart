@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -34,10 +33,11 @@ class AuthService extends ChangeNotifier {
   AuthService() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       if (data.event == AuthChangeEvent.signedOut) {
-        _isTwoFactorPending = false;
-        _activeTwoFactorCode = null;
-        _activeTwoFactorExpiry = null;
-        _pendingTwoFactorEmail = null;
+        if (!_isTwoFactorPending) {
+          _activeTwoFactorCode = null;
+          _activeTwoFactorExpiry = null;
+          _pendingTwoFactorEmail = null;
+        }
       }
       notifyListeners();
     });
@@ -186,7 +186,19 @@ class AuthService extends ChangeNotifier {
           if (is2fa) {
             _isTwoFactorPending = true;
             _pendingTwoFactorEmail = uEmail;
-            await sendTwoFactorCode(email: uEmail);
+            
+            // 2FA tamamlanmadan anasayfaya sızmayı engellemek için geçici oturumu temizle
+            await _supabase.auth.signOut();
+            _isTwoFactorPending = true;
+            _pendingTwoFactorEmail = uEmail;
+
+            final sendErr = await sendTwoFactorCode(email: uEmail);
+            if (sendErr != null) {
+              _isTwoFactorPending = false;
+              _pendingTwoFactorEmail = null;
+              notifyListeners();
+              return sendErr;
+            }
             notifyListeners();
             return '2FA_REQUIRED';
           }
@@ -440,41 +452,64 @@ class AuthService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<String> sendTwoFactorCode({required String email}) async {
-    final code = (100000 + Random().nextInt(900000)).toString();
-    _activeTwoFactorCode = code;
-    _activeTwoFactorExpiry = DateTime.now().add(const Duration(minutes: 3));
-    _pendingTwoFactorEmail = email;
+  Future<String?> sendTwoFactorCode({required String email}) async {
+    final cleanEmail = email.trim();
+    _pendingTwoFactorEmail = cleanEmail;
+    _activeTwoFactorExpiry = DateTime.now().add(const Duration(minutes: 5));
 
-    // Telefon ekranına heads-up bildirim gönder
     try {
-      await NotificationService().showTwoFactorNotification(code);
+      debugPrint('[Auth] 🔐 2FA Güvenlik Kodu $cleanEmail e-posta adresine gönderiliyor...');
+      await _supabase.auth.signInWithOtp(
+        email: cleanEmail,
+        shouldCreateUser: false,
+      );
+      debugPrint('[Auth] ✅ 2FA Güvenlik Kodu e-posta olarak gönderildi: $cleanEmail');
+      return null;
+    } on AuthException catch (e) {
+      debugPrint('[Auth] 2FA signInWithOtp AuthException: ${e.message}');
+      final msg = e.message.toLowerCase();
+      if (msg.contains('rate limit') || msg.contains('too many requests')) {
+        return 'Çok fazla kod talep edildi. Lütfen birkaç dakika sonra tekrar deneyin.';
+      }
+      return e.message;
     } catch (e) {
-      debugPrint('[Auth] 2FA notification dispatch error: $e');
+      debugPrint('[Auth] 2FA signInWithOtp Error: $e');
+      return 'Güvenlik kodu e-postanıza gönderilemedi: $e';
     }
-
-    debugPrint('[Auth] 🔐 2FA Güvenlik Kodu $email adresine gönderildi: $code');
-    return code;
   }
 
-  bool verifyTwoFactorCode(String inputCode) {
-    if (_activeTwoFactorCode == null || _activeTwoFactorExpiry == null) {
-      return false;
-    }
-    if (DateTime.now().isAfter(_activeTwoFactorExpiry!)) {
-      return false;
-    }
+  Future<bool> verifyTwoFactorCode(String inputCode) async {
     final cleanInput = inputCode.trim().replaceAll(' ', '');
-    if (cleanInput == _activeTwoFactorCode || cleanInput == '582914') {
+    final email = _pendingTwoFactorEmail ?? currentUserEmail;
+    if (email == null || email.isEmpty) return false;
+
+    // Apple Reviewer / Acil Test Bypass Kodu
+    if (cleanInput == '582914') {
       _isTwoFactorPending = false;
-      _activeTwoFactorCode = null;
-      _activeTwoFactorExpiry = null;
-      final uid = currentUserId;
-      if (uid != null) {
-        NotificationService().syncUserWithOneSignal(uid);
-      }
+      _pendingTwoFactorEmail = null;
       notifyListeners();
       return true;
+    }
+
+    try {
+      final response = await _supabase.auth.verifyOTP(
+        email: email,
+        token: cleanInput,
+        type: OtpType.email,
+      );
+
+      if (response.session != null || response.user != null) {
+        _isTwoFactorPending = false;
+        _pendingTwoFactorEmail = null;
+        final uid = response.user?.id ?? currentUserId;
+        if (uid != null) {
+          NotificationService().syncUserWithOneSignal(uid);
+        }
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('[Auth] 2FA verifyOTP Error: $e');
     }
     return false;
   }
