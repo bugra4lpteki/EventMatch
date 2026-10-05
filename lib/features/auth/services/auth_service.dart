@@ -32,10 +32,12 @@ class AuthService extends ChangeNotifier {
   String? get currentUserId => _isDemoUser ? 'dae11b96-8e19-490a-b0ae-a002bd7965be' : _supabase.auth.currentUser?.id;
 
   String? _activeTwoFactorCode;
+  DateTime? _activeTwoFactorExpiry;
   String? _pendingTwoFactorEmail;
 
   String? get pendingTwoFactorEmail => _pendingTwoFactorEmail;
   String? get activeTwoFactorCode => _activeTwoFactorCode;
+  DateTime? get activeTwoFactorExpiry => _activeTwoFactorExpiry;
 
   AuthService() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
