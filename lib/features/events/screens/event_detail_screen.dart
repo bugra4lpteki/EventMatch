@@ -192,6 +192,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     try {
       final artistDataList = await _spotifyService.getArtistsForEvent(
         widget.event.title,
+        description: widget.event.description,
         category: widget.event.category,
       );
       if (mounted) {
@@ -226,7 +227,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _currentPosition = Duration.zero;
       }
 
-      String? audioUrl = (track.previewUrl != null && track.previewUrl!.isNotEmpty && !track.previewUrl!.contains('soundhelix'))
+      String? audioUrl = (track.previewUrl != null &&
+              track.previewUrl!.isNotEmpty &&
+              !track.previewUrl!.contains('soundhelix') &&
+              !track.previewUrl!.contains('itunes.apple.com'))
           ? track.previewUrl
           : null;
 
@@ -237,7 +241,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (audioUrl == null || audioUrl.isEmpty) {
         final dynamicList = await SpotifyService().getArtistTopTracks('', artistName: track.artistName);
         for (var t in dynamicList) {
-          if (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix')) {
+          if (t.previewUrl != null &&
+              t.previewUrl!.isNotEmpty &&
+              !t.previewUrl!.contains('soundhelix') &&
+              !t.previewUrl!.contains('itunes.apple.com')) {
             audioUrl = t.previewUrl;
             break;
           }
@@ -278,7 +285,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           _isPlaying = true;
         });
       } catch (innerError) {
-        debugPrint("Audio preview failed: $innerError");
+        debugPrint("Audio preview primary play failed: $innerError, trying live Deezer stream fallback...");
+        try {
+          final liveFallback = await SpotifyService().resolveAudioPreview(track.artistName, track.title, forceLive: true);
+          if (liveFallback != null && liveFallback.isNotEmpty && liveFallback != audioUrl) {
+            await _audioPlayer.play(UrlSource(liveFallback));
+            if (mounted) {
+              setState(() {
+                _playingTrackId = track.id;
+                _isPlaying = true;
+              });
+            }
+            return;
+          }
+        } catch (retryError) {
+          debugPrint("Deezer fallback failed: $retryError");
+        }
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

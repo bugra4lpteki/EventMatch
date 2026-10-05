@@ -365,9 +365,9 @@ class SpotifyService {
     return null;
   }
 
-  /// Sanatçı ve parça adına göre iTunes ve Deezer üzerinden anlık %100 orijinal stüdyo ses önizlemesi çözümler.
-  /// Asla SoundHelix veya alakasız sentetik ritim çalmaz!
-  Future<String?> resolveAudioPreview(String artistName, String trackTitle) async {
+  /// Sanatçı ve parça adına göre Deezer üzerinden anlık %100 orijinal stüdyo ses önizlemesi (.mp3) çözümler.
+  /// Asla SoundHelix veya süresi dolmuş kırık statik iTunes bağlantıları çalmaz!
+  Future<String?> resolveAudioPreview(String artistName, String trackTitle, {bool forceLive = false}) async {
     final cleanArtist = _cleanArtistName(artistName);
     final cleanTitle = trackTitle
         .split('(').first
@@ -381,65 +381,14 @@ class SpotifyService {
     if (query.isEmpty) return null;
 
     final cacheKey = 'preview_${query.toLowerCase()}';
-    if (_previewCache.containsKey(cacheKey) && _previewCache[cacheKey]!.isNotEmpty) {
-      return _previewCache[cacheKey];
-    }
-
-    // 0. Küratörlü Sanatçılarda doğrulanmış parça ara
-    final lowerArtist = cleanArtist.toLowerCase();
-    for (final entry in _curatedArtists.entries) {
-      if (lowerArtist.contains(entry.key) || entry.key.contains(lowerArtist)) {
-        for (final t in entry.value.tracks) {
-          if (t.title.toLowerCase().contains(cleanTitle.toLowerCase()) ||
-              cleanTitle.toLowerCase().contains(t.title.toLowerCase())) {
-            if (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix')) {
-              _previewCache[cacheKey] = t.previewUrl!;
-              return t.previewUrl!;
-            }
-          }
-        }
+    if (!forceLive && _previewCache.containsKey(cacheKey) && _previewCache[cacheKey]!.isNotEmpty) {
+      final cached = _previewCache[cacheKey]!;
+      if (!cached.contains('itunes.apple.com') && !cached.contains('soundhelix')) {
+        return cached;
       }
     }
 
-    // 1. iTunes Arama Motoru (TR)
-    try {
-      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5&country=TR');
-      final res = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final results = data['results'] as List?;
-        if (results != null && results.isNotEmpty) {
-          for (var r in results) {
-            final p = r['previewUrl'] as String?;
-            if (p != null && p.isNotEmpty) {
-              _previewCache[cacheKey] = p;
-              return p;
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 2. iTunes Global Arama Motoru (Ülke kısıtlamasız arama)
-    try {
-      final url = Uri.parse('https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5');
-      final res = await http.get(url, headers: {'User-Agent': 'Mozilla/5.0'}).timeout(const Duration(seconds: 4));
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final results = data['results'] as List?;
-        if (results != null && results.isNotEmpty) {
-          for (var r in results) {
-            final p = r['previewUrl'] as String?;
-            if (p != null && p.isNotEmpty) {
-              _previewCache[cacheKey] = p;
-              return p;
-            }
-          }
-        }
-      }
-    } catch (_) {}
-
-    // 3. Deezer Arama Motoru (Doğrudan artist + title ile)
+    // 1. Deezer Arama Motoru (Anında çalışan yüksek kaliteli 30s MP3 stüdyo önizlemesi)
     try {
       final dUrl = Uri.parse('https://api.deezer.com/search?q=${Uri.encodeComponent(query)}&limit=5');
       final dRes = await http.get(dUrl).timeout(const Duration(seconds: 4));
@@ -458,8 +407,8 @@ class SpotifyService {
       }
     } catch (_) {}
 
-    // 4. Deezer Parça Arama (Sadece şarkı adıyla arama)
-    if (cleanTitle.isNotEmpty && cleanTitle != cleanArtist) {
+    // 2. Deezer Parça Arama (Sadece parça adıyla arama)
+    if (cleanTitle.isNotEmpty && cleanTitle.toLowerCase() != cleanArtist.toLowerCase()) {
       try {
         final dUrl = Uri.parse('https://api.deezer.com/search/track?q=${Uri.encodeComponent(cleanTitle)}&limit=5');
         final dRes = await http.get(dUrl).timeout(const Duration(seconds: 4));
@@ -479,12 +428,15 @@ class SpotifyService {
       } catch (_) {}
     }
 
-    // 5. Sanatçı Top Parçalarından Yedek Önizleme
+    // 3. Sanatçı Top Parçalarından Deezer Önizleme
     try {
       final artistTracks = await _fetchTracksFromUniversalApi(cleanArtist);
       if (artistTracks.isNotEmpty) {
         for (var t in artistTracks) {
-          if (t.previewUrl != null && t.previewUrl!.isNotEmpty) {
+          if (t.previewUrl != null &&
+              t.previewUrl!.isNotEmpty &&
+              !t.previewUrl!.contains('itunes.apple.com') &&
+              !t.previewUrl!.contains('soundhelix')) {
             _previewCache[cacheKey] = t.previewUrl!;
             return t.previewUrl!;
           }
@@ -492,11 +444,31 @@ class SpotifyService {
       }
     } catch (_) {}
 
+    // 4. Küratörlü Sanatçılarda Doğrulanmış Önizleme (Çevrimdışı / Test / Fallback durumları için)
+    final lowerArtist = cleanArtist.toLowerCase();
+    for (final entry in _curatedArtists.entries) {
+      if (lowerArtist.contains(entry.key) || entry.key.contains(lowerArtist)) {
+        for (final t in entry.value.tracks) {
+          if (t.title.toLowerCase().contains(cleanTitle.toLowerCase()) ||
+              cleanTitle.toLowerCase().contains(t.title.toLowerCase())) {
+            if (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix')) {
+              _previewCache[cacheKey] = t.previewUrl!;
+              return t.previewUrl!;
+            }
+          }
+        }
+      }
+    }
+
     return null;
   }
 
   /// Etkinlikteki tüm sanatçıları (tekli, ortak iş veya festival) ayrı ayrı Spotify verileriyle çekme
-  Future<List<SpotifyArtistData>> getArtistsForEvent(String eventTitle, {String category = ''}) async {
+  Future<List<SpotifyArtistData>> getArtistsForEvent(
+    String eventTitle, {
+    String description = '',
+    String category = '',
+  }) async {
     final catLower = category.toLowerCase().trim();
     final titleLower = eventTitle.toLowerCase().trim();
     if (catLower.contains('tiyatro') ||
@@ -521,14 +493,15 @@ class SpotifyService {
       return [];
     }
 
-    final artistNames = extractArtistNames(eventTitle);
+    final artistNames = extractArtistNames(eventTitle, description: description);
     if (artistNames.isEmpty) return [];
 
     final List<SpotifyArtistData> results = [];
     for (final name in artistNames) {
+      if (isInvalidArtistToken(name)) continue;
       try {
         final artist = await searchArtist(name, category: category);
-        if (artist != null) {
+        if (artist != null && !isInvalidArtistToken(artist.name)) {
           final tracks = await getArtistTopTracks(artist.id, artistName: artist.name);
           results.add(SpotifyArtistData(artist: artist, tracks: tracks));
         }
@@ -775,27 +748,188 @@ class SpotifyService {
   }
 
 
-  /// Etkinlik başlığından sanatçı adlarını ayıklama
-  /// (Örn: "Sibel Can - Eypio" -> ["Sibel Can", "Eypio"])
-  /// (Örn: "Sibel Can & Eypio" -> ["Sibel Can", "Eypio"])
-  /// (Örn: "Mor ve Ötesi" -> ["Mor ve Ötesi"])
-  static List<String> extractArtistNames(String raw) {
+  // --- 81 İl, Bölgeler, İlçe ve Etkinlik / Bilet / Festival Kelimeleri Kara Listesi ---
+  static final Set<String> _invalidTokens = {
+    // 81 İl ve Yaygın İlçe / Tatil / Bölge İsimleri
+    'adana', 'adıyaman', 'adiyaman', 'afyonkarahisar', 'afyon', 'ağrı', 'agri', 'aksaray',
+    'amasya', 'ankara', 'antalya', 'ardahan', 'artvin', 'aydın', 'aydin', 'balıkesir', 'balikesir',
+    'bartın', 'bartin', 'batman', 'bayburt', 'bilecik', 'bingöl', 'bingol', 'bitlis', 'bolu',
+    'burdur', 'bursa', 'çanakkale', 'canakkale', 'çankırı', 'cankiri', 'çorum', 'corum', 'denizli',
+    'diyarbakır', 'diyarbakir', 'düzce', 'duzce', 'edirne', 'elazığ', 'elazig', 'erzincan',
+    'erzurum', 'eskişehir', 'eskisehir', 'gaziantep', 'giresun', 'gümüşhane', 'gumushane', 'hakkari',
+    'hatay', 'iğdır', 'ığdır', 'igdir', 'isparta', 'ısparta', 'istanbul', 'izmir', 'kahramanmaraş',
+    'kahramanmaras', 'maraş', 'maras', 'karabük', 'karabuk', 'karaman', 'kars', 'kastamonu', 'kayseri',
+    'kırıkkale', 'kirikkale', 'kırklareli', 'kirklareli', 'kırşehir', 'kirsehir', 'kilis', 'kocaeli',
+    'izmit', 'konya', 'kütahya', 'kutahya', 'malatya', 'manisa', 'mardin', 'mersin', 'muğla', 'mugla',
+    'muş', 'mus', 'nevşehir', 'nevsehir', 'niğde', 'nigde', 'ordu', 'osmaniye', 'rize', 'sakarya',
+    'adapazarı', 'adapazari', 'samsun', 'siirt', 'sinop', 'sivas', 'şanlıurfa', 'sanliurfa', 'urfa',
+    'şırnak', 'sirnak', 'tekirdağ', 'tekirdag', 'tokat', 'trabzon', 'tunceli', 'uşak', 'usak',
+    'van', 'yalova', 'yozgat', 'zonguldak',
+    // Bölgeler ve Tatil / Etkinlik Merkezleri
+    'bodrum', 'çeşme', 'cesme', 'alanya', 'fethiye', 'marmaris', 'didim', 'kuşadası', 'kusadasi',
+    'kemer', 'kaş', 'kas', 'datça', 'datca', 'urla', 'foça', 'foca', 'alaçatı', 'alacati',
+    'sarıyer', 'sariyer', 'kadıköy', 'kadikoy', 'beşiktaş', 'besiktas', 'şişli', 'sisli',
+    'beylikdüzü', 'beylikduzu', 'ataköy', 'atakoy', 'bakırköy', 'bakirkoy', 'üsküdar', 'uskudar',
+    'kartal', 'maltepe', 'pendik', 'tuzla', 'taksim', 'beyoğlu', 'beyoglu', 'karaköy', 'karakoy',
+    'karadeniz', 'ege', 'akdeniz', 'marmara', 'anadolu', 'trakya', 'bostancı', 'bostanci',
+    'zorlu', 'harbiye', 'küçükçiftlik', 'kucukciftlik', 'maximum uniq', 'jolly joker', 'if performance',
+    'dorock', 'dorock xl', 'arena', 'hall', 'center', 'park',
+    // Festival / Bilet / Organizasyon / Müzik Terimleri
+    'kombine', 'kombine bilet', 'kombine+kamp', 'kamp+kombine', 'kamp', 'kampi', 'kampı',
+    'çadır', 'cadir', 'bilet', 'biletler', 'biletleri', 'biletix', 'passo', 'bubilet',
+    'biletinial', 'biletino', 'festival', 'festivali', 'festivalleri', 'fest', 'şenlik',
+    'senlik', 'şenliği', 'senligi', 'panayır', 'panayir', 'fuar', 'fuarı', 'expo', 'zirve',
+    'summit', 'karne', 'gün', 'gun', 'günü', 'gunu', 'günleri', 'gunleri', '1. gün', '2. gün',
+    '3. gün', '1 gün', '2 gün', '3 gün', '1 gün bilet', 'açık hava', 'acik hava', 'açıkhava',
+    'acikhava', 'konser', 'konseri', 'konserleri', 'live', 'turkey', 'türkiye', 'sahne', 'sahnesi',
+    'etkinlik', 'etkinlikleri', 'turne', 'turnesi', 'tour', 'akustik', 'gösterisi', 'özel',
+    'senfoni', 'orkestrası', 'senfoni orkestrası', 'kerki', 'solfej', 'kerkisolfej', 'kerki solfej',
+    'atlantis', 'bkm', 'organizasyon', 'yapım', 'sunar', 'presents', 'canlı performans', 'canli performans',
+    'canlı sahne', 'canli sahne', 'stand up', 'stand-up', 'tiyatro', 'oyun', 'gösteri', 'parti',
+    'partisi', 'party', 'night', 'gecesi', 'seans', 'seansı', 'matine', 'suare', 'vip', 'genel giriş',
+    'müzik', 'muzik', 'gençlik', 'genclik', 'kültür', 'kultur', 'sanat', 'rock', 'pop', 'caz', 'jazz'
+  };
+
+  /// İl ve bölge konum isimleri kümesi
+  static final Set<String> _locationTokens = {
+    'adana', 'adıyaman', 'adiyaman', 'afyonkarahisar', 'afyon', 'ağrı', 'agri', 'aksaray',
+    'amasya', 'ankara', 'antalya', 'ardahan', 'artvin', 'aydın', 'aydin', 'balıkesir', 'balikesir',
+    'bartın', 'bartin', 'batman', 'bayburt', 'bilecik', 'bingöl', 'bingol', 'bitlis', 'bolu',
+    'burdur', 'bursa', 'çanakkale', 'canakkale', 'çankırı', 'cankiri', 'çorum', 'corum', 'denizli',
+    'diyarbakır', 'diyarbakir', 'düzce', 'duzce', 'edirne', 'elazığ', 'elazig', 'erzincan',
+    'erzurum', 'eskişehir', 'eskisehir', 'gaziantep', 'giresun', 'gümüşhane', 'gumushane', 'hakkari',
+    'hatay', 'iğdır', 'ığdır', 'igdir', 'isparta', 'ısparta', 'istanbul', 'izmir', 'kahramanmaraş',
+    'kahramanmaras', 'maraş', 'maras', 'karabük', 'karabuk', 'karaman', 'kars', 'kastamonu', 'kayseri',
+    'kırıkkale', 'kirikkale', 'kırklareli', 'kirklareli', 'kırşehir', 'kirsehir', 'kilis', 'kocaeli',
+    'izmit', 'konya', 'kütahya', 'kutahya', 'malatya', 'manisa', 'mardin', 'mersin', 'muğla', 'mugla',
+    'muş', 'mus', 'nevşehir', 'nevsehir', 'niğde', 'nigde', 'ordu', 'osmaniye', 'rize', 'sakarya',
+    'adapazarı', 'adapazari', 'samsun', 'siirt', 'sinop', 'sivas', 'şanlıurfa', 'sanliurfa', 'urfa',
+    'şırnak', 'sirnak', 'tekirdağ', 'tekirdag', 'tokat', 'trabzon', 'tunceli', 'uşak', 'usak',
+    'van', 'yalova', 'yozgat', 'zonguldak',
+    'bodrum', 'çeşme', 'cesme', 'alanya', 'fethiye', 'marmaris', 'didim', 'kuşadası', 'kusadasi',
+    'kemer', 'kaş', 'kas', 'datça', 'datca', 'urla', 'foça', 'foca', 'alaçatı', 'alacati',
+    'sarıyer', 'sariyer', 'kadıköy', 'kadikoy', 'beşiktaş', 'besiktas', 'şişli', 'sisli',
+    'beylikdüzü', 'beylikduzu', 'ataköy', 'atakoy', 'bakırköy', 'bakirkoy', 'üsküdar', 'uskudar',
+    'kartal', 'maltepe', 'pendik', 'tuzla', 'taksim', 'beyoğlu', 'beyoglu', 'karaköy', 'karakoy',
+    'karadeniz', 'ege', 'akdeniz', 'marmara', 'anadolu', 'trakya', 'bostancı', 'bostanci',
+    'zorlu', 'harbiye', 'küçükçiftlik', 'kucukciftlik', 'maximum uniq', 'jolly joker', 'if performance',
+    'dorock', 'dorock xl', 'arena', 'hall', 'center', 'park',
+  };
+
+  /// Bilinen Popüler Festival & Konser Sanatçıları ve Grupları Rehberi
+  static final List<String> _popularArtistDirectory = [
+    'Mor ve Ötesi', 'Dolu Kadehi Ters Tut', 'Yüzyüzeyken Konuşuruz', 'Büyük Ev Ablukada',
+    'Son Feci Bisiklet', 'Perdenin Ardındakiler', 'Yaşlı Amca', 'Evdeki Saat', 'Soft Analog',
+    'She Past Away', 'Hey! Douglas', 'Mavi Gri', 'Dedublüman', 'Madrigal', 'Adamlar',
+    'Seksendört', 'Yüksek Sadakat', 'Bulutsuzluk Özlemi',
+    'Teoman', 'Duman', 'Manga', 'Sıla', 'Kenan Doğulu', 'Sertab Erener', 'Athena',
+    'Şebnem Ferah', 'Hayko Cepkin', 'Haluk Levent', 'Cem Adrian', 'Can Bonomo',
+    'Fatma Turgut', 'Emir Can İğrek', 'Semicenk', 'BLOK3', 'Motive', 'Uzi',
+    'Lvbel C5', 'Çakal', 'Ezhel', 'Murda', 'Ceza', 'Sagopa Kajmer', 'Anıl Piyancı',
+    'Gazapizm', 'Köfn', 'Melike Şahin', 'Mabel Matiz', 'Kalben', 'Melek Mosso',
+    'Sena Şener', 'Zeynep Bastık', 'İrem Derici', 'Simge', 'Edis', 'Buray',
+    'Yalın', 'Gripin', 'Pinhani', 'Redd', 'Kaan Tangöze', 'Emre Aydın',
+    'Feridun Düzağaç', 'Ogün Sanlısoy', 'Murat Boz', 'Hadise', 'Gülşen', 'Tarkan',
+    'Sezen Aksu', 'Ebru Gündeş', 'Yıldız Tilbe', 'Funda Arar', 'Berkay', 'Hakan Altun',
+    'Serdar Ortaç', 'Koray Avcı', 'Candan Erçetin', 'Nilüfer', 'Ajda Pekkan',
+    'Selda Bağcan', 'Ceylan Ertem', 'Birsen Tezer', 'Jehan Barbur', 'Gaye Su Akyol',
+    'İkilem', 'Canozan', 'Sedef Sebüktekin', 'Nova Norda', 'Sufle', 'Jakuzi',
+    'Lalalar', 'Bedük', 'Mahmut Orhan', 'Burak Yeter', 'Deeperise', 'Sibel Can',
+    'Eypio', 'Gökhan Türkmen', 'Oğuzhan Koç', 'Mustafa Sandal', 'Hande Yener',
+    'Demet Akalın', 'Bengü', 'Ziynet Sali', 'Ferhat Göçer', 'Fatih Erkoç',
+    'Karsu', 'Evrencan Gündüz', 'Ceylan', 'Zara', 'Kubat', 'Volkan Konak',
+    'Resul Dindar', 'Manuş Baba', 'Kıraç', 'Barış Akarsu', 'Erkin Koray',
+    'Barış Manço', 'Cem Karaca', 'Ahmet Kaya', 'Neşet Ertaş', 'Aşık Veysel',
+  ];
+
+  /// Verilen kelimenin şehir, bölge, bilet ya da festival kelimesi olup olmadığını doğrular
+  static bool isInvalidArtistToken(String token) {
+    final lower = token.toLowerCase().trim();
+    if (lower.isEmpty || lower.length < 2) return true;
+
+    if (_invalidTokens.contains(lower)) return true;
+
+    final norm = lower
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ş', 's')
+        .replaceAll('ö', 'o')
+        .replaceAll('ç', 'c');
+    if (_invalidTokens.contains(norm)) return true;
+
+    final words = lower.split(RegExp(r'\s+'));
+    if (words.isNotEmpty &&
+        words.every((w) {
+          final wNorm = w
+              .replaceAll('ı', 'i')
+              .replaceAll('ğ', 'g')
+              .replaceAll('ü', 'u')
+              .replaceAll('ş', 's')
+              .replaceAll('ö', 'o')
+              .replaceAll('ç', 'c');
+          return _invalidTokens.contains(w) || _invalidTokens.contains(wNorm);
+        })) {
+      return true;
+    }
+
+    // Şehir veya bölge içeren ve yanında etkinlik kelimesi olan ifadeler asla sanatçı olamaz
+    bool hasLoc = false;
+    for (final w in words) {
+      final wNorm = w
+          .replaceAll('ı', 'i')
+          .replaceAll('ğ', 'g')
+          .replaceAll('ü', 'u')
+          .replaceAll('ş', 's')
+          .replaceAll('ö', 'o')
+          .replaceAll('ç', 'c');
+      if (_locationTokens.contains(w) || _locationTokens.contains(wNorm)) {
+        hasLoc = true;
+        break;
+      }
+    }
+    if (hasLoc && words.length > 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Etkinlik başlığından ve açıklamasından gerçek sanatçı adlarını ayıklama
+  /// Şehir isimlerini, kombine bilet yazılarını ASLA sanatçı olarak döndürmez!
+  static List<String> extractArtistNames(String raw, {String description = ''}) {
     String text = raw.trim();
     if (text.isEmpty) return [];
+
+    final List<String> result = [];
+
+    // 0. Festival başlığı veya açıklaması içinde bilinen gerçek sanatçıları tara
+    final combinedLower = '${text.toLowerCase()} ${description.toLowerCase()}';
+    for (final artist in _popularArtistDirectory) {
+      final regex = RegExp('\\b${RegExp.escape(artist.toLowerCase())}\\b', caseSensitive: false);
+      if (regex.hasMatch(combinedLower)) {
+        if (!result.contains(artist)) {
+          result.add(artist);
+        }
+      }
+    }
 
     // 1. Öncü sponsor/organizatör ve festival başlıklarını kaldır
     text = text.replaceAll(RegExp(r'^(?:.*?)\s*(?:sunar|presents)\s*:\s*', caseSensitive: false), '');
     text = text.replaceAll(RegExp(r'^(?:Maximum|Biletix|Red Bull|Garanti BBVA|Vodafone|Turkcell|\+1|Birlikte Güzel|Paribu)\s+', caseSensitive: false), '');
     text = text.replaceAll(RegExp(r'^(?:.*?Festivali\s*\d*|.*?Fest\s*\d*)\s*:\s*', caseSensitive: false), '');
 
-    // 2. Turne / Konser / Mekan ve Yıl eklerini kaldır
+    // 2. Turne / Konser / Mekan, Festival ve Kombine eklerini kaldır
     final suffixes = [
       ' World Tour', ' Konserleri', ' Konseri', ' Konser', ' Live', ' Turnesi', ' Gösterisi',
       ' Akustik', ' Teneffüs', ' Sahnesi', ' Festivali', ' Harbiye',
       ' Açık Hava', ' Açıkhava', ' Jolly Joker', ' Bostancı Gösteri Merkezi',
-      ' Dorock XL', ' IF Performance', ' Zorlu PSM', ' Biletleri',
+      ' Dorock XL', ' IF Performance', ' Zorlu PSM', ' Biletleri', ' Bilet',
       ' Kerki Solfej', ' KerkiSolfej', ' Atlantis Yapım', ' Atlantis', ' BKM',
-      ' 2024', ' 2025', ' 2026', ' 2027'
+      ' 2024', ' 2025', ' 2026', ' 2027', ' 2028',
+      ' Kombine Bilet', ' Kombine+Kamp', ' Kamp+Kombine', ' Kombine',
+      ' 1. Gün', ' 2. Gün', ' 3. Gün', ' 1 Günlük', ' 2 Günlük', ' 3 Günlük',
+      ' Festival', ' Fest', ' Şenliği', ' Şenlik', ' Buluşması', ' Partisi', ' Party'
     ];
 
     for (final s in suffixes) {
@@ -825,6 +959,10 @@ class SpotifyService {
       'bob marley & the wailers': '__BAND_BOB_MARLEY__',
       'dolu kadehi ters tut': '__BAND_DKTT__',
       'yüzyüzeyken konuşuruz': '__BAND_YYK__',
+      'büyük ev ablukada': '__BAND_BEA__',
+      'son feci bisiklet': '__BAND_SFB__',
+      'yaşlı amca': '__BAND_YA__',
+      'evdeki saat': '__BAND_ES__',
     };
 
     final Map<String, String> reversePlaceholders = {};
@@ -839,7 +977,6 @@ class SpotifyService {
     }
 
     // 5. Çoklu sanatçı ayraçlarına göre böl
-    // " & ", ",", "/", " feat. ", " feat ", " ft. ", " ft ", " x ", " X ", " ile ", " ve ", " - "
     final splitRegex = RegExp(
       r'(\s+&\s+|\s*,\s*|\s*\/\s*|\s+feat\.?\s+|\s+ft\.?\s+|\s+[xX]\s+|\s+ile\s+|\s+ve\s+|\s+-\s+)',
       caseSensitive: false,
@@ -847,20 +984,6 @@ class SpotifyService {
 
     final rawParts = text.split(splitRegex);
 
-    final invalidTokens = {
-      'istanbul', 'ankara', 'izmir', 'bursa', 'antalya', 'harbiye',
-      'açıkhava', 'acikhava', 'açık hava', 'konser', 'konseri', 'live',
-      'turkey', 'türkiye', 'sahne', 'sahnesi', 'bilet', 'biletleri',
-      'festival', 'festivali', 'fest', 'biletix', 'passo', 'bubilet',
-      'etkinlik', 'turne', 'turnesi', 'akustik', 'gösterisi', 'özel',
-      'senfoni', 'orkestrası', 'senfoni orkestrası', 'bostancı', 'zorlu',
-      'jolly joker', 'if performance', 'dorock', 'dorock xl', 'maximum uniq',
-      'küçükçiftlik', 'kucukciftlik', 'park', 'arena', 'hall', 'center',
-      'kerki', 'solfej', 'kerkisolfej', 'kerki solfej', 'atlantis', 'bkm',
-      'organizasyon', 'yapım', 'sunar', 'canlı performans', 'canlı sahne',
-    };
-
-    final List<String> result = [];
     for (var part in rawParts) {
       part = part.trim();
       for (final ph in reversePlaceholders.entries) {
@@ -870,19 +993,24 @@ class SpotifyService {
       part = part.replaceAll(RegExp(r'^[,\-\s]+|[,\-\s]+$'), '').trim();
 
       if (part.length < 2) continue;
-      if (invalidTokens.contains(part.toLowerCase())) continue;
+      if (isInvalidArtistToken(part)) continue;
 
       if (!result.contains(part)) {
         result.add(part);
       }
     }
 
+    // Eğer hiçbir sanatçı bulunamadıysa ve metin sadece bir şehir/festival adıysa KESİNLİKLE boş döndür
     if (result.isEmpty && text.isNotEmpty) {
       String fallback = text;
       for (final ph in reversePlaceholders.entries) {
         fallback = fallback.replaceAll(ph.key, ph.value);
       }
-      return [fallback.trim()];
+      fallback = fallback.trim();
+      if (!isInvalidArtistToken(fallback)) {
+        return [fallback];
+      }
+      return [];
     }
 
     return result;
@@ -926,7 +1054,10 @@ class SpotifyService {
         final c = entry.value;
         return List.generate(c.tracks.length, (i) {
           final t = c.tracks[i];
-          final preview = (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix'))
+          final preview = (t.previewUrl != null &&
+                  t.previewUrl!.isNotEmpty &&
+                  !t.previewUrl!.contains('soundhelix') &&
+                  !t.previewUrl!.contains('itunes.apple.com'))
               ? t.previewUrl!
               : null;
           return SpotifyTrack(
@@ -1037,7 +1168,10 @@ class SpotifyService {
         final c = entry.value;
         return List.generate(c.tracks.length, (i) {
           final t = c.tracks[i];
-          final preview = (t.previewUrl != null && t.previewUrl!.isNotEmpty && !t.previewUrl!.contains('soundhelix'))
+          final preview = (t.previewUrl != null &&
+                  t.previewUrl!.isNotEmpty &&
+                  !t.previewUrl!.contains('soundhelix') &&
+                  !t.previewUrl!.contains('itunes.apple.com'))
               ? t.previewUrl!
               : null;
           return SpotifyTrack(

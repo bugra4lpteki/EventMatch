@@ -249,42 +249,38 @@ class _SecuritySettingsScreenState extends State<SecuritySettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          children: [
-                            Text(
-                              '2 Adımlı Doğrulama (2FA)',
-                              style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
-                            ),
-                            const SizedBox(width: 6),
-                            if (_is2FAEnabled)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: const [
-                                    Icon(Icons.shield_rounded, color: Color(0xFF38BDF8), size: 11),
-                                    SizedBox(width: 3),
-                                    Text('Aktif & Korumalı', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
-                                  ],
-                                ),
-                              )
-                            else
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
-                                ),
-                                child: const Text('Önerilen', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
-                              ),
-                          ],
+                        Text(
+                          '2 Adımlı Doğrulama (2FA)',
+                          style: GoogleFonts.outfit(color: AppColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 15),
                         ),
+                        const SizedBox(height: 4),
+                        if (_is2FAEnabled)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.shield_rounded, color: Color(0xFF38BDF8), size: 11),
+                                SizedBox(width: 3),
+                                Text('Aktif & Korumalı', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 10, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.amber.withValues(alpha: 0.35)),
+                            ),
+                            child: const Text('Önerilen', style: TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
                         const SizedBox(height: 3),
                         Text(
                           'Giriş yaparken e-posta adresinize 6 haneli güvenlik kodu gönderilir.',

@@ -432,14 +432,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Profil Fotoğrafları (Max 3, Sürükle-Bırak veya Oklarla Sırala)
+              // Profil Fotoğrafları (Sürükle-Bırak ile Sıralama)
               _buildLabel('Profil Fotoğrafları (1. fotoğraf profil fotoğrafınızdır)'),
+              const SizedBox(height: 2),
+              Text(
+                'Sıralamayı değiştirmek için fotoğrafa basılı tutup sürükleyin.',
+                style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(height: 10),
               SizedBox(
-                height: 160,
-                child: ReorderableListView(
+                height: 122,
+                child: ReorderableListView.builder(
                   scrollDirection: Axis.horizontal,
                   buildDefaultDragHandles: false,
+                  itemCount: _avatarImages.length,
+                  proxyDecorator: (child, index, animation) {
+                    return AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: 1.08,
+                          child: Material(
+                            elevation: 8,
+                            color: Colors.transparent,
+                            shadowColor: AppColors.primary.withValues(alpha: 0.5),
+                            borderRadius: BorderRadius.circular(14),
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: child,
+                    );
+                  },
                   onReorder: (oldIndex, newIndex) {
+                    HapticFeedback.mediumImpact();
                     setState(() {
                       if (oldIndex < newIndex) {
                         newIndex -= 1;
@@ -448,160 +474,115 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       _avatarImages.insert(newIndex, item);
                     });
                   },
-                  children: [
-                    for (int index = 0; index < _avatarImages.length; index++)
-                      Padding(
-                        key: ValueKey('photo_${_avatarImages[index].hashCode}_$index'),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      key: ValueKey('photo_${_avatarImages[index].hashCode}_$index'),
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      child: ReorderableDelayedDragStartListener(
+                        index: index,
+                        child: Stack(
+                          clipBehavior: Clip.none,
                           children: [
-                            ReorderableDelayedDragStartListener(
-                              index: index,
-                              child: Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => _showPhotoOptions(index),
-                                    child: Container(
-                                      width: 86,
-                                      height: 106,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface,
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(
-                                          color: index == 0
-                                              ? AppColors.primary
-                                              : AppColors.primary.withValues(alpha: 0.3),
-                                          width: index == 0 ? 2.2 : 1.0,
-                                        ),
-                                        boxShadow: index == 0
-                                            ? [
-                                                BoxShadow(
-                                                  color: AppColors.primary.withValues(alpha: 0.35),
-                                                  blurRadius: 10,
-                                                  spreadRadius: 1,
-                                                ),
-                                              ]
-                                            : null,
-                                      ),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: _buildAvatarPreview(_avatarImages[index]),
-                                      ),
-                                    ),
+                            GestureDetector(
+                              onTap: () => _showPhotoOptions(index),
+                              child: Container(
+                                width: 88,
+                                height: 110,
+                                decoration: BoxDecoration(
+                                  color: AppColors.surface,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: index == 0
+                                        ? AppColors.primary
+                                        : AppColors.primary.withValues(alpha: 0.3),
+                                    width: index == 0 ? 2.2 : 1.0,
                                   ),
-                                  // Main Profile badge on index 0
-                                  if (index == 0)
-                                    Positioned(
-                                      top: 4,
-                                      left: 4,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
-                                        decoration: BoxDecoration(
-                                          gradient: AppColors.primaryGradient,
-                                          borderRadius: BorderRadius.circular(6),
-                                          boxShadow: const [
-                                            BoxShadow(color: Colors.black45, blurRadius: 4),
-                                          ],
-                                        ),
-                                        child: const Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(Icons.star, size: 9, color: Colors.white),
-                                            SizedBox(width: 2),
-                                            Text(
-                                              'Profil',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 9,
-                                                fontWeight: FontWeight.w900,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  // Edit / Scale Button
-                                  Positioned(
-                                    bottom: 4,
-                                    right: 4,
-                                    child: GestureDetector(
-                                      onTap: () => _editImageScale(index),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(4),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.7),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: AppColors.primary, width: 1),
-                                        ),
-                                        child: Icon(Icons.crop_rotate, size: 12, color: AppColors.primary),
-                                      ),
-                                    ),
-                                  ),
-                                  // Remove Button
-                                  Positioned(
-                                    top: -4,
-                                    right: -4,
-                                    child: GestureDetector(
-                                      onTap: () => _removeImage(index),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(3),
-                                        decoration: BoxDecoration(
-                                          color: Colors.black.withOpacity(0.85),
-                                          shape: BoxShape.circle,
-                                          border: Border.all(color: Colors.white24, width: 1),
-                                        ),
-                                        child: const Icon(Icons.close, size: 12, color: Colors.white),
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                  boxShadow: index == 0
+                                      ? [
+                                          BoxShadow(
+                                            color: AppColors.primary.withValues(alpha: 0.35),
+                                            blurRadius: 10,
+                                            spreadRadius: 1,
+                                          ),
+                                        ]
+                                      : null,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: _buildAvatarPreview(_avatarImages[index]),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 6),
-                            // Quick swap arrow buttons (one tap to reorder!)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (index > 0)
-                                  GestureDetector(
-                                    onTap: () => _movePhoto(index, index - 1),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface,
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.white24, width: 0.8),
+                            // Main Profile badge on index 0
+                            if (index == 0)
+                              Positioned(
+                                top: 5,
+                                left: 5,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    gradient: AppColors.primaryGradient,
+                                    borderRadius: BorderRadius.circular(6),
+                                    boxShadow: const [
+                                      BoxShadow(color: Colors.black45, blurRadius: 4),
+                                    ],
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.star, size: 9, color: Colors.white),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        'Profil',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w900,
+                                        ),
                                       ),
-                                      child: const Icon(Icons.arrow_back, size: 14, color: Colors.white),
-                                    ),
-                                  )
-                                else
-                                  const SizedBox(width: 24),
-                                if (index < _avatarImages.length - 1)
-                                  GestureDetector(
-                                    onTap: () => _movePhoto(index, index + 1),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(4),
-                                      margin: const EdgeInsets.symmetric(horizontal: 2),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.surface,
-                                        borderRadius: BorderRadius.circular(6),
-                                        border: Border.all(color: Colors.white24, width: 0.8),
-                                      ),
-                                      child: const Icon(Icons.arrow_forward, size: 14, color: Colors.white),
-                                    ),
-                                  )
-                                else
-                                  const SizedBox(width: 24),
-                              ],
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            // Edit / Scale Button
+                            Positioned(
+                              bottom: 5,
+                              right: 5,
+                              child: GestureDetector(
+                                onTap: () => _editImageScale(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: AppColors.primary, width: 1),
+                                  ),
+                                  child: Icon(Icons.crop_rotate, size: 13, color: AppColors.primary),
+                                ),
+                              ),
+                            ),
+                            // Remove Button
+                            Positioned(
+                              top: -4,
+                              right: -4,
+                              child: GestureDetector(
+                                onTap: () => _removeImage(index),
+                                child: Container(
+                                  padding: const EdgeInsets.all(3.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.85),
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white24, width: 1),
+                                  ),
+                                  child: const Icon(Icons.close, size: 12, color: Colors.white),
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-                  ],
+                    );
+                  },
                 ),
               ),
               if (_avatarImages.length < 3)
