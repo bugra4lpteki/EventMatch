@@ -65,12 +65,16 @@ class ExternalEventService {
               continue;
             }
 
-            String ticketUrl = item['url']?.toString() ?? 'https://www.biletix.com';
+            String ticketUrl = item['url']?.toString() ?? '';
             if (ticketUrl.contains('u=')) {
               final match = RegExp(r'[?&]u=([^&]+)').firstMatch(ticketUrl);
               if (match != null) {
                 ticketUrl = Uri.decodeComponent(match.group(1)!);
               }
+            }
+            if (ticketUrl.trim().isEmpty || ticketUrl == 'https://www.biletix.com' || ticketUrl == 'https://biletix.com') {
+              final cleanK = title.toString().split('-').first.split(':').first.replaceAll(RegExp(r'[\(\)\[\]&,!]'), ' ').trim();
+              ticketUrl = 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=${Uri.encodeComponent(cleanK)}';
             }
 
             // Spor müsabakaları uygulamadan tamamen kaldırıldı
@@ -241,13 +245,17 @@ class ExternalEventService {
           return null;
         }
 
-        final rawTicketUrl = item['url'] ?? item['ticketUrl'] ?? 'https://www.biletix.com';
+        final rawTicketUrl = item['url'] ?? item['ticketUrl'] ?? '';
         String ticketUrl = rawTicketUrl.toString();
         if (ticketUrl.contains('u=')) {
           final m = RegExp(r'[?&]u=([^&]+)').firstMatch(ticketUrl);
           if (m != null) {
             ticketUrl = Uri.decodeComponent(m.group(1)!);
           }
+        }
+        if (ticketUrl.trim().isEmpty || ticketUrl == 'https://www.biletix.com' || ticketUrl == 'https://biletix.com') {
+          final cleanK = title.toString().split('-').first.split(':').first.replaceAll(RegExp(r'[\(\)\[\]&,!]'), ' ').trim();
+          ticketUrl = 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=${Uri.encodeComponent(cleanK)}';
         }
         String imageUrl = '';
         final match = RegExp(r'/performance/([A-Za-z0-9]+)').firstMatch(ticketUrl);

@@ -480,13 +480,65 @@ class EventModel {
         lowerAtmosphere.contains('iptal');
   }
 
-  /// Biletix üzerinde artık olmayan veya sahte arama linki içeren etkinlikleri tespit eder
+  static const Set<String> _knownFakeBiletixCodes = {
+    'ALEYNA',
+    'SILA',
+    'BLACKKEYS',
+    'BATURAY',
+    'AMADEUS',
+    'ZENGIN',
+    'KAAN',
+    'TUZBIBER',
+    'CHILLOUT',
+    'GEZGIN',
+    'COFFEEFEST',
+    'JAZZFEST',
+    'DOGU',
+    'SNARKY',
+    'SAINTLEVANT',
+    'MAVI',
+    'BVB',
+    'BLS',
+    'BILAL',
+    'ARTURO',
+    'SWALLOW',
+  };
+
+  /// Biletix performans kodunun sahte bir mock kod mu yoksa gerçek bir Biletix/Ticketmaster kodu mu olduğunu doğrular.
+  /// Biletix Türkiye gerçek kodları: '5' ile başlayan 5 alfanumerik karakterdir (ör: 5MM77, 53Q03, 5FPAD).
+  /// Ticketmaster Discovery kodları: Z1HyzZyMZkK3aCt- gibi uzun hash'lerdir (>= 8 karakter).
+  bool _isFakeBiletixPerformanceCode(String code) {
+    if (code.isEmpty) return true;
+    final upper = code.toUpperCase();
+    if (_knownFakeBiletixCodes.contains(upper)) return true;
+    // Biletix Türkiye resmi performans kodları (5XXXX formatında)
+    if (RegExp(r'^5[A-Z0-9]{4}$').hasMatch(upper)) return false;
+    // Ticketmaster global event hash'leri
+    if (code.length >= 8) return false;
+    // Harf içeren ama bilinen kelime formatında olan mock kodlar
+    return RegExp(r'^[A-Z]{3,}$').hasMatch(upper);
+  }
+
+  /// Biletix üzerinde artık olmayan veya sahte mock linki içeren eski etkinlikleri tespit eder
   bool get isObsoleteBiletixEvent {
-    if (!id.toLowerCase().startsWith('biletix_')) return false;
+    // Yalnızca Biletix kökenli etkinlikler için kontrol yap
+    if (!id.toLowerCase().startsWith('biletix_') && !id.toLowerCase().startsWith('local_')) return false;
+
+    // Gerçek Ticketmaster Discovery API'sinden gelen etkinlikler canlı ve gerçektir
+    final bool isFromLiveDiscoveryApi = RegExp(r'^biletix_[Z0-9A-Za-z_-]{8,}$').hasMatch(id);
+
     final url = (ticketUrl ?? '').toLowerCase();
-    if (url.contains('searchinfo=') || url == 'https://www.biletix.com' || url == 'https://biletix.com') {
-      return true;
+    if (url.isEmpty || url == 'https://www.biletix.com' || url == 'https://biletix.com') {
+      return !isFromLiveDiscoveryApi;
     }
+
+    // Sahte performans URL'si tespiti: /performance/CODE/001/TURKIYE/tr
+    final perfMatch = RegExp(r'/performance/([^/]+)/').firstMatch(ticketUrl ?? '');
+    if (perfMatch != null) {
+      final code = perfMatch.group(1) ?? '';
+      if (_isFakeBiletixPerformanceCode(code)) return true;
+    }
+
     return false;
   }
 
@@ -496,6 +548,7 @@ class EventModel {
     if (isSportsEvent) return false;
     if (isExpired) return false;
     if (isCancelled) return false;
+    if (isObsoleteBiletixEvent) return false;
     return true;
   }
 
@@ -556,10 +609,18 @@ class EventModel {
       final lClean = clean.toLowerCase();
 
       // Doğrudan performans/etkinlik bilet satış sayfası mı?
-      final isDirectPerformance = lClean.contains('biletix.com/performance') ||
-          lClean.contains('biletinial.com/tr-tr/') ||
+      // NOT: biletix.com/performance URL'leri için sahte kod kontrolü yapılır
+      bool isDirectPerformance = false;
+      if (lClean.contains('biletix.com/performance')) {
+        // Gerçek Ticketmaster event URL'si mi yoksa sahte mock URL mi?
+        final perfMatch = RegExp(r'/performance/([^/]+)/').firstMatch(clean);
+        final code = perfMatch?.group(1) ?? '';
+        isDirectPerformance = !_isFakeBiletixPerformanceCode(code);
+      } else if (lClean.contains('biletinial.com/tr-tr/') ||
           lClean.contains('bubilet.com.tr/') ||
-          lClean.contains('passo.com.tr/');
+          lClean.contains('passo.com.tr/')) {
+        isDirectPerformance = true;
+      }
 
       if (isDirectPerformance) {
         return clean;

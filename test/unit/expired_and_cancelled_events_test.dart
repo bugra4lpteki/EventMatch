@@ -153,5 +153,107 @@ void main() {
       expect(all.any((e) => e.id == 'test_expired_event'), isFalse);
       expect(all.any((e) => e.id == 'test_cancelled_event'), isFalse);
     });
+
+    test('Biletix: Gerçek Biletix Türkiye kodları (5XXXX formatında) geçerli olmalı, sahte mock kodlar geçersiz sayılmalıdır', () {
+      final now = DateTime.now();
+
+      // Gerçek Ticketmaster/Biletix Türkiye etkinlikleri
+      final realLiveEvent1 = EventModel(
+        id: 'biletix_Z2HyzZyMZk7hv7vve',
+        title: 'Ufuk Beydemir',
+        category: 'Konser',
+        location: 'Holly Stone Performance Hall - Alanya, Antalya',
+        dateTime: now.add(const Duration(days: 2)),
+        description: 'Ufuk Beydemir konseri',
+        imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a',
+        ticketUrl: 'https://www.biletix.com/performance/53Q03/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+      );
+
+      final realLiveEvent2 = EventModel(
+        id: 'biletix_Z2HyzZyMZkCjLfvve',
+        title: 'Haydaaa! Mehmet Mayda Stand Up',
+        category: 'Stand-up',
+        location: 'Efsahne Beyoğlu, İstanbul',
+        dateTime: now.add(const Duration(days: 3)),
+        description: 'Stand up gecesi',
+        imageUrl: 'https://images.unsplash.com/photo-1514306191717-452ec28c7814',
+        ticketUrl: 'https://www.biletix.com/performance/5MM77/017/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+      );
+
+      // Sahte/kırık mock etkinlikler (kodlar: ALEYNA, BLACKKEYS)
+      final fakeMockEvent1 = EventModel(
+        id: 'biletix_fake_1',
+        title: 'Eski Sahte Konser',
+        category: 'Konser',
+        location: 'İstanbul',
+        dateTime: now.add(const Duration(days: 4)),
+        description: 'Kırık link',
+        imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a',
+        ticketUrl: 'https://www.biletix.com/performance/ALEYNA/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+      );
+
+      final fakeMockEvent2 = EventModel(
+        id: 'biletix_fake_2',
+        title: 'The Black Keys',
+        category: 'Konser',
+        location: 'İstanbul',
+        dateTime: now.add(const Duration(days: 5)),
+        description: 'Kırık link',
+        imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a',
+        ticketUrl: 'https://www.biletix.com/performance/BLACKKEYS/001/TURKIYE/tr',
+        ticketProvider: 'Biletix',
+      );
+
+      // Gerçek etkinlikler geçerli olmalıdır
+      expect(realLiveEvent1.isObsoleteBiletixEvent, isFalse);
+      expect(realLiveEvent1.isValidForDisplay, isTrue);
+      expect(realLiveEvent1.effectiveTicketUrl, 'https://www.biletix.com/performance/53Q03/001/TURKIYE/tr');
+
+      expect(realLiveEvent2.isObsoleteBiletixEvent, isFalse);
+      expect(realLiveEvent2.isValidForDisplay, isTrue);
+      expect(realLiveEvent2.effectiveTicketUrl, 'https://www.biletix.com/performance/5MM77/017/TURKIYE/tr');
+
+      // Sahte mock etkinlikler geçersiz olmalıdır
+      expect(fakeMockEvent1.isObsoleteBiletixEvent, isTrue);
+      expect(fakeMockEvent1.isValidForDisplay, isFalse);
+
+      expect(fakeMockEvent2.isObsoleteBiletixEvent, isTrue);
+      expect(fakeMockEvent2.isValidForDisplay, isFalse);
+    });
+
+    test('effectiveTicketUrl: Affiliate linklerden u= parametresi doğru çözülmeli veya arama sayfasına yönlendirmelidir', () {
+      final now = DateTime.now();
+
+      final affiliateEvent = EventModel(
+        id: 'biletix_Z2HyzZyMZk7hv7vve',
+        title: 'Ufuk Beydemir',
+        category: 'Konser',
+        location: 'Antalya',
+        dateTime: now.add(const Duration(days: 2)),
+        description: 'Konser',
+        imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a',
+        ticketUrl: 'https://ticketmaster.evyy.net/c/none/2038774/23908?u=https%3A%2F%2Fwww.biletix.com%2Fperformance%2F53Q03%2F001%2FTURKIYE%2Ftr&utm_medium=affiliate',
+        ticketProvider: 'Biletix',
+      );
+
+      expect(affiliateEvent.effectiveTicketUrl, 'https://www.biletix.com/performance/53Q03/001/TURKIYE/tr');
+
+      final searchEvent = EventModel(
+        id: 'local_duman_live',
+        title: 'Duman Konseri',
+        category: 'Konser',
+        location: 'İstanbul',
+        dateTime: now.add(const Duration(days: 3)),
+        description: 'Duman',
+        imageUrl: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a',
+        ticketUrl: 'https://www.biletix.com/search/TURKIYE/tr?category=&searchinfo=Duman',
+        ticketProvider: 'Biletix',
+      );
+
+      expect(searchEvent.effectiveTicketUrl, contains('biletix.com/search/TURKIYE/tr?category=&searchinfo=Duman'));
+    });
   });
 }
