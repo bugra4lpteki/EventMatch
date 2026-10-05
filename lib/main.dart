@@ -148,15 +148,21 @@ class _EventMatchAppState extends State<EventMatchApp> {
 
       if (event == AuthChangeEvent.signedIn) {
         final authService = ctx.read<AuthService>();
-        if (authService.isTwoFactorPending) {
-          debugPrint('[Auth] 2FA beklemede: Otomatik anasayfa yönlendirmesi engellendi.');
+        // Şifreli giriş ve 2FA akışını LoginScreen ve TwoFactorVerificationScreen yönetir.
+        // main.dart asla araya girip HomeScreen'e erken yönlendirmemelidir.
+        if (authService.isPasswordLoginInProgress || authService.isTwoFactorPending) {
+          debugPrint('[Auth] Şifreli giriş veya 2FA aktif: main.dart otomatik HomeScreen yönlendirmesi engellendi.');
           return;
         }
-        ctx.read<MockEventService>().loadUserProfile();
-        navigatorKey.currentState?.pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+
+        // Sadece harici OAuth (Google / Apple) tarayıcı yönlendirmelerinde tetikle
+        if (authService.isOAuthInProgress) {
+          ctx.read<MockEventService>().loadUserProfile();
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeScreen()),
+            (route) => false,
+          );
+        }
       } else if (event == AuthChangeEvent.passwordRecovery) {
         navigatorKey.currentState?.push(
           MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),

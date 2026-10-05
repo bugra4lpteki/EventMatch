@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -16,15 +15,23 @@ class AuthService extends ChangeNotifier {
   bool _isTwoFactorPending = false;
   bool get isTwoFactorPending => _isTwoFactorPending;
 
+  bool _isPasswordLoginInProgress = false;
+  bool get isPasswordLoginInProgress => _isPasswordLoginInProgress;
+
+  bool _isOAuthInProgress = false;
+  bool get isOAuthInProgress => _isOAuthInProgress;
+
   bool _isDemoUser = false;
   bool get isDemoUser => _isDemoUser;
 
-  bool get isAuthenticated => (_supabase.auth.currentSession != null || _isDemoUser) && !_isTwoFactorPending;
+  bool get isAuthenticated =>
+      (_supabase.auth.currentSession != null || _isDemoUser) &&
+      !_isTwoFactorPending &&
+      !_isPasswordLoginInProgress;
   String? get currentUserEmail => _isDemoUser ? 'demo@eventmatch.app' : _supabase.auth.currentUser?.email;
   String? get currentUserId => _isDemoUser ? 'dae11b96-8e19-490a-b0ae-a002bd7965be' : _supabase.auth.currentUser?.id;
 
   String? _activeTwoFactorCode;
-  DateTime? _activeTwoFactorExpiry;
   String? _pendingTwoFactorEmail;
 
   String? get pendingTwoFactorEmail => _pendingTwoFactorEmail;
@@ -44,6 +51,8 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> signInWithGoogle() async {
+    _isOAuthInProgress = true;
+    notifyListeners();
     try {
       final res = await _supabase.auth.signInWithOAuth(
         OAuthProvider.google,
@@ -54,6 +63,8 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return res;
     } on AuthException catch (e) {
+      _isOAuthInProgress = false;
+      notifyListeners();
       debugPrint('[Auth] Google OAuth AuthException: ${e.message}');
       final msg = e.message.toLowerCase();
       if (msg.contains('provider is not enabled') || msg.contains('unsupported provider')) {
@@ -61,6 +72,8 @@ class AuthService extends ChangeNotifier {
       }
       throw Exception(e.message);
     } catch (e) {
+      _isOAuthInProgress = false;
+      notifyListeners();
       debugPrint('[Auth] Google Sign-In error: $e');
       final str = e.toString().toLowerCase();
       if (str.contains('sign_in_canceled') || str.contains('canceled') || str.contains('cancelled')) {
@@ -74,6 +87,8 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> signInWithApple() async {
+    _isOAuthInProgress = true;
+    notifyListeners();
     try {
       if (!kIsWeb && Platform.isIOS) {
         try {
@@ -95,6 +110,7 @@ class AuthService extends ChangeNotifier {
               idToken: idToken,
               nonce: rawNonce,
             );
+            _isOAuthInProgress = false;
             notifyListeners();
             return res.user != null;
           }
@@ -102,6 +118,8 @@ class AuthService extends ChangeNotifier {
           debugPrint('Native Apple Sign In error/fallback: $nativeErr');
           final str = nativeErr.toString().toLowerCase();
           if (str.contains('canceled') || str.contains('cancelled') || str.contains('1001')) {
+            _isOAuthInProgress = false;
+            notifyListeners();
             return false;
           }
           // If native failed, fallback to OAuth flow below
@@ -117,6 +135,8 @@ class AuthService extends ChangeNotifier {
       notifyListeners();
       return res;
     } on AuthException catch (e) {
+      _isOAuthInProgress = false;
+      notifyListeners();
       debugPrint('Apple OAuth AuthException: ${e.message}');
       final msg = e.message.toLowerCase();
       if (msg.contains('provider is not enabled') || msg.contains('unsupported provider')) {
@@ -124,6 +144,8 @@ class AuthService extends ChangeNotifier {
       }
       throw Exception(e.message);
     } catch (e) {
+      _isOAuthInProgress = false;
+      notifyListeners();
       debugPrint('Apple OAuth Error: $e');
       final str = e.toString().toLowerCase();
       if (str.contains('canceled') || str.contains('cancelled')) {
@@ -137,6 +159,9 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<String?> login(String emailOrUsername, String password) async {
+    _isPasswordLoginInProgress = true;
+    notifyListeners();
+
     try {
       String email = emailOrUsername.trim();
       final isDemoCredentials = (email.toLowerCase() == 'demo@eventmatch.app' ||
@@ -164,12 +189,22 @@ class AuthService extends ChangeNotifier {
             if (res != null && res['email'] != null && res['email'].toString().isNotEmpty) {
               email = res['email'].toString().trim();
             } else {
+              _isPasswordLoginInProgress = false;
+              notifyListeners();
               return '@$cleanUser kullanıcı adına ait hesap bulunamadı veya e-posta eşleşmesi yok. Lütfen e-posta adresinizle giriş yapın.';
             }
           } catch (e) {
             debugPrint('Username to email resolve hatası: $e');
           }
         }
+      }
+
+      // 1. Bu e-posta için 2FA açık mı kontrol et (Oturum açılmadan önce bayrağı diker)
+      final isPre2fa = !isDemoCredentials && await isTwoFactorEnabled(email: email);
+      if (isPre2fa) {
+        _isTwoFactorPending = true;
+        _pendingTwoFactorEmail = email;
+        debugPrint('[Auth] 2FA önceden tespit edildi: $email');
       }
 
       try {
@@ -183,16 +218,19 @@ class AuthService extends ChangeNotifier {
 
           // Apple Demo hesabı için 2FA kontrolünü atla (İncelemecinin takılmasını önler)
           final is2fa = isDemoCredentials ? false : await isTwoFactorEnabled(userId: uid, email: uEmail);
+          debugPrint('[Auth] Giriş başarılı: uid=$uid, email=$uEmail, is2fa=$is2fa');
+
           if (is2fa) {
             _isTwoFactorPending = true;
             _pendingTwoFactorEmail = uEmail;
-            
+
             // 2FA tamamlanmadan anasayfaya sızmayı engellemek için geçici oturumu temizle
             await _supabase.auth.signOut();
             _isTwoFactorPending = true;
             _pendingTwoFactorEmail = uEmail;
 
             final sendErr = await sendTwoFactorCode(email: uEmail);
+            _isPasswordLoginInProgress = false;
             if (sendErr != null) {
               _isTwoFactorPending = false;
               _pendingTwoFactorEmail = null;
@@ -204,6 +242,7 @@ class AuthService extends ChangeNotifier {
           }
 
           _isTwoFactorPending = false;
+          _isPasswordLoginInProgress = false;
           _isDemoUser = isDemoCredentials;
           if (uid != null) {
             NotificationService().syncUserWithOneSignal(uid);
@@ -212,6 +251,9 @@ class AuthService extends ChangeNotifier {
           return null;
         }
       } catch (e) {
+        _isPasswordLoginInProgress = false;
+        _isTwoFactorPending = false;
+        notifyListeners();
         if (isDemoCredentials) {
           debugPrint('[Auth] Demo account fallback active for Apple Reviewer: $e');
           _isDemoUser = true;
@@ -221,8 +263,13 @@ class AuthService extends ChangeNotifier {
         }
         rethrow;
       }
+      _isPasswordLoginInProgress = false;
+      notifyListeners();
       return 'Oturum başlatılamadı.';
     } on AuthException catch (e) {
+      _isPasswordLoginInProgress = false;
+      _isTwoFactorPending = false;
+      notifyListeners();
       debugPrint('Login AuthException: ${e.message}');
       final msg = e.message.toLowerCase();
       if (msg.contains('invalid login credentials')) {
@@ -233,6 +280,9 @@ class AuthService extends ChangeNotifier {
       }
       return e.message;
     } catch (e) {
+      _isPasswordLoginInProgress = false;
+      _isTwoFactorPending = false;
+      notifyListeners();
       debugPrint('Login Error: $e');
       return 'Giriş sırasında hata oluştu: $e';
     }
@@ -379,48 +429,62 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<bool> isTwoFactorEnabled({String? userId, String? email}) async {
-    try {
-      final uid = userId ?? currentUserId;
-      final uEmail = email ?? currentUserEmail;
-      
-      // 1. Supabase 'users' tablosundan kontrol et
-      if (uid != null && uid.isNotEmpty) {
+    final uEmail = (email ?? currentUserEmail)?.toLowerCase().trim();
+    final uid = userId ?? currentUserId;
+
+    // 1. Supabase 'users' tablosundan kontrol et
+    if (uid != null && uid.isNotEmpty) {
+      try {
         final res = await _supabase
             .from('users')
             .select('two_factor_enabled')
             .eq('id', uid)
             .maybeSingle();
         if (res != null && res['two_factor_enabled'] != null) {
-          final isEnabled = res['two_factor_enabled'] == true;
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('security_2fa_enabled', isEnabled);
-          if (uEmail != null) {
-            await prefs.setBool('security_2fa_enabled_${uEmail.toLowerCase()}', isEnabled);
-          }
+          final rawVal = res['two_factor_enabled'];
+          final isEnabled = rawVal == true || rawVal.toString().toLowerCase() == 'true' || rawVal == 1;
+          debugPrint('[Auth] Supabase users 2FA durumu: $isEnabled (raw: $rawVal) user: $uid');
+          try {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setBool('security_2fa_enabled', isEnabled);
+            if (uEmail != null && uEmail.isNotEmpty) {
+              await prefs.setBool('security_2fa_enabled_$uEmail', isEnabled);
+            }
+            await prefs.setBool('security_2fa_enabled_$uid', isEnabled);
+          } catch (_) {}
           return isEnabled;
         }
+      } catch (e) {
+        debugPrint('[Auth] isTwoFactorEnabled query error: $e');
       }
-    } catch (e) {
-      debugPrint('[Auth] isTwoFactorEnabled query error: $e');
     }
 
     // 2. Yerel SharedPreferences yedek kontrolü
     try {
       final prefs = await SharedPreferences.getInstance();
-      final uEmail = email ?? currentUserEmail;
       if (uEmail != null && uEmail.isNotEmpty) {
-        final emailPref = prefs.getBool('security_2fa_enabled_${uEmail.toLowerCase()}');
-        if (emailPref != null) return emailPref;
+        final emailPref = prefs.getBool('security_2fa_enabled_$uEmail');
+        if (emailPref != null) {
+          debugPrint('[Auth] SharedPreferences email ile 2FA: $emailPref ($uEmail)');
+          return emailPref;
+        }
       }
-      final uid = userId ?? currentUserId;
       if (uid != null && uid.isNotEmpty) {
         final idPref = prefs.getBool('security_2fa_enabled_$uid');
-        if (idPref != null) return idPref;
+        if (idPref != null) {
+          debugPrint('[Auth] SharedPreferences uid ile 2FA: $idPref ($uid)');
+          return idPref;
+        }
       }
-      return prefs.getBool('security_2fa_enabled') ?? false;
-    } catch (_) {
-      return false;
+      final globalPref = prefs.getBool('security_2fa_enabled');
+      if (globalPref != null) {
+        debugPrint('[Auth] SharedPreferences global 2FA: $globalPref');
+        return globalPref;
+      }
+    } catch (e) {
+      debugPrint('[Auth] SharedPreferences 2FA read error: $e');
     }
+    return false;
   }
 
   Future<void> setTwoFactorEnabled(bool enabled, {String? email}) async {
