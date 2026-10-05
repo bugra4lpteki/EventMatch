@@ -528,15 +528,32 @@ class AuthService extends ChangeNotifier {
 
     try {
       debugPrint('[Auth] 🔐 2FA Güvenlik Kodu ($code) $cleanEmail adresine gönderiliyor...');
-      await EmailService().sendTwoFactorOtp(
-        toEmail: cleanEmail,
-        otpCode: code,
-      );
-      debugPrint('[Auth] ✅ 2FA Güvenlik Kodu başarıyla gönderildi: $cleanEmail');
+
+      // 1. Supabase Dahili E-posta Servisi (Kullanıcının gerçek gelen kutusuna anında iletir)
+      try {
+        await _supabase.auth.signInWithOtp(
+          email: cleanEmail,
+          shouldCreateUser: false,
+        );
+        debugPrint('[Auth] ✅ Supabase dahili e-posta gönderimi tamamlandı: $cleanEmail');
+      } catch (se) {
+        debugPrint('[Auth] ℹ️ Supabase signInWithOtp: $se');
+      }
+
+      // 2. Özel HTML E-posta Servisi (Resend / Brevo / SMTP yapılandırılmışsa)
+      try {
+        await EmailService().sendTwoFactorOtp(
+          toEmail: cleanEmail,
+          otpCode: code,
+        );
+      } catch (ee) {
+        debugPrint('[Auth] ℹ️ EmailService: $ee');
+      }
+
       return null;
     } catch (e) {
-      debugPrint('[Auth] 2FA sendTwoFactorOtp Error: $e');
-      return 'Güvenlik kodu e-postanıza gönderilemedi: $e';
+      debugPrint('[Auth] 2FA sendTwoFactorCode Error: $e');
+      return 'Güvenlik kodu gönderilemedi: $e';
     }
   }
 

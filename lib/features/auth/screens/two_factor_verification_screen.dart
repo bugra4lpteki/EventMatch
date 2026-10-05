@@ -38,7 +38,9 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
     super.initState();
     _startTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _focusNode.requestFocus();
+      if (mounted) {
+        _focusNode.requestFocus();
+      }
     });
   }
 
@@ -75,6 +77,27 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
       return '$name***@$domain';
     }
     return '${name[0]}***${name[name.length - 1]}@$domain';
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    try {
+      final clipboardData = await Clipboard.getData('text/plain');
+      final text = clipboardData?.text;
+      if (text != null && text.isNotEmpty) {
+        final digits = text.replaceAll(RegExp(r'\D'), '');
+        if (digits.isNotEmpty) {
+          final code = digits.length > 6 ? digits.substring(0, 6) : digits;
+          _codeController.text = code;
+          _codeController.selection = TextSelection.fromPosition(TextPosition(offset: code.length));
+          setState(() {
+            _errorMessage = null;
+          });
+          if (code.length == 6) {
+            _verifyCode();
+          }
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _verifyCode() async {
@@ -137,7 +160,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Yeni doğrulama kodu ${widget.email} adresine gönderildi. Lütfen gelen kutunuzu kontrol edin.',
+                  'Yeni doğrulama kodu ${widget.email} adresine gönderildi. Gelen kutusu ve Spam klasörünü kontrol edin.',
                   style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13),
                 ),
               ),
@@ -160,6 +183,56 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
     } else {
       Navigator.of(context).pop();
     }
+  }
+
+  Widget _buildPinBox(int index) {
+    final text = _codeController.text;
+    final isFilled = text.length > index;
+    final isFocused = text.length == index;
+    final char = isFilled ? text[index] : '';
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 180),
+      width: 46,
+      height: 54,
+      decoration: BoxDecoration(
+        color: isFocused
+            ? const Color(0xFF38BDF8).withValues(alpha: 0.12)
+            : Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _errorMessage != null
+              ? AppColors.error
+              : isFocused
+                  ? const Color(0xFF38BDF8)
+                  : isFilled
+                      ? const Color(0xFF38BDF8).withValues(alpha: 0.6)
+                      : Colors.white.withValues(alpha: 0.15),
+          width: isFocused ? 2.0 : 1.4,
+        ),
+        boxShadow: isFocused
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF38BDF8).withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  spreadRadius: 1,
+                )
+              ]
+            : null,
+      ),
+      child: Center(
+        child: Text(
+          char.isNotEmpty ? char : (isFocused ? '|' : '·'),
+          style: GoogleFonts.outfit(
+            color: char.isNotEmpty
+                ? Colors.white
+                : (isFocused ? const Color(0xFF38BDF8) : Colors.white24),
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -201,13 +274,13 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
 
                         // Glowing Shield Icon
                         Center(
                           child: Container(
-                            width: 88,
-                            height: 88,
+                            width: 80,
+                            height: 80,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               gradient: LinearGradient(
@@ -232,12 +305,12 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                             ),
                             child: const Icon(
                               Icons.verified_user_rounded,
-                              size: 46,
+                              size: 42,
                               color: Color(0xFF38BDF8),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
 
                         // Title
                         Text(
@@ -273,66 +346,57 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                                   ),
                                 ),
                                 const TextSpan(
-                                  text: ' adresinize 6 haneli bir doğrulama kodu gönderildi.\nLütfen gelen kutunuzu (ve gereksiz/spam klasörünü) kontrol edin.',
+                                  text: ' adresinize 6 haneli doğrulama kodu gönderildi.\nLütfen gelen kutunuzu (ve Spam klasörünü) kontrol edin.',
                                 ),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 32),
 
-                        // OTP Code Input Box
-                        Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: _errorMessage != null
-                                  ? AppColors.error
-                                  : const Color(0xFF38BDF8).withValues(alpha: 0.5),
-                              width: 1.8,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: (_errorMessage != null ? AppColors.error : const Color(0xFF38BDF8))
-                                    .withValues(alpha: 0.12),
-                                blurRadius: 18,
-                                spreadRadius: 1,
+                        // Interactive 6-Pin Input Area
+                        GestureDetector(
+                          onTap: () {
+                            _focusNode.requestFocus();
+                          },
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // 6 Visible PIN Boxes
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: List.generate(6, (i) => _buildPinBox(i)),
+                              ),
+
+                              // Real TextField capturing touch, hardware keyboard & software keyboard
+                              Opacity(
+                                opacity: 0.02,
+                                child: TextField(
+                                  controller: _codeController,
+                                  focusNode: _focusNode,
+                                  autofocus: true,
+                                  keyboardType: TextInputType.number,
+                                  maxLength: 6,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  autofillHints: const [AutofillHints.oneTimeCode],
+                                  style: const TextStyle(fontSize: 1, color: Colors.transparent),
+                                  cursorColor: Colors.transparent,
+                                  decoration: const InputDecoration(
+                                    border: InputBorder.none,
+                                    counterText: '',
+                                    contentPadding: EdgeInsets.zero,
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      if (_errorMessage != null) _errorMessage = null;
+                                    });
+                                    if (val.length == 6) {
+                                      _verifyCode();
+                                    }
+                                  },
+                                ),
                               ),
                             ],
-                          ),
-                          child: TextField(
-                            controller: _codeController,
-                            focusNode: _focusNode,
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 16,
-                            ),
-                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                            decoration: InputDecoration(
-                              counterText: '',
-                              hintText: '••••••',
-                              hintStyle: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.2),
-                                letterSpacing: 16,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-                            ),
-                            onChanged: (val) {
-                              if (_errorMessage != null) {
-                                setState(() => _errorMessage = null);
-                              }
-                              if (val.length == 6) {
-                                _verifyCode();
-                              }
-                            },
                           ),
                         ),
 
@@ -361,7 +425,28 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                           ),
                         ],
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
+
+                        // Paste from Clipboard Button
+                        TextButton.icon(
+                          onPressed: _pasteFromClipboard,
+                          icon: const Icon(Icons.content_paste_rounded, size: 16, color: Color(0xFF38BDF8)),
+                          label: Text(
+                            'Kodu Panodan Yapıştır',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFF38BDF8),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8).withValues(alpha: 0.08),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+
+                        const SizedBox(height: 16),
 
                         // Resend countdown or button
                         Center(
@@ -448,14 +533,18 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                         const SizedBox(height: 12),
 
                         // Cancel Button
-                        TextButton(
-                          onPressed: _handleCancel,
-                          child: Text(
-                            'Giriş Yapmaktan Vazgeç',
-                            style: GoogleFonts.outfit(
-                              color: AppColors.textSecondary,
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w500,
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: TextButton(
+                            onPressed: _handleCancel,
+                            child: Text(
+                              'Giriş Ekranına Dön',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ),
