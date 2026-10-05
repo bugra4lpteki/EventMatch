@@ -166,16 +166,25 @@ class _SwipeScreenState extends State<SwipeScreen> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 4.0, bottom: 8.0),
-                  child: AppinioSwiper(
-                    key: ValueKey('swipe_deck_$_refreshCount'),
-                    controller: _swiperController,
-                    cardCount: items.length,
-                    backgroundCardCount: items.length > 1 ? 1 : 0,
-                    backgroundCardOffset: Offset.zero,
-                    backgroundCardScale: 1.0,
-                    onSwipeEnd: (prev, target, activity) => _onSwipeEnd(prev, target, activity, items),
-                    cardBuilder: (BuildContext context, int index) {
-                      return _buildUserCard(items[index]);
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Kartın sadece tam sağa veya tam sola belirgin şekilde çekilince kaybolması için
+                      // threshold değerini genişliğin %45'i olarak ayarlıyoruz (küçük hareketlerde geri döner)
+                      final swipeThreshold = (constraints.maxWidth * 0.45).clamp(160.0, 260.0);
+                      return AppinioSwiper(
+                        key: ValueKey('swipe_deck_$_refreshCount'),
+                        controller: _swiperController,
+                        cardCount: items.length,
+                        backgroundCardCount: items.length > 1 ? 1 : 0,
+                        backgroundCardOffset: Offset.zero,
+                        backgroundCardScale: 1.0,
+                        threshold: swipeThreshold,
+                        swipeOptions: const SwipeOptions.only(left: true, right: true),
+                        onSwipeEnd: (prev, target, activity) => _onSwipeEnd(prev, target, activity, items),
+                        cardBuilder: (BuildContext context, int index) {
+                          return _buildUserCard(items[index]);
+                        },
+                      );
                     },
                   ),
                 ),
