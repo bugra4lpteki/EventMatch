@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -27,6 +28,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   String? _errorMessage;
   String? _successMessage;
 
+  Timer? _resendTimer;
+  int _resendCountdown = 0;
+
   @override
   void initState() {
     super.initState();
@@ -37,11 +41,35 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _emailController.dispose();
     _otpController.dispose();
     _newPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  void _startResendTimer() {
+    _resendTimer?.cancel();
+    setState(() {
+      _resendCountdown = 60;
+    });
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_resendCountdown <= 1) {
+        timer.cancel();
+        setState(() {
+          _resendCountdown = 0;
+        });
+      } else {
+        setState(() {
+          _resendCountdown--;
+        });
+      }
+    });
   }
 
   Future<void> _handleSendResetLink() async {
@@ -50,6 +78,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       setState(() {
         _errorMessage = 'Lütfen geçerli bir e-posta adresi girin.';
         _successMessage = null;
+      });
+      return;
+    }
+
+    if (_resendCountdown > 0) {
+      setState(() {
+        _errorMessage = 'Yeni kod talep etmek için lütfen $_resendCountdown saniye bekleyin.';
       });
       return;
     }
@@ -71,7 +106,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         _errorMessage = error;
       } else {
         _isCodeSent = true;
-        _successMessage = 'Şifre sıfırlama kodu e-postanıza gönderildi. Gelen kutunuzu (ve spam klasörünü) kontrol edin.';
+        _startResendTimer();
+        _successMessage = 'Şifre sıfırlama kodu gönderildi! Lütfen e-posta gelen kutunuzu ve Spam klasörünü kontrol edin.';
       }
     });
   }
@@ -307,7 +343,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                           Text(
                             _isCodeSent
                                 ? 'E-postanıza gelen 6 haneli kodu ve belirleyeceğiniz yeni şifreyi girin.'
-                                : 'Hesabınıza kayıtlı e-posta adresinizi girin. Size şifre sıfırlama kodu göndereceğiz.',
+                                : 'Hesabınıza kayıtlı e-posta adresinizi girin. Size 6 haneli şifre sıfırlama kodu göndereceğiz.',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.outfit(
                               fontSize: 14,
@@ -586,7 +622,32 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                       ),
                                     ),
 
-                                    const SizedBox(height: 12),
+                                    const SizedBox(height: 14),
+
+                                    // Spam Tip Banner
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: Colors.amber.withOpacity(0.25)),
+                                      ),
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(Icons.info_outline_rounded, color: Colors.amber, size: 18),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'E-posta ulaşmadıysa lütfen Gereksiz / Spam klasörünüzü de kontrol edin.',
+                                              style: GoogleFonts.outfit(color: Colors.amber.shade200, fontSize: 12.5),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
@@ -609,11 +670,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                                           ),
                                         ),
                                         TextButton(
-                                          onPressed: _isLoading ? null : _handleSendResetLink,
+                                          onPressed: (_isLoading || _resendCountdown > 0) ? null : _handleSendResetLink,
                                           child: Text(
-                                            'Tekrar Gönder',
+                                            _resendCountdown > 0 ? 'Tekrar Gönder (${_resendCountdown}s)' : 'Tekrar Gönder',
                                             style: GoogleFonts.outfit(
-                                              color: AppColors.primaryVariant,
+                                              color: _resendCountdown > 0 ? AppColors.textMuted : AppColors.primaryVariant,
                                               fontSize: 13,
                                               fontWeight: FontWeight.w600,
                                             ),

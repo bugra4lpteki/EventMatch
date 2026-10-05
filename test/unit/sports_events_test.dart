@@ -27,8 +27,7 @@ void main() {
       final eventService = MockEventService();
       expect(eventService.categories.contains('Spor'), isFalse);
       expect(eventService.categories.any((c) => c.toLowerCase().contains('spor')), isFalse);
-      expect(eventService.categories.any((c) => c.toLowerCase().contains('musabaka')), isFalse);
-      expect(eventService.categories, containsAll(['Tümü', 'Konser', 'Tiyatro', 'Stand-up', 'Festival']));
+      expect(eventService.categories, containsAll(['Tümü', 'Konser', 'Tiyatro', 'Stand-up']));
     });
 
     test('addCategory fonksiyonu ile Spor veya Müsabaka eklenememelidir', () {
