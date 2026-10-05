@@ -90,13 +90,13 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
       if (text != null && text.isNotEmpty) {
         final digits = text.replaceAll(RegExp(r'\D'), '');
         if (digits.isNotEmpty) {
-          final code = digits.length > 6 ? digits.substring(0, 6) : digits;
+          final code = digits.length > 8 ? digits.substring(0, 8) : digits;
           _codeController.text = code;
           _codeController.selection = TextSelection.fromPosition(TextPosition(offset: code.length));
           setState(() {
             _errorMessage = null;
           });
-          if (code.length == 6) {
+          if (code.length >= 6) {
             _verifyCode();
           }
         }
@@ -107,7 +107,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
   Future<void> _verifyCode() async {
     final code = _codeController.text.trim();
     if (code.length < 6) {
-      setState(() => _errorMessage = 'Lütfen 6 haneli doğrulama kodunu girin.');
+      setState(() => _errorMessage = 'Lütfen doğrulama kodunu girin.');
       return;
     }
 
@@ -197,13 +197,13 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
-      width: 46,
-      height: 54,
+      width: 38,
+      height: 50,
       decoration: BoxDecoration(
         color: isFocused
             ? const Color(0xFF38BDF8).withValues(alpha: 0.12)
             : Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _errorMessage != null
               ? AppColors.error
@@ -212,13 +212,13 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                   : isFilled
                       ? const Color(0xFF38BDF8).withValues(alpha: 0.6)
                       : Colors.white.withValues(alpha: 0.15),
-          width: isFocused ? 2.0 : 1.4,
+          width: isFocused ? 2.0 : 1.2,
         ),
         boxShadow: isFocused
             ? [
                 BoxShadow(
                   color: const Color(0xFF38BDF8).withValues(alpha: 0.25),
-                  blurRadius: 12,
+                  blurRadius: 10,
                   spreadRadius: 1,
                 )
               ]
@@ -231,7 +231,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
             color: char.isNotEmpty
                 ? Colors.white
                 : (isFocused ? const Color(0xFF38BDF8) : Colors.white24),
-            fontSize: 24,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -350,7 +350,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                                   ),
                                 ),
                                 const TextSpan(
-                                  text: ' adresinize 6 haneli doğrulama kodu gönderildi.\nLütfen gelen kutunuzu (ve Spam klasörünü) kontrol edin.',
+                                  text: ' adresinize gelen doğrulama kodunu girin.\nLütfen gelen kutunuzu (ve Spam klasörünü) kontrol edin.',
                                 ),
                               ],
                             ),
@@ -358,7 +358,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                         ),
                         const SizedBox(height: 32),
 
-                        // Interactive 6-Pin Input Area
+                        // Interactive 8-Pin Input Area
                         GestureDetector(
                           onTap: () {
                             _focusNode.requestFocus();
@@ -366,10 +366,10 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                           child: Stack(
                             alignment: Alignment.center,
                             children: [
-                              // 6 Visible PIN Boxes
+                              // 8 Visible PIN Boxes
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: List.generate(6, (i) => _buildPinBox(i)),
+                                children: List.generate(8, (i) => _buildPinBox(i)),
                               ),
 
                               // Real TextField capturing touch, hardware keyboard & software keyboard
@@ -380,7 +380,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                                   focusNode: _focusNode,
                                   autofocus: true,
                                   keyboardType: TextInputType.number,
-                                  maxLength: 6,
+                                  maxLength: 8,
                                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                                   autofillHints: const [AutofillHints.oneTimeCode],
                                   style: const TextStyle(fontSize: 1, color: Colors.transparent),
@@ -394,7 +394,7 @@ class _TwoFactorVerificationScreenState extends State<TwoFactorVerificationScree
                                     setState(() {
                                       if (_errorMessage != null) _errorMessage = null;
                                     });
-                                    if (val.length == 6) {
+                                    if (val.length == 8) {
                                       _verifyCode();
                                     }
                                   },
