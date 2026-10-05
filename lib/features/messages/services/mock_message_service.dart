@@ -29,6 +29,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
   final Set<String> _blockedUserIds = {};
   final Set<String> _followingUserIds = {};
   final Set<String> _deletedChatIds = {};
+  final Set<String> _hiddenMessageIdsForMe = {};
+  final Set<String> _deletedForEveryoneIds = {};
   
   // Canlı oda stream kontrolcüleri (Persistent StreamController)
   final Map<String, StreamController<List<MessageModel>>> _roomStreamControllers = {};
@@ -88,6 +90,44 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
       final key = id.isNotEmpty ? 'eventmatch_archived_ids_$id' : 'eventmatch_archived_ids_default';
       final list = prefs.getStringList(key) ?? [];
       _archivedChatIds.addAll(list.map((e) => e.toLowerCase()));
+    } catch (_) {}
+  }
+
+  Future<void> _saveHiddenMessageIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_hidden_messages_$id' : 'eventmatch_hidden_messages_default';
+      await prefs.setStringList(key, _hiddenMessageIdsForMe.toList());
+    } catch (_) {}
+  }
+
+  Future<void> _loadHiddenMessageIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_hidden_messages_$id' : 'eventmatch_hidden_messages_default';
+      final list = prefs.getStringList(key) ?? [];
+      _hiddenMessageIdsForMe.addAll(list.map((e) => e.toLowerCase().trim()));
+    } catch (_) {}
+  }
+
+  Future<void> _saveDeletedForEveryoneIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_deleted_everyone_$id' : 'eventmatch_deleted_everyone_default';
+      await prefs.setStringList(key, _deletedForEveryoneIds.toList());
+    } catch (_) {}
+  }
+
+  Future<void> _loadDeletedForEveryoneIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = currentUserId;
+      final key = id.isNotEmpty ? 'eventmatch_deleted_everyone_$id' : 'eventmatch_deleted_everyone_default';
+      final list = prefs.getStringList(key) ?? [];
+      _deletedForEveryoneIds.addAll(list.map((e) => e.toLowerCase().trim()));
     } catch (_) {}
   }
 
@@ -182,6 +222,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _initService() async {
     await _syncBlockedUsers();
+    await _loadHiddenMessageIds();
+    await _loadDeletedForEveryoneIds();
     ModerationService().addListener(() {
       _syncBlockedUsers();
       // Remove any chats belonging to newly blocked users
@@ -357,6 +399,18 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               _handleReactionEvent(payload);
             },
           )
+          .onBroadcast(
+            event: 'delete_message',
+            callback: (payload) {
+              _handleDeleteMessageEvent(payload);
+            },
+          )
+          .onBroadcast(
+            event: 'view_once_opened',
+            callback: (payload) {
+              _handleViewOnceOpenedEvent(payload);
+            },
+          )
           .subscribe((status, [error]) {
             debugPrint('📡 [SUPABASE REALTIME] Broadcast kanalı durumu: $status');
           });
@@ -369,7 +423,11 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             schema: 'public',
             table: 'messages',
             callback: (payload) {
-              _handlePostgresMessageEvent(payload);
+              if (payload.eventType == PostgresChangeEvent.delete) {
+                _handlePostgresDeleteMessageEvent(payload);
+              } else {
+                _handlePostgresMessageEvent(payload);
+              }
             },
           )
           .subscribe((status, [error]) {
@@ -730,6 +788,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     required DateTime timestamp,
   }) {
     if (content.trim().isEmpty || partnerId.isEmpty) return;
+    final cleanMsgId = msgId.toLowerCase().trim();
+    if (_hiddenMessageIdsForMe.contains(cleanMsgId) || _deletedForEveryoneIds.contains(cleanMsgId)) {
+      return;
+    }
     if (partnerId.toLowerCase().startsWith('venue_') ||
         receiverId.toLowerCase().startsWith('venue_') ||
         senderId.toLowerCase().startsWith('venue_')) {
@@ -880,6 +942,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         mediaUrl: parsed.mediaUrl,
         audioDurationSeconds: parsed.audioDuration,
         messageType: parsed.messageType,
+        isViewOnce: parsed.isViewOnce,
+        isViewOnceOpened: parsed.isViewOnceOpened,
       );
       chat.messages.add(newMsg);
       _deduplicateMessagesList(chat.messages);
@@ -1178,6 +1242,10 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             if (!isForThisChat) continue;
 
             final mId = row['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
+            final cleanMid = mId.toLowerCase().trim();
+            if (_hiddenMessageIdsForMe.contains(cleanMid) || _deletedForEveryoneIds.contains(cleanMid)) {
+              continue;
+            }
             final text = row['content']?.toString() ?? row['message']?.toString() ?? '';
             final sender = row['sender_id']?.toString() ?? '';
             final receiver = row['receiver_id']?.toString() ?? '';
@@ -1228,6 +1296,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                 id: mId,
                 timestamp: ts,
                 status: effectiveStatus,
+                isViewOnce: parsed.isViewOnce,
+                isViewOnceOpened: parsed.isViewOnceOpened,
               );
               hasNew = true;
               continue;
@@ -1258,6 +1328,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
               mediaUrl: parsed.mediaUrl,
               audioDurationSeconds: parsed.audioDuration,
               messageType: parsed.messageType,
+              isViewOnce: parsed.isViewOnce,
+              isViewOnceOpened: parsed.isViewOnceOpened,
             ));
             hasNew = true;
           } catch (e) {
@@ -1555,6 +1627,12 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
         try {
+          final mId = msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}';
+          final cleanMId = mId.toLowerCase().trim();
+          if (_hiddenMessageIdsForMe.contains(cleanMId) || _deletedForEveryoneIds.contains(cleanMId)) {
+            continue;
+          }
+
           final isRead = msg['is_read'] == true || msg['status'] == 'read';
           final isFromMe = lowerSender == lowerCurrent;
           final calculatedStatus = isRead
@@ -1565,7 +1643,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           final parsed = MessageModel.parseEncodedContent(rawText);
 
           final msgModel = MessageModel(
-            id: msg['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
+            id: mId,
             senderId: sender,
             receiverId: receiver,
             text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawText,
@@ -1578,6 +1656,8 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             mediaUrl: parsed.mediaUrl,
             audioDurationSeconds: parsed.audioDuration,
             messageType: parsed.messageType,
+            isViewOnce: parsed.isViewOnce,
+            isViewOnceOpened: parsed.isViewOnceOpened,
           );
 
           messagesByPartner.putIfAbsent(partnerId.toLowerCase(), () => []).add(msgModel);
@@ -2178,8 +2258,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Mesajı yerelden (ve veritabanından) siler
-  Future<void> deleteMessage(String chatId, String messageId) async {
+  /// 1. Sadece Kendinden Sil (Delete for Me)
+  Future<void> deleteMessageForMe(String chatId, String messageId) async {
+    final cleanId = messageId.trim();
+    if (cleanId.isEmpty) return;
+
+    _hiddenMessageIdsForMe.add(cleanId.toLowerCase());
+    await _saveHiddenMessageIds();
+
     final lowerChatId = chatId.toLowerCase().trim();
     final chatIndex = _chats.indexWhere((c) =>
         c.id.toLowerCase() == lowerChatId ||
@@ -2187,16 +2273,274 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (chatIndex >= 0) {
       final chat = _chats[chatIndex];
-      chat.messages.removeWhere((m) => m.id == messageId);
+      chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(chat.participant.id);
+      notifyListeners();
+    }
+  }
+
+  /// 2. Herkes İçin Sil (Delete for Everyone)
+  Future<void> deleteMessageForEveryone(String chatId, String messageId, String partnerId) async {
+    final cleanId = messageId.trim();
+    if (cleanId.isEmpty) return;
+
+    _deletedForEveryoneIds.add(cleanId.toLowerCase());
+    await _saveDeletedForEveryoneIds();
+
+    final lowerChatId = chatId.toLowerCase().trim();
+    final lowerPartner = partnerId.toLowerCase().trim();
+    final chatIndex = _chats.indexWhere((c) =>
+        c.id.toLowerCase() == lowerChatId ||
+        c.participant.id.toLowerCase() == lowerPartner ||
+        c.participant.id.toLowerCase() == lowerChatId);
+
+    if (chatIndex >= 0) {
+      final chat = _chats[chatIndex];
+      chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == cleanId.toLowerCase());
       _saveChatsToLocalStorage();
       _emitRoomUpdate(chat.participant.id);
       notifyListeners();
     }
 
+    // Gerçek zamanlı WebSocket yayını: Diğer tarafa anında bildir
     try {
-      await _supabase.from('messages').delete().eq('id', messageId);
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'delete_message',
+        payload: {
+          'message_id': cleanId,
+          'chat_id': chatId,
+          'sender_id': currentUserId,
+          'receiver_id': partnerId,
+          'for_everyone': true,
+        },
+      );
     } catch (e) {
-      debugPrint('[MessageService] ❌ deleteMessage error: $e');
+      debugPrint('[MessageService] ⚠️ delete_message broadcast error: $e');
+    }
+
+    // Veritabanından tamamen sil
+    try {
+      await _supabase.from('messages').delete().eq('id', cleanId);
+    } catch (e) {
+      debugPrint('[MessageService] ❌ deleteMessageForEveryone DB error: $e');
+    }
+  }
+
+  /// Geriye dönük uyumluluk için genel mesaj silme
+  Future<void> deleteMessage(String chatId, String messageId) async {
+    await deleteMessageForMe(chatId, messageId);
+  }
+
+  /// 3. Tek Seferlik (View-Once) Fotoğraf Gönderme
+  Future<void> sendViewOnceImage(
+    String chatId,
+    String partnerId,
+    String localImagePath, {
+    String? caption,
+    MessageModel? replyToMessage,
+  }) async {
+    try {
+      final currentId = currentUserId.isNotEmpty ? currentUserId : 'user_mobile';
+      if (partnerId.isEmpty || partnerId.toLowerCase() == currentId.toLowerCase()) return;
+      if (isBlocked(partnerId)) return;
+
+      int chatIndex = _chats.indexWhere((c) => c.id == chatId || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      if (chatIndex < 0) {
+        final newChat = createOrGetChatForUser(UserModel(id: partnerId, name: 'Kullanıcı', avatarUrl: ''));
+        chatIndex = _chats.indexWhere((c) => c.id == newChat.id || c.participant.id.toLowerCase() == partnerId.toLowerCase());
+      }
+      if (chatIndex < 0) return;
+
+      final chat = _chats[chatIndex];
+      final newMsgId = 'msg_${DateTime.now().millisecondsSinceEpoch}';
+      final now = DateTime.now();
+
+      final isPng = localImagePath.toLowerCase().endsWith('.png');
+      final ext = isPng ? 'png' : 'jpg';
+      final trimmedCaption = caption?.trim() ?? '';
+
+      final storageUrl = await _uploadMediaToStorage(localImagePath, folder: 'view_once', extension: ext);
+      if (storageUrl == null) {
+        debugPrint('[MessageService] ❌ Tek seferlik fotoğraf Storage yüklemesi başarısız oldu.');
+        return;
+      }
+
+      final String imageUrl = storageUrl;
+      final encodedContent = '[view_once:$imageUrl]${trimmedCaption.isNotEmpty ? '\n$trimmedCaption' : ''}';
+
+      String? replySender;
+      String? replyText;
+      if (replyToMessage != null) {
+        replySender = replyToMessage.senderId.toLowerCase().trim() == currentId.toLowerCase().trim()
+            ? 'Sen'
+            : chat.participant.name;
+        replyText = replyToMessage.isAudio
+            ? '🎤 Sesli Mesaj'
+            : (replyToMessage.isViewOnce ? '① Fotoğraf' : (replyToMessage.isImage ? '📷 Fotoğraf' : replyToMessage.text));
+      }
+
+      final newMsg = MessageModel(
+        id: newMsgId,
+        senderId: currentId,
+        receiverId: partnerId,
+        text: trimmedCaption.isNotEmpty ? trimmedCaption : 'Fotoğraf',
+        timestamp: now,
+        status: MessageStatus.sending,
+        mediaUrl: imageUrl,
+        messageType: 'view_once',
+        isViewOnce: true,
+        isViewOnceOpened: false,
+        replyToMessageId: replyToMessage?.id,
+        replyToText: replyText,
+        replyToSenderName: replySender,
+      );
+
+      chat.messages.add(newMsg);
+      _sortChats();
+      _saveChatsToLocalStorage();
+      _emitRoomUpdate(partnerId);
+      notifyListeners();
+
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'new_message',
+        payload: {
+          'id': newMsgId,
+          'sender_id': currentId,
+          'receiver_id': partnerId,
+          'content': encodedContent,
+          'created_at': now.toUtc().toIso8601String(),
+          'media_url': imageUrl,
+          'message_type': 'view_once',
+          'is_view_once': true,
+          'is_view_once_opened': false,
+          'reply_to_id': replyToMessage?.id,
+          'reply_to_text': replyText,
+          'reply_to_sender_name': replySender,
+        },
+      );
+
+      sendTypingStatus(partnerId, false);
+      await _persistMessage(chat.id, partnerId, encodedContent, newMsgId, senderUserId: currentId);
+    } catch (e) {
+      debugPrint('[MessageService] ❌ sendViewOnceImage Error: $e');
+    }
+  }
+
+  /// 4. Tek Seferlik Fotoğraf Açıldı Olarak İşaretleme
+  Future<void> markViewOnceOpened(String chatId, String messageId, String partnerId) async {
+    final cleanId = messageId.trim().toLowerCase();
+    if (cleanId.isEmpty) return;
+
+    for (var chat in _chats) {
+      final idx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == cleanId);
+      if (idx >= 0) {
+        final m = chat.messages[idx];
+        if (!m.isViewOnceOpened) {
+          chat.messages[idx] = m.copyWith(isViewOnceOpened: true, text: 'Açıldı');
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+        }
+        break;
+      }
+    }
+
+    try {
+      _broadcastChannel?.sendBroadcastMessage(
+        event: 'view_once_opened',
+        payload: {
+          'message_id': messageId,
+          'chat_id': chatId,
+          'sender_id': currentUserId,
+          'receiver_id': partnerId,
+        },
+      );
+    } catch (_) {}
+
+    try {
+      await _supabase
+          .from('messages')
+          .update({'content': '[view_once:opened]'})
+          .eq('id', messageId);
+    } catch (_) {}
+  }
+
+  void _handleDeleteMessageEvent(Map<String, dynamic> payload) {
+    try {
+      final msgId = payload['message_id']?.toString()?.toLowerCase().trim();
+      final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
+      final currentId = currentUserId.toLowerCase().trim();
+
+      if (msgId == null || msgId.isEmpty || currentId.isEmpty) return;
+      if (receiverId != currentId && senderId != currentId) return;
+
+      _deletedForEveryoneIds.add(msgId);
+      _saveDeletedForEveryoneIds();
+
+      for (var chat in _chats) {
+        final initialLen = chat.messages.length;
+        chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == msgId);
+        if (chat.messages.length != initialLen) {
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ _handleDeleteMessageEvent error: $e');
+    }
+  }
+
+  void _handlePostgresDeleteMessageEvent(PostgresChangePayload payload) {
+    try {
+      final old = payload.oldRecord;
+      final msgId = (old['id']?.toString() ?? '').toLowerCase().trim();
+      if (msgId.isEmpty) return;
+
+      _deletedForEveryoneIds.add(msgId);
+      _saveDeletedForEveryoneIds();
+
+      for (var chat in _chats) {
+        final initialLen = chat.messages.length;
+        chat.messages.removeWhere((m) => m.id.toLowerCase().trim() == msgId);
+        if (chat.messages.length != initialLen) {
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ _handlePostgresDeleteMessageEvent error: $e');
+    }
+  }
+
+  void _handleViewOnceOpenedEvent(Map<String, dynamic> payload) {
+    try {
+      final msgId = payload['message_id']?.toString()?.toLowerCase().trim();
+      final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
+      final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
+      final currentId = currentUserId.toLowerCase().trim();
+
+      if (msgId == null || msgId.isEmpty || currentId.isEmpty) return;
+      if (receiverId != currentId && senderId != currentId) return;
+
+      for (var chat in _chats) {
+        final idx = chat.messages.indexWhere((m) => m.id.toLowerCase().trim() == msgId);
+        if (idx >= 0) {
+          final m = chat.messages[idx];
+          chat.messages[idx] = m.copyWith(isViewOnceOpened: true, text: 'Açıldı');
+          _saveChatsToLocalStorage();
+          _emitRoomUpdate(chat.participant.id);
+          notifyListeners();
+          break;
+        }
+      }
+    } catch (e) {
+      debugPrint('[MessageService] ⚠️ _handleViewOnceOpenedEvent error: $e');
     }
   }
 

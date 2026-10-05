@@ -22,7 +22,9 @@ class MessageModel {
   final String? replyToSenderName;
   final String? mediaUrl;
   final int? audioDurationSeconds;
-  final String messageType; // 'text' | 'audio'
+  final String messageType; // 'text' | 'audio' | 'image' | 'view_once'
+  final bool isViewOnce;
+  bool isViewOnceOpened;
 
   MessageModel({
     required this.id,
@@ -38,6 +40,8 @@ class MessageModel {
     this.mediaUrl,
     this.audioDurationSeconds,
     this.messageType = 'text',
+    this.isViewOnce = false,
+    this.isViewOnceOpened = false,
   }) : reactions = reactions ?? {};
 
   bool get isRead => status == MessageStatus.read;
@@ -58,6 +62,7 @@ class MessageModel {
   }
 
   bool get isImage {
+    if (isViewOnce || messageType == 'view_once') return false;
     if (messageType == 'image') return true;
     if (mediaUrl != null && mediaUrl!.isNotEmpty) {
       final m = mediaUrl!.toLowerCase();
@@ -107,6 +112,8 @@ class MessageModel {
     String? mediaUrl,
     int? audioDurationSeconds,
     String? messageType,
+    bool? isViewOnce,
+    bool? isViewOnceOpened,
   }) {
     return MessageModel(
       id: id ?? this.id,
@@ -122,6 +129,8 @@ class MessageModel {
       mediaUrl: mediaUrl ?? this.mediaUrl,
       audioDurationSeconds: audioDurationSeconds ?? this.audioDurationSeconds,
       messageType: messageType ?? this.messageType,
+      isViewOnce: isViewOnce ?? this.isViewOnce,
+      isViewOnceOpened: isViewOnceOpened ?? this.isViewOnceOpened,
     );
   }
 
@@ -141,16 +150,29 @@ class MessageModel {
       'media_url': mediaUrl,
       'audio_duration': audioDurationSeconds,
       'message_type': messageType,
+      'is_view_once': isViewOnce,
+      'is_view_once_opened': isViewOnceOpened,
     };
   }
 
-  static ({String cleanText, String? replySender, String? replyText, String? mediaUrl, int? audioDuration, String messageType}) parseEncodedContent(String rawContent) {
+  static ({
+    String cleanText,
+    String? replySender,
+    String? replyText,
+    String? mediaUrl,
+    int? audioDuration,
+    String messageType,
+    bool isViewOnce,
+    bool isViewOnceOpened,
+  }) parseEncodedContent(String rawContent) {
     String currentText = rawContent.trim();
     String? replySender;
     String? replyText;
     String? mediaUrl;
     int? audioDuration;
     String messageType = 'text';
+    bool isViewOnce = false;
+    bool isViewOnceOpened = false;
 
     // 1. Parse [reply:Sender:Text]
     if (currentText.startsWith('[reply:')) {
@@ -168,8 +190,23 @@ class MessageModel {
       }
     }
 
-    // 2. Parse [image:URL] or [image:DATA_URI]
-    if (currentText.startsWith('[image:')) {
+    // 2. Parse [view_once:URL] or [view_once:URL|||opened]
+    if (currentText.startsWith('[view_once:')) {
+      final closeBracket = currentText.lastIndexOf(']');
+      if (closeBracket > 11) {
+        final inner = currentText.substring(11, closeBracket);
+        final opened = inner.endsWith('|||opened');
+        final cleanUrl = opened ? inner.substring(0, inner.length - 9) : inner;
+        mediaUrl = cleanUrl;
+        messageType = 'view_once';
+        isViewOnce = true;
+        isViewOnceOpened = opened;
+        final rest = currentText.substring(closeBracket + 1).trim();
+        currentText = rest.isNotEmpty ? rest : (opened ? 'Açıldı' : 'Fotoğraf');
+      }
+    }
+    // 3. Parse [image:URL] or [image:DATA_URI]
+    else if (currentText.startsWith('[image:')) {
       final closeBracket = currentText.lastIndexOf(']');
       if (closeBracket > 7) {
         mediaUrl = currentText.substring(7, closeBracket);
@@ -178,7 +215,7 @@ class MessageModel {
         currentText = rest.isNotEmpty ? rest : '📷 Fotoğraf';
       }
     } 
-    // 3. Parse [audio:URL:duration] or [audio:DATA_URI:duration]
+    // 4. Parse [audio:URL:duration] or [audio:DATA_URI:duration]
     else if (currentText.startsWith('[audio:')) {
       final closeBracket = currentText.lastIndexOf(']');
       if (closeBracket > 7) {
@@ -207,6 +244,8 @@ class MessageModel {
       mediaUrl: mediaUrl,
       audioDuration: audioDuration,
       messageType: messageType,
+      isViewOnce: isViewOnce,
+      isViewOnceOpened: isViewOnceOpened,
     );
   }
 
@@ -242,9 +281,19 @@ class MessageModel {
         ? map['audio_duration'] as int
         : (int.tryParse(map['audio_duration']?.toString() ?? '') ?? parsed.audioDuration);
 
-    // Düzgün message_type tespiti (asla görsele yanlışlıkla audio atanmaz!)
+    final bool isViewOnce = map['is_view_once'] == true ||
+        parsed.isViewOnce ||
+        map['message_type'] == 'view_once' ||
+        (rawContent.startsWith('[view_once:'));
+
+    final bool isViewOnceOpened = map['is_view_once_opened'] == true ||
+        parsed.isViewOnceOpened ||
+        rawContent.contains('|||opened');
+
     String determinedType = 'text';
-    if (parsed.messageType != 'text') {
+    if (isViewOnce) {
+      determinedType = 'view_once';
+    } else if (parsed.messageType != 'text') {
       determinedType = parsed.messageType;
     } else if (map['message_type'] != null && map['message_type'].toString().isNotEmpty) {
       determinedType = map['message_type'].toString();
@@ -271,7 +320,7 @@ class MessageModel {
       id: map['id']?.toString() ?? 'msg_${DateTime.now().millisecondsSinceEpoch}',
       senderId: map['sender_id']?.toString() ?? '',
       receiverId: map['receiver_id']?.toString(),
-      text: parsed.cleanText.isNotEmpty ? parsed.cleanText : rawContent,
+      text: parsed.cleanText.isNotEmpty ? parsed.cleanText : (isViewOnceOpened ? 'Açıldı' : (isViewOnce ? 'Fotoğraf' : rawContent)),
       timestamp: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString())?.toLocal() ?? DateTime.now()
           : (map['timestamp'] != null
@@ -285,6 +334,8 @@ class MessageModel {
       mediaUrl: mediaUrl,
       audioDurationSeconds: audioDuration,
       messageType: determinedType,
+      isViewOnce: isViewOnce,
+      isViewOnceOpened: isViewOnceOpened,
     );
   }
 }

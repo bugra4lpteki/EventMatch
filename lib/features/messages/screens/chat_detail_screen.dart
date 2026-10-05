@@ -19,6 +19,8 @@ import '../../events/services/mock_event_service.dart';
 import '../../events/services/mock_match_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../widgets/chat_wallpaper_background.dart';
+import 'view_once_viewer_screen.dart';
+import '../../../core/services/security_screen_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final ChatModel chat;
@@ -185,20 +187,12 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 final picker = ImagePicker();
                 final xFile = await picker.pickImage(
                   source: ImageSource.camera,
-                  maxWidth: 800,
-                  maxHeight: 800,
-                  imageQuality: 50,
+                  maxWidth: 1000,
+                  maxHeight: 1000,
+                  imageQuality: 65,
                 );
-                if (xFile != null) {
-                  final replyCopy = _replyingToMessage;
-                  setState(() => _replyingToMessage = null);
-                  await msgService.sendImageMessage(
-                    currentChatId,
-                    widget.chat.participant.id,
-                    xFile.path,
-                    replyToMessage: replyCopy,
-                  );
-                  _scrollToBottom(animated: true);
+                if (xFile != null && mounted) {
+                  _showImagePreviewAndSendModal(xFile.path, msgService, currentChatId);
                 }
               },
             ),
@@ -219,24 +213,233 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 final picker = ImagePicker();
                 final xFile = await picker.pickImage(
                   source: ImageSource.gallery,
-                  maxWidth: 800,
-                  maxHeight: 800,
-                  imageQuality: 50,
+                  maxWidth: 1000,
+                  maxHeight: 1000,
+                  imageQuality: 65,
                 );
-                if (xFile != null) {
-                  final replyCopy = _replyingToMessage;
-                  setState(() => _replyingToMessage = null);
-                  await msgService.sendImageMessage(
-                    currentChatId,
-                    widget.chat.participant.id,
-                    xFile.path,
-                    replyToMessage: replyCopy,
-                  );
-                  _scrollToBottom(animated: true);
+                if (xFile != null && mounted) {
+                  _showImagePreviewAndSendModal(xFile.path, msgService, currentChatId);
                 }
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Fotoğraf Gönderme Önizlemesi & Tek Oynatımlık Toggle Modal
+  void _showImagePreviewAndSendModal(
+    String localImagePath,
+    MockMessageService msgService,
+    String currentChatId,
+  ) {
+    bool isViewOnce = false;
+    final captionController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Container(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            top: 14,
+            left: 16,
+            right: 16,
+          ),
+          decoration: const BoxDecoration(
+            color: Color(0xFF171923),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(top: BorderSide(color: Colors.white12)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Fotoğraf Önizleme Alanı
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  height: 220,
+                  width: double.infinity,
+                  color: Colors.black45,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Image.file(File(localImagePath), fit: BoxFit.contain),
+                      if (isViewOnce)
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withValues(alpha: 0.5),
+                                  blurRadius: 8,
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '①',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                                SizedBox(width: 5),
+                                Text(
+                                  'Tek Seferlik Aktif',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Açıklama Metni
+              TextField(
+                controller: captionController,
+                style: const TextStyle(color: Colors.white, fontSize: 14.5),
+                decoration: InputDecoration(
+                  hintText: 'Açıklama ekle...',
+                  hintStyle: const TextStyle(color: Colors.white54, fontSize: 14),
+                  filled: true,
+                  fillColor: const Color(0xFF0D0E15),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(20),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Kontroller: Tek Oynatımlık Seçimi & Gönder
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      HapticFeedback.lightImpact();
+                      setModalState(() {
+                        isViewOnce = !isViewOnce;
+                      });
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isViewOnce
+                            ? AppColors.primary.withValues(alpha: 0.25)
+                            : const Color(0xFF1E2235),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(
+                          color: isViewOnce ? AppColors.primary : Colors.white12,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 22,
+                            height: 22,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isViewOnce ? AppColors.primary : Colors.transparent,
+                              border: Border.all(
+                                color: isViewOnce ? AppColors.primary : Colors.white70,
+                                width: 1.5,
+                              ),
+                            ),
+                            child: Text(
+                              '1',
+                              style: TextStyle(
+                                color: isViewOnce ? Colors.white : Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isViewOnce ? 'Tek Oynatımlık' : 'Standart',
+                            style: TextStyle(
+                              color: isViewOnce ? Colors.white : Colors.white70,
+                              fontSize: 12.5,
+                              fontWeight: isViewOnce ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+                      elevation: 4,
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      final replyCopy = _replyingToMessage;
+                      setState(() => _replyingToMessage = null);
+                      final caption = captionController.text.trim();
+
+                      if (isViewOnce) {
+                        await msgService.sendViewOnceImage(
+                          currentChatId,
+                          widget.chat.participant.id,
+                          localImagePath,
+                          caption: caption.isNotEmpty ? caption : null,
+                          replyToMessage: replyCopy,
+                        );
+                      } else {
+                        await msgService.sendImageMessage(
+                          currentChatId,
+                          widget.chat.participant.id,
+                          localImagePath,
+                          caption: caption.isNotEmpty ? caption : null,
+                          replyToMessage: replyCopy,
+                        );
+                      }
+                      _scrollToBottom(animated: true);
+                    },
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Gönder', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        SizedBox(width: 6),
+                        Icon(Icons.send_rounded, color: Colors.white, size: 16),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -560,6 +763,140 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   _replyingToMessage = message;
                 });
               },
+            ),
+            const Divider(color: Colors.white10),
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+              title: const Text('Mesajı Sil', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showDeleteMessageDialog(context, message, service, chatId);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Mesaj Silme Seçenekleri: Kendinden Sil (Benden Sil) & Herkes İçin Sil
+  void _showDeleteMessageDialog(
+    BuildContext context,
+    MessageModel message,
+    MockMessageService service,
+    String chatId,
+  ) {
+    HapticFeedback.mediumImpact();
+    final currentId = service.currentUserId.toLowerCase().trim();
+    final senderId = message.senderId.toLowerCase().trim();
+    final isMe = senderId == currentId || senderId == 'me' || (currentId.isEmpty && senderId != widget.chat.participant.id.toLowerCase().trim());
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E2235),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.5),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 22),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Mesajı Sil',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              isMe
+                  ? 'Bu mesajı yalnızca kendinizden mi yoksa sohbetteki herkes için mi silmek istersiniz?'
+                  : 'Bu mesajı cihazınızdan silmek istiyor musunuz? Sohbetin diğer katılımcısı mesajı görmeye devam eder.',
+              style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: 16),
+            const Divider(color: Colors.white10),
+            // Seçenek 1: Benden Sil
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.person_remove_outlined, color: Colors.orangeAccent),
+              title: const Text(
+                'Benden Sil',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14.5),
+              ),
+              subtitle: const Text(
+                'Sadece bu cihazdan ve sizin sohbetinizden kaldırılır',
+                style: TextStyle(color: Colors.white54, fontSize: 11.5),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                HapticFeedback.lightImpact();
+                await service.deleteMessageForMe(chatId, message.id);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Mesaj sizden silindi.'), duration: Duration(seconds: 2)),
+                  );
+                }
+              },
+            ),
+            // Seçenek 2: Herkes İçin Sil (Yalnızca mesajı gönderen kullanıcıya sunulur)
+            if (isMe) ...[
+              const Divider(color: Colors.white10),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                title: const Text(
+                  'Herkes İçin Sil',
+                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 14.5),
+                ),
+                subtitle: const Text(
+                  'Sohbetteki tüm katılımcılardan kalıcı olarak silinir',
+                  style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                ),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  HapticFeedback.mediumImpact();
+                  await service.deleteMessageForEveryone(chatId, message.id, widget.chat.participant.id);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Mesaj herkes için silindi.'), duration: Duration(seconds: 2)),
+                    );
+                  }
+                },
+              ),
+            ],
+            const SizedBox(height: 6),
+            Center(
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('İptal', style: TextStyle(color: Colors.white54, fontSize: 14)),
+              ),
             ),
           ],
         ),
@@ -1253,6 +1590,195 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     );
   }
 
+  Widget _buildViewOnceBubble(
+    MessageModel message,
+    bool isMe,
+    MockMessageService msgService,
+    String currentChatId,
+    String timeStr,
+  ) {
+    final isOpened = message.isViewOnceOpened;
+    final bool canOpen = !isOpened && !isMe;
+
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.76,
+        ),
+        decoration: BoxDecoration(
+          color: isMe
+              ? (isOpened ? const Color(0xFF4C1D95).withValues(alpha: 0.6) : const Color(0xFF6D28D9))
+              : const Color(0xFF1F2232),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isMe ? 16 : 2),
+            bottomRight: Radius.circular(isMe ? 2 : 16),
+          ),
+          border: Border.all(
+            color: isOpened
+                ? Colors.white12
+                : (isMe ? Colors.white24 : AppColors.primary.withValues(alpha: 0.6)),
+            width: isOpened ? 1 : 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            if (isOpened) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Bu fotoğraf tek oynatımlıktı ve zaten görüntülendi.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
+
+            if (isMe) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Gizlilik gereği tek seferlik fotoğraflar gönderildikten sonra tekrar açılamaz.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              return;
+            }
+
+            if (message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (ctx) => ViewOnceViewerScreen(
+                    imageUrl: message.mediaUrl!,
+                    senderName: widget.chat.participant.name,
+                    caption: message.text != 'Fotoğraf' && message.text != 'Açıldı' ? message.text : null,
+                    onViewCompleted: () {
+                      msgService.markViewOnceOpened(
+                        currentChatId,
+                        message.id,
+                        widget.chat.participant.id,
+                      );
+                    },
+                  ),
+                ),
+              );
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (message.replyToText != null && message.replyToText!.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: _buildReplySnippet(message, isMe),
+                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isOpened
+                            ? Colors.white10
+                            : (isMe
+                                ? Colors.white24
+                                : AppColors.primary.withValues(alpha: 0.3)),
+                        border: Border.all(
+                          color: isOpened
+                              ? Colors.white24
+                              : (isMe ? Colors.white70 : AppColors.primary),
+                          width: 2,
+                        ),
+                      ),
+                      child: Text(
+                        '1',
+                        style: TextStyle(
+                          color: isOpened
+                              ? Colors.white38
+                              : Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            isOpened ? 'Açıldı' : 'Fotoğraf',
+                            style: TextStyle(
+                              color: isOpened ? Colors.white60 : Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              fontStyle: isOpened ? FontStyle.italic : FontStyle.normal,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isOpened
+                                ? 'Tek seferlik fotoğraf'
+                                : (canOpen ? 'Görüntülemek için dokun' : 'Tek seferlik fotoğraf'),
+                            style: TextStyle(
+                              color: canOpen ? AppColors.primary : Colors.white54,
+                              fontSize: 11,
+                              fontWeight: canOpen ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          timeStr,
+                          style: TextStyle(
+                            color: isMe ? Colors.white70 : Colors.white60,
+                            fontSize: 10,
+                          ),
+                        ),
+                        if (isMe) ...[
+                          const SizedBox(width: 4),
+                          _buildStatusTick(message.status),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+                if (message.reactionCounts.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: _buildReactionBadges(message, msgService, currentChatId),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// WhatsApp Tarzı Sade, Zarif ve Kompakt Mesaj Balonu
   Widget _buildWhatsAppMessageBubble(
     MessageModel message,
@@ -1261,6 +1787,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     String currentChatId,
   ) {
     final timeStr = DateFormat('HH:mm').format(message.timestamp.toLocal());
+
+    // 0. TEK OYNATIMLIK (VIEW-ONCE) FOTOĞRAF MESAJI
+    if (message.isViewOnce) {
+      return _buildViewOnceBubble(message, isMe, msgService, currentChatId, timeStr);
+    }
 
     // 1. FOTOĞRAF MESAJI
     if (message.isImage && message.mediaUrl != null && message.mediaUrl!.isNotEmpty) {
