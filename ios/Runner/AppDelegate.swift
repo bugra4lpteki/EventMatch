@@ -17,18 +17,6 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-
-    let securityChannel = FlutterMethodChannel(
-      name: "com.eventmatch.app/security",
-      binaryMessenger: engineBridge.engine.binaryMessenger
-    )
-    securityChannel.setMethodCallHandler { (call: FlutterMethodCall, result: @escaping FlutterResult) in
-      if call.method == "enableSecure" || call.method == "disableSecure" {
-        result(true)
-      } else {
-        result(FlutterMethodNotImplemented)
-      }
-    }
   }
 
   // iOS ön plandayken gelen bildirimlerin banner ve ses olarak sunulması
