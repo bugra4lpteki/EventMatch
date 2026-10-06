@@ -166,6 +166,74 @@ void main() {
       // On non-ios without Supabase session, returns false safely without throwing
       expect(restored, isFalse);
     });
+
+    test('Daily Swipe Quota limits free users to 50 swipes and allows unlimited for VIP', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      final eventService = MockEventService();
+      final matchService = MockMatchService(eventService);
+      await eventService.cancelVip();
+
+      // Free user starts with 50 swipes
+      final initialRem = await matchService.getRemainingDailySwipes();
+      expect(initialRem, equals(50));
+      expect(await matchService.canSwipe(), isTrue);
+
+      // Record a swipe
+      await matchService.recordSwipe();
+      expect(await matchService.getRemainingDailySwipes(), equals(49));
+
+      // VIP user has unlimited
+      await eventService.activateVip(days: 30);
+      expect(await matchService.getRemainingDailySwipes(), equals(999999));
+      expect(await matchService.canSwipe(), isTrue);
+    });
+
+    test('Daily Boost Quota limits free users to 1x30min and VIP users to 5x60min', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      final eventService = MockEventService();
+      await eventService.cancelVip();
+
+      // Free user: 1 boost, 30 min duration
+      expect(eventService.maxDailyBoosts, equals(1));
+      expect(eventService.currentBoostDuration.inMinutes, equals(30));
+      expect(await eventService.canBoostToday(), isTrue);
+
+      // Trigger free boost
+      final boosted = await eventService.triggerDailyBoost();
+      expect(boosted, isTrue);
+      expect(eventService.currentUser.isBoosted, isTrue);
+      expect(await eventService.getRemainingDailyBoosts(), equals(0));
+      expect(await eventService.canBoostToday(), isFalse);
+
+      // VIP user: 5 boosts, 60 min duration
+      await eventService.activateVip(days: 30);
+      expect(eventService.maxDailyBoosts, equals(5));
+      expect(eventService.currentBoostDuration.inMinutes, equals(60));
+      expect(await eventService.canBoostToday(), isTrue);
+      expect(await eventService.getRemainingDailyBoosts(), equals(4)); // 5 - 1 used
+    });
+
+    test('Daily Match Map Quota grants 1 hour (3600s) to free and unlimited to VIP', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+      final eventService = MockEventService();
+      await eventService.cancelVip();
+
+      // Free user initial budget
+      expect(await eventService.getRemainingMatchMapSeconds(), equals(3600));
+      expect(await eventService.canAccessMatchMap(), isTrue);
+
+      // Record 60 seconds usage
+      await eventService.recordMatchMapUsage(seconds: 60);
+      expect(await eventService.getRemainingMatchMapSeconds(), equals(3540));
+
+      // VIP user unlimited
+      await eventService.activateVip(days: 30);
+      expect(await eventService.getRemainingMatchMapSeconds(), equals(999999));
+      expect(await eventService.canAccessMatchMap(), isTrue);
+    });
   });
 }
 

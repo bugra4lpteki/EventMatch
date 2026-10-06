@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +52,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
   String _selectedMapStyle = 'google'; // 'google', 'satellite', 'dark', 'osm'
   bool _hasAutoFittedBounds = false;
 
+  // Match Haritası Günlük Kota & Sayaç (Ücretsiz: 1 saat, VIP: Sınırsız)
+  Timer? _matchMapQuotaTimer;
+  int _matchMapRemainingSeconds = 3600;
+
   // Eşleşme isteği için mesaj kontrolcüsü
   final TextEditingController _matchNoteController = TextEditingController();
   bool _isWritingMatchMessage = false;
@@ -69,10 +75,34 @@ class _EventMapScreenState extends State<EventMapScreen> {
     super.initState();
     _mapController = MapController();
     _checkPermissionAndGetLocation();
+    _loadMatchMapQuota();
+  }
+
+  Future<void> _loadMatchMapQuota() async {
+    final eventService = context.read<MockEventService>();
+    final rem = await eventService.getRemainingMatchMapSeconds();
+    if (mounted) {
+      setState(() => _matchMapRemainingSeconds = rem);
+    }
+  }
+
+  void _startMatchMapTimer() {
+    _matchMapQuotaTimer?.cancel();
+    _matchMapQuotaTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted || _currentMapMode != MapMode.matchMap) return;
+      final eventService = context.read<MockEventService>();
+      if (eventService.currentUser.hasActiveVip) return;
+      await eventService.recordMatchMapUsage(seconds: 5);
+      final rem = await eventService.getRemainingMatchMapSeconds();
+      if (mounted) {
+        setState(() => _matchMapRemainingSeconds = rem);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _matchMapQuotaTimer?.cancel();
     _matchNoteController.dispose();
     super.dispose();
   }
@@ -497,9 +527,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 1. Etkinlikler Modu
+              // 1. Etkinlikler Modu (Herkese tamamen ücretsiz ve açık)
               GestureDetector(
                 onTap: () {
+                  _matchMapQuotaTimer?.cancel();
                   setState(() {
                     _currentMapMode = MapMode.events;
                     _selectedUser = null;
@@ -532,7 +563,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                   ),
                 ),
               ),
-              // 2. Match Haritası Modu (Gerçek Kullanıcı PP'leri & Canlı Konum)
+              // 2. Match Haritası Modu (Ücretsiz: Günde 1 Saat, VIP: Sınırsız)
               GestureDetector(
                 onTap: () {
                   setState(() {
@@ -540,6 +571,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     _selectedEvent = null;
                     _isWritingMatchMessage = false;
                   });
+                  _startMatchMapTimer();
                   try {
                     context.read<LocationRadarService>().toggleRadar(true);
                   } catch (_) {}
@@ -1053,6 +1085,69 @@ class _EventMapScreenState extends State<EventMapScreen> {
           ),
 
           // 2. Üst Kontrol Paneli (Etkinlik Filtresi veya Match Haritası Durum Barı)
+          if (_currentMapMode == MapMode.matchMap)
+            Positioned(
+              top: 12,
+              left: 12,
+              right: 12,
+              child: Center(
+                child: GestureDetector(
+                  onTap: () {
+                    if (!currentUser.hasActiveVip) {
+                      VipPaywallSheet.show(context, initialFeature: VipFeature.mapBoost);
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF13151F).withValues(alpha: 0.92),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: currentUser.hasActiveVip
+                            ? const Color(0xFFF59E0B)
+                            : Colors.white24,
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          currentUser.hasActiveVip
+                              ? Icons.workspace_premium_rounded
+                              : Icons.timer_rounded,
+                          color: currentUser.hasActiveVip
+                              ? const Color(0xFFF59E0B)
+                              : const Color(0xFF38BDF8),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          currentUser.hasActiveVip
+                              ? '👑 VIP: Sınırsız Match Haritası'
+                              : '⏱️ Günlük Kalan: ${_matchMapRemainingSeconds ~/ 60} dk (VIP ile Sınırsız)',
+                          style: TextStyle(
+                            color: currentUser.hasActiveVip
+                                ? const Color(0xFFFDE68A)
+                                : Colors.white,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           if (_currentMapMode == MapMode.events)
             Positioned(
               top: 12,
@@ -1482,30 +1577,50 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       return;
                     }
 
-                    if (!currentUser.hasActiveVip) {
-                      VipPaywallSheet.show(
-                        context,
-                        initialFeature: VipFeature.mapBoost,
-                      );
+                    final canBoost = await eventService.canBoostToday();
+                    if (!canBoost) {
+                      if (!currentUser.hasActiveVip) {
+                        VipPaywallSheet.show(
+                          context,
+                          initialFeature: VipFeature.mapBoost,
+                        );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Bugünkü 1 ücretsiz Boost hakkınızı kullandınız. Günde 5 adet 1 saatlik Boost için VIP\'e geçin! 👑'),
+                            backgroundColor: Color(0xFF1E1E2E),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Bugünkü 5 VIP Boost hakkınızın tamamını kullandınız. Gece 00:00\'da yenilenecektir.'),
+                            backgroundColor: Color(0xFF1E1E2E),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
+                      }
                       return;
                     }
 
-                    // VIP üye -> Boost'u 1 saatliğine aktifleştir
-                    await eventService.activateBoost(hours: 1);
-                    if (mounted) {
+                    final success = await eventService.triggerDailyBoost();
+                    if (success && mounted) {
+                      final isVip = currentUser.hasActiveVip;
+                      final durText = isVip ? '1 saat' : '30 dakika';
+                      final remaining = await eventService.getRemainingDailyBoosts();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           backgroundColor: const Color(0xFF1E1B18),
                           behavior: SnackBarBehavior.floating,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                          content: const Row(
+                          content: Row(
                             children: [
-                              Text('⚡', style: TextStyle(fontSize: 22)),
+                              const Text('⚡', style: TextStyle(fontSize: 22)),
                               SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  'Harita Boost Aktifleştirildi! Profilin 1 saat boyunca yakındaki tüm kullanıcılarda en üstte parlayacak! 👑',
-                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                  'Harita Boost Aktifleştirildi! Profilin $durText boyunca yakındaki tüm kullanıcılarda en üstte parlayacak! (Kalan hak: $remaining) 🚀',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
                                 ),
                               ),
                             ],
@@ -2368,6 +2483,75 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       },
                     ),
                   ],
+                ),
+              ),
+            ),
+
+          // 4. MATCH HARİTASI GÜNLÜK 1 SAAT KOTA KİLİT PANELİ (Ücretsiz Hesaplar İçin)
+          if (_currentMapMode == MapMode.matchMap && !currentUser.hasActiveVip && _matchMapRemainingSeconds <= 0)
+            Positioned.fill(
+              child: ClipRRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.85),
+                    padding: const EdgeInsets.all(28),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(18),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                              border: Border.all(color: const Color(0xFFF59E0B), width: 1.5),
+                            ),
+                            child: const Icon(Icons.timer_off_rounded, color: Color(0xFFF59E0B), size: 52),
+                          ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Günlük 1 Saatlik Match Haritası Süreniz Doldu',
+                            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            'Ücretsiz hesaplar günde 1 saat Match Haritası kullanabilir. Etkinlik haritası herkese sınırsız açıktır. 7/24 sınırsız radar ve eşleşme için VIP\'e geçebilirsiniz.',
+                            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () => VipPaywallSheet.show(context, initialFeature: VipFeature.mapBoost),
+                            icon: const Icon(Icons.workspace_premium_rounded, color: Colors.black, size: 20),
+                            label: const Text('VIP\'e Geç (Sınırsız Radar 👑)', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFF59E0B),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          OutlinedButton.icon(
+                            onPressed: () {
+                              _matchMapQuotaTimer?.cancel();
+                              setState(() {
+                                _currentMapMode = MapMode.events;
+                              });
+                            },
+                            icon: const Icon(Icons.confirmation_number_rounded, color: Colors.white, size: 16),
+                            label: const Text('Ücretsiz Etkinlik Haritasına Dön', style: TextStyle(color: Colors.white)),
+                            style: OutlinedButton.styleFrom(
+                              side: const BorderSide(color: Colors.white24),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),

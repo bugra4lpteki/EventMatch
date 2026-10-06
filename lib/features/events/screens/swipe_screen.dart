@@ -150,6 +150,46 @@ class _SwipeScreenState extends State<SwipeScreen> {
                   ),
                   Row(
                     children: [
+                      // Kalan Kaydırma Kotası Rozeti
+                      FutureBuilder<int>(
+                        future: matchService.getRemainingDailySwipes(),
+                        builder: (context, snapshot) {
+                          final isVip = eventService.currentUser.hasActiveVip;
+                          if (isVip) {
+                            return Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.all_inclusive_rounded, color: Color(0xFFF59E0B), size: 14),
+                                  SizedBox(width: 4),
+                                  Text('VIP Sınırsız', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            );
+                          }
+                          final rem = snapshot.data ?? 50;
+                          return Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white24),
+                            ),
+                            child: Text(
+                              '⚡ $rem / 50 Hak',
+                              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
+                            ),
+                          );
+                        },
+                      ),
                       // Geri Al (Undo) Button (VIP)
                       Container(
                         margin: const EdgeInsets.only(right: 8),
@@ -548,7 +588,15 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
   String? _pendingMessage;
 
-  void _sendMatchMessage(dynamic item) {
+  void _sendMatchMessage(dynamic item) async {
+    final matchService = context.read<MockMatchService>();
+    final canSwipe = await matchService.canSwipe();
+    if (!canSwipe) {
+      if (mounted) {
+        VipPaywallSheet.show(context, initialFeature: VipFeature.undoSwipe);
+      }
+      return;
+    }
     final messageText = _messageController.text.trim();
     _pendingMessage = messageText.isNotEmpty ? messageText : null;
     _messageController.clear();
@@ -557,6 +605,14 @@ class _SwipeScreenState extends State<SwipeScreen> {
   }
 
   void _onSwipeEnd(int previousIndex, int targetIndex, SwiperActivity activity, List<UserModel> items) async {
+    final matchService = context.read<MockMatchService>();
+    final canSwipe = await matchService.canSwipe();
+    if (!canSwipe) {
+      if (mounted) {
+        VipPaywallSheet.show(context, initialFeature: VipFeature.undoSwipe);
+      }
+      return;
+    }
     if (previousIndex >= 0 && previousIndex < items.length) {
       final swipedItem = items[previousIndex];
       _locallySwipedIds.add(swipedItem.id.toLowerCase().trim());

@@ -47,6 +47,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
       'price': '₺89.99',
       'period': 'hafta',
       'days': 7,
+      'badge': '7 GÜN DENEME',
       'isPopular': false,
     },
     {
@@ -291,7 +292,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
               const SizedBox(height: 20),
             ],
 
-            // 4 VIP Features List
+            // 5 VIP Features List
             _buildFeatureTile(
               icon: Icons.visibility_rounded,
               iconColor: const Color(0xFF38BDF8),
@@ -303,9 +304,25 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             _buildFeatureTile(
               icon: Icons.replay_rounded,
               iconColor: const Color(0xFFF59E0B),
-              title: 'Sınırsız Geri Alma (Undo)',
-              description: 'Yanlışlıkla sola kaydırdığın profilleri tek dokunuşla desteye geri çağır.',
+              title: 'Sınırsız Kaydırma & Geri Alma',
+              description: 'Günlük 50 kaydırma sınırını kaldır, dilediğin kadar profil incele ve son kartı geri al.',
               isHighlighted: widget.highlightedFeature == VipFeature.undoSwipe,
+            ),
+            const SizedBox(height: 10),
+            _buildFeatureTile(
+              icon: Icons.map_rounded,
+              iconColor: const Color(0xFF10B981),
+              title: 'Sınırsız 7/24 Match Haritası',
+              description: 'Ücretsiz 1 saat sınırını kaldır, civardaki katılımcıları ve canlı eşleşmeleri 7/24 haritada gör.',
+              isHighlighted: false,
+            ),
+            const SizedBox(height: 10),
+            _buildFeatureTile(
+              icon: Icons.bolt_rounded,
+              iconColor: const Color(0xFFA855F7),
+              title: 'Günde 5 Kez 1 Saatlik Boost',
+              description: 'Ücretsiz 1 adet 30 dk yerine, günde 5 defa 1 saat boyunca haritada en üstte parılda.',
+              isHighlighted: widget.highlightedFeature == VipFeature.mapBoost,
             ),
             const SizedBox(height: 10),
             _buildFeatureTile(
@@ -315,18 +332,51 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
               description: 'Konser ve mekan sohbetlerinde altın parlayan mesaj balonu ve 👑 VIP tacı ile parılda.',
               isHighlighted: widget.highlightedFeature == VipFeature.venueBadge,
             ),
-            const SizedBox(height: 10),
-            _buildFeatureTile(
-              icon: Icons.bolt_rounded,
-              iconColor: const Color(0xFFA855F7),
-              title: '1 Saatlik Radar Boost',
-              description: 'Etkinlik haritasında profilini 1 saat öne çıkar, civardaki tüm katılımcıların en başında görün.',
-              isHighlighted: widget.highlightedFeature == VipFeature.mapBoost,
-            ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             if (!hasVip) ...[
+              // 7 Gün Ücretsiz Deneme Tanıtım Kutusu
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF2E2405), Color(0xFF1E1702)],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.6), width: 1.2),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.card_giftcard_rounded, color: Color(0xFFF59E0B), size: 24),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Yeni Hesaplara Özel: 7 Gün Ücretsiz Deneme 🎁',
+                            style: GoogleFonts.outfit(
+                              color: const Color(0xFFFDE68A),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'İlk 7 gün ₺0.00. 7 günün sonunda abonelik devam eder. App Store\'dan dilediğiniz an iptal edebilirsiniz.',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               // Plan Selector
               Row(
                 children: List.generate(_plans.length, (index) {

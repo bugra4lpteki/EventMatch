@@ -962,12 +962,38 @@ class MockEventService extends ChangeNotifier {
               await prefs.setString('${userId}_boost_expires_at', currentUser.boostExpiryDate!.toIso8601String());
             }
           }
+
+          // Yeni Kullanıcı Hoş Geldin Hediyesi: İlk kez gelen ve VIP kaydı olmayan kullanıcılara 1 Hafta Ücretsiz VIP!
+          final hasTrial = prefs.getBool('${userId}_welcome_trial_granted') ?? false;
+          if (!hasTrial && userData['is_vip'] != true && userData['vip_expires_at'] == null) {
+            final trialExpiry = DateTime.now().add(const Duration(days: 7));
+            currentUser.isVip = true;
+            currentUser.vipExpiryDate = trialExpiry;
+            await prefs.setBool('${userId}_welcome_trial_granted', true);
+            await prefs.setBool('${userId}_is_vip', true);
+            await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
+            try {
+              await _supabase.from('users').update({
+                'is_vip': true,
+                'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
+              }).eq('id', userId);
+            } catch (_) {}
+          }
         } else {
           final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
           currentUser.name = userName;
           final email = authUser?.email ?? '';
           final derivedUsername = email.contains('@') ? email.split('@')[0] : 'user_${userId.substring(0, 6)}';
           currentUser.username = derivedUsername;
+
+          // Yeni Kullanıcı Hoş Geldin Hediyesi: 7 Gün Ücretsiz VIP Ayrıcalığı!
+          final trialExpiry = DateTime.now().add(const Duration(days: 7));
+          currentUser.isVip = true;
+          currentUser.vipExpiryDate = trialExpiry;
+          await prefs.setBool('${userId}_welcome_trial_granted', true);
+          await prefs.setBool('${userId}_is_vip', true);
+          await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
+
           try {
             await _supabase.from('users').upsert({
               'id': userId,
@@ -975,6 +1001,8 @@ class MockEventService extends ChangeNotifier {
               'username': derivedUsername,
               'email': email,
               'city': 'İstanbul',
+              'is_vip': true,
+              'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
             });
           } catch (e) {
             debugPrint('Auto upsert user profile error: $e');
@@ -1307,9 +1335,43 @@ class MockEventService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> activateBoost({int hours = 1}) async {
+  /// Profil Boost Kuralları:
+  /// - Ücretsiz Kullanıcı: Günde 1 kez, 30 dakika süre sınırı
+  /// - VIP Kullanıcı: Günde 5 kez, 60 dakika (1 saat) süre sınırı
+  int get maxDailyBoosts => currentUser.hasActiveVip ? 5 : 1;
+  Duration get currentBoostDuration => currentUser.hasActiveVip ? const Duration(hours: 1) : const Duration(minutes: 30);
+
+  Future<int> getRemainingDailyBoosts() async {
     final prefs = await SharedPreferences.getInstance();
-    final expiry = DateTime.now().add(Duration(hours: hours));
+    final todayKey = 'boost_count_${currentUser.id}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    final remaining = maxDailyBoosts - used;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  Future<bool> canBoostToday() async {
+    final rem = await getRemainingDailyBoosts();
+    return rem > 0;
+  }
+
+  Future<bool> triggerDailyBoost() async {
+    final canBoost = await canBoostToday();
+    if (!canBoost) return false;
+
+    final prefs = await SharedPreferences.getInstance();
+    final todayKey = 'boost_count_${currentUser.id}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    await prefs.setInt(todayKey, used + 1);
+
+    final dur = currentBoostDuration;
+    await activateBoost(minutes: dur.inMinutes);
+    return true;
+  }
+
+  Future<void> activateBoost({int? hours, int? minutes}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final dur = minutes != null ? Duration(minutes: minutes) : Duration(hours: hours ?? 1);
+    final expiry = DateTime.now().add(dur);
     currentUser.boostExpiryDate = expiry;
 
     await prefs.setString('boost_expires_at', expiry.toIso8601String());
@@ -1321,11 +1383,41 @@ class MockEventService extends ChangeNotifier {
           'boost_expires_at': expiry.toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         }).eq('id', currentUser.id);
-        debugPrint('[EventService] ⚡ Supabase 1 Saatlik Boost başarıyla aktifleştirildi.');
+        debugPrint('[EventService] ⚡ Supabase Boost başarıyla aktifleştirildi (${dur.inMinutes} dk).');
       } catch (e) {
         debugPrint('[EventService] Supabase boost_expires_at notu: $e');
       }
     }
+    notifyListeners();
+  }
+
+  /// Match Haritası Günlük Kota Kuralları:
+  /// - Ücretsiz Kullanıcılar: Günlük 1 saat (3600 saniye) ücretsiz erişim
+  /// - VIP Kullanıcılar: Sınırsız 7/24 erişim
+  /// - Etkinlik Haritası: Herkese ücretsiz ve sınırsız
+  static const int freeDailyMatchMapSeconds = 3600;
+
+  Future<int> getRemainingMatchMapSeconds() async {
+    if (currentUser.hasActiveVip) return 999999;
+    final prefs = await SharedPreferences.getInstance();
+    final todayKey = 'match_map_sec_${currentUser.id}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    final remaining = freeDailyMatchMapSeconds - used;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  Future<bool> canAccessMatchMap() async {
+    if (currentUser.hasActiveVip) return true;
+    final remaining = await getRemainingMatchMapSeconds();
+    return remaining > 0;
+  }
+
+  Future<void> recordMatchMapUsage({int seconds = 1}) async {
+    if (currentUser.hasActiveVip) return;
+    final prefs = await SharedPreferences.getInstance();
+    final todayKey = 'match_map_sec_${currentUser.id}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    await prefs.setInt(todayKey, used + seconds);
     notifyListeners();
   }
 

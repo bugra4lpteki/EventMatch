@@ -478,9 +478,39 @@ class MockMatchService extends ChangeNotifier {
     return RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$').hasMatch(str);
   }
 
-  // --- 2. SWIPE / LIKE DEDUPLICATION ---
+  // --- 2. SWIPE / LIKE DEDUPLICATION & DAILY QUOTA ---
+
+  /// Günlük Kaydırma Kotası Kuralları:
+  /// - Ücretsiz Kullanıcılar: Günde 50 kaydırma hakkı
+  /// - VIP Kullanıcılar: Sınırsız kaydırma
+  static const int maxFreeDailySwipes = 50;
+
+  Future<int> getRemainingDailySwipes() async {
+    if (eventService.currentUser.hasActiveVip) return 999999;
+    final prefs = await SharedPreferences.getInstance();
+    final todayKey = 'swipes_${currentUserId}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    final remaining = maxFreeDailySwipes - used;
+    return remaining > 0 ? remaining : 0;
+  }
+
+  Future<bool> canSwipe() async {
+    if (eventService.currentUser.hasActiveVip) return true;
+    final rem = await getRemainingDailySwipes();
+    return rem > 0;
+  }
+
+  Future<void> recordSwipe() async {
+    if (eventService.currentUser.hasActiveVip) return;
+    final prefs = await SharedPreferences.getInstance();
+    final todayKey = 'swipes_${currentUserId}_${DateTime.now().toIso8601String().substring(0, 10)}';
+    final used = prefs.getInt(todayKey) ?? 0;
+    await prefs.setInt(todayKey, used + 1);
+    notifyListeners();
+  }
 
   Future<bool> swipeRight(UserModel targetUser, {String? initialMessage}) async {
+    await recordSwipe();
     bool isMutualMatch = false;
     final targetId = targetUser.id.toLowerCase().trim();
     final currentId = currentUserId;
@@ -614,6 +644,7 @@ class MockMatchService extends ChangeNotifier {
   }
 
   Future<void> swipeLeft(UserModel targetUser) async {
+    await recordSwipe();
     final targetId = targetUser.id.toLowerCase().trim();
     final currentId = currentUserId;
 
