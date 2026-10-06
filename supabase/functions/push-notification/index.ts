@@ -23,7 +23,19 @@ serve(async (req) => {
 
     const senderId = record.sender_id;
     const receiverId = record.receiver_id;
-    const content = record.content || "Yeni bir mesajınız var.";
+    const rawContent = record.content || "Yeni bir mesajınız var.";
+    let content = rawContent;
+    if (content.includes("[view_once:")) {
+      const caption = content.replace(/\[view_once:[^\]]*\]\s*/g, "").trim();
+      content = caption.length > 0 ? `📷 Tek seferlik fotoğraf: ${caption}` : "📷 Tek seferlik fotoğraf";
+    } else if (content.includes("[image:")) {
+      const caption = content.replace(/\[image:[^\]]*\]\s*/g, "").trim();
+      content = caption.length > 0 ? `📷 Fotoğraf: ${caption}` : "📷 Fotoğraf";
+    } else if (content.includes("[audio:")) {
+      content = "🎤 Sesli Mesaj";
+    } else if (content.includes("[reply:")) {
+      content = content.replace(/\[reply:[^\]]*\]\s*/g, "").trim() || "Yeni Mesaj";
+    }
     const matchId = record.match_id;
 
     if (!receiverId || !senderId) {

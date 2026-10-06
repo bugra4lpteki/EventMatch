@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
@@ -400,10 +401,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                 if (codeSent) ...[
                   const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF38BDF8).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.mark_email_read_outlined, color: Color(0xFF38BDF8), size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '${emailController.text.trim()} adresine 6 haneli doğrulama kodu gönderildi.',
+                            style: const TextStyle(color: Colors.white70, fontSize: 12.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   TextField(
                     controller: codeController,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(color: Colors.white, fontSize: 15, letterSpacing: 4),
+                    style: const TextStyle(color: Colors.white, fontSize: 16, letterSpacing: 4),
                     textAlign: TextAlign.center,
                     decoration: InputDecoration(
                       hintText: '6 Haneli Doğrulama Kodu',
@@ -412,6 +434,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       fillColor: Colors.white.withOpacity(0.05),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: isVerifying
+                          ? null
+                          : () async {
+                              final email = emailController.text.trim();
+                              final generated = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
+                              expectedCode = generated;
+                              try {
+                                await Supabase.instance.client.auth.signInWithOtp(
+                                  email: email,
+                                  shouldCreateUser: false,
+                                );
+                              } catch (_) {}
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Yeni kod gönderildi: (Kod: $generated)'),
+                                    backgroundColor: const Color(0xFF38BDF8),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              }
+                            },
+                      child: const Text('Kodu Tekrar Gönder', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12)),
                     ),
                   ),
                 ],
@@ -437,12 +488,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                                 return;
                               }
+
+                              setModalState(() => isVerifying = true);
                               final generated = (100000 + (DateTime.now().millisecondsSinceEpoch % 900000)).toString();
                               expectedCode = generated;
+
+                              // Gerçek Supabase Auth OTP e-postası tetikle
+                              try {
+                                await Supabase.instance.client.auth.signInWithOtp(
+                                  email: email,
+                                  shouldCreateUser: false,
+                                );
+                              } catch (e) {
+                                debugPrint('[Verification] Supabase OTP send note: $e');
+                              }
+
                               setModalState(() {
+                                isVerifying = false;
                                 codeSent = true;
                                 codeController.clear();
                               });
+
                               if (ctx.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
@@ -454,7 +520,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               }
                             } else {
                               final input = codeController.text.trim();
-                              if (input != expectedCode && input != '582914') {
+                              setModalState(() => isVerifying = true);
+
+                              bool isValid = input == expectedCode || input == '582914';
+
+                              if (!isValid && input.length == 6) {
+                                try {
+                                  final res = await Supabase.instance.client.auth.verifyOTP(
+                                    email: emailController.text.trim(),
+                                    token: input,
+                                    type: OtpType.email,
+                                  );
+                                  if (res.session != null || res.user != null) {
+                                    isValid = true;
+                                  }
+                                } catch (_) {}
+                              }
+
+                              if (!isValid) {
+                                setModalState(() => isVerifying = false);
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: const Text('Girdiğiniz kod hatalı. Lütfen kontrol edip tekrar deneyin.'),
@@ -464,7 +548,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 );
                                 return;
                               }
-                              setModalState(() => isVerifying = true);
+
                               await eventService.verifyCurrentUserEmail(emailController.text.trim());
                               if (ctx.mounted) {
                                 Navigator.pop(sheetContext);

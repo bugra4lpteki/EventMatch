@@ -1100,6 +1100,10 @@ class MockEventService extends ChangeNotifier {
                              prefs.getBool('${currentUser.name}_is_verified') ??
                              prefs.getBool('user_email_verified') ?? false;
 
+    if (currentUser.isVerified && !currentUser.badges.contains('verified')) {
+      currentUser.badges.add('verified');
+    }
+
     _syncPlannedEventsWithAttendees();
     notifyListeners();
   }
@@ -1118,12 +1122,14 @@ class MockEventService extends ChangeNotifier {
 
     try {
       final sbUser = _supabase.auth.currentUser;
-      if (sbUser != null) {
-        await _supabase.from('users').update({
-          'is_verified': true,
-        }).eq('id', sbUser.id);
-      }
-    } catch (_) {}
+      final targetId = (sbUser != null && sbUser.id.isNotEmpty) ? sbUser.id : userId;
+      await _supabase.from('users').update({
+        'is_verified': true,
+        'email': email,
+      }).or('id.eq.$targetId,id.eq.$userId');
+    } catch (e) {
+      debugPrint('[Verification] Supabase users is_verified update: $e');
+    }
 
     notifyListeners();
   }
