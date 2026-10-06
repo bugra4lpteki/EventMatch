@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -168,7 +169,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           backgroundImage: _selectedAvatarPath != null
                               ? (_selectedAvatarPath!.startsWith('http')
                                   ? NetworkImage(_selectedAvatarPath!)
-                                  : FileImage(File(_selectedAvatarPath!)) as ImageProvider)
+                                  : (kIsWeb
+                                      ? NetworkImage(_selectedAvatarPath!)
+                                      : FileImage(File(_selectedAvatarPath!)) as ImageProvider))
                               : null,
                           child: _selectedAvatarPath == null
                               ? Icon(

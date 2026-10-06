@@ -62,32 +62,40 @@ class NotificationService with WidgetsBindingObserver {
   Future<void> initialize() async {
     if (_isInitialized) return;
 
+    if (kIsWeb) {
+      _isInitialized = true;
+      debugPrint('[NotificationService] 🌐 Web ortamında yerel bildirim motoru atlandı.');
+      return;
+    }
+
     try {
-      // 1. Yerel Bildirim Motorunu Başlat (Local Notifications)
-      const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
-      const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
-      );
+      // 1. Yerel Bildirim Motorunu Başlat (Sadece Android / iOS)
+      if (Platform.isAndroid || Platform.isIOS) {
+        const androidSettings = AndroidInitializationSettings('@drawable/ic_notification');
+        const iosSettings = DarwinInitializationSettings(
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
 
-      const initSettings = InitializationSettings(
-        android: androidSettings,
-        iOS: iosSettings,
-      );
+        const initSettings = InitializationSettings(
+          android: androidSettings,
+          iOS: iosSettings,
+        );
 
-      await _notificationsPlugin.initialize(
-        initSettings,
-        onDidReceiveNotificationResponse: (response) {
-          debugPrint('[NotificationService] 🔔 Yerel bildirime tıklandı: ${response.payload}');
-          if (response.payload != null) {
-            onNotificationClick.add(response.payload);
-          }
-        },
-      );
+        await _notificationsPlugin.initialize(
+          initSettings,
+          onDidReceiveNotificationResponse: (response) {
+            debugPrint('[NotificationService] 🔔 Yerel bildirime tıklandı: ${response.payload}');
+            if (response.payload != null) {
+              onNotificationClick.add(response.payload);
+            }
+          },
+        );
+      }
 
       // 2. Android Kanalını ve İzinlerini Kaydet
-      if (!kIsWeb && Platform.isAndroid) {
+      if (Platform.isAndroid) {
         final androidImpl = _notificationsPlugin
             .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
 
@@ -97,7 +105,7 @@ class NotificationService with WidgetsBindingObserver {
       }
 
       // 3. OneSignal Başlatma (Uygulama tamamen kapalıyken bile Apple/Google üzerinden push atar)
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      if (Platform.isAndroid || Platform.isIOS) {
         await _initOneSignal();
       }
 

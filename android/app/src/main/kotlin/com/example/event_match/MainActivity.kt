@@ -13,8 +13,8 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SECURITY_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "enableSecure" -> {
-                    activity?.runOnUiThread {
-                        activity?.window?.setFlags(
+                    runOnUiThread {
+                        window?.setFlags(
                             WindowManager.LayoutParams.FLAG_SECURE,
                             WindowManager.LayoutParams.FLAG_SECURE
                         )
@@ -22,8 +22,8 @@ class MainActivity : FlutterActivity() {
                     result.success(true)
                 }
                 "disableSecure" -> {
-                    activity?.runOnUiThread {
-                        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    runOnUiThread {
+                        window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     }
                     result.success(true)
                 }

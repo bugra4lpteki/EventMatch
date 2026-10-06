@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -108,6 +109,15 @@ class _ImageScaleDialogState extends State<ImageScaleDialog> {
       img = Image.memory(input, fit: _selectedFit, errorBuilder: (c, e, s) => _errorWidget());
     } else if (input is String) {
       if (input.startsWith('http') || input.startsWith('blob:')) {
+        img = Image.network(input, fit: _selectedFit, errorBuilder: (c, e, s) => _errorWidget());
+      } else if (input.startsWith('data:')) {
+        try {
+          final b64 = input.contains(',') ? input.split(',').last : input;
+          img = Image.memory(base64Decode(b64), fit: _selectedFit, errorBuilder: (c, e, s) => _errorWidget());
+        } catch (_) {
+          img = _errorWidget();
+        }
+      } else if (kIsWeb) {
         img = Image.network(input, fit: _selectedFit, errorBuilder: (c, e, s) => _errorWidget());
       } else {
         img = Image.file(File(input), fit: _selectedFit, errorBuilder: (c, e, s) => _errorWidget());

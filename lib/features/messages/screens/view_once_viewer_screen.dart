@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -104,9 +105,13 @@ class _ViewOnceViewerScreenState extends State<ViewOnceViewerScreen> with Widget
         return const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 54);
       }
     } else {
-      final f = File(trimmed);
-      if (f.existsSync()) {
-        return Image.file(f, fit: BoxFit.contain);
+      if (!kIsWeb) {
+        try {
+          final f = File(trimmed);
+          if (f.existsSync()) {
+            return Image.file(f, fit: BoxFit.contain);
+          }
+        } catch (_) {}
       }
       return const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 54);
     }

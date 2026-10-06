@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -277,7 +278,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.file(File(localImagePath), fit: BoxFit.contain),
+                      kIsWeb
+                          ? Image.network(localImagePath, fit: BoxFit.contain)
+                          : Image.file(File(localImagePath), fit: BoxFit.contain),
                       if (isViewOnce)
                         Positioned(
                           top: 10,
@@ -468,9 +471,17 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
         imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
       }
     } else {
-      final f = File(trimmed);
-      if (f.existsSync()) {
-        imageWidget = Image.file(f, fit: BoxFit.contain);
+      if (!kIsWeb) {
+        try {
+          final f = File(trimmed);
+          if (f.existsSync()) {
+            imageWidget = Image.file(f, fit: BoxFit.contain);
+          } else {
+            imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
+          }
+        } catch (_) {
+          imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
+        }
       } else {
         imageWidget = const Icon(Icons.broken_image_rounded, color: Colors.white, size: 48);
       }
@@ -581,20 +592,24 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
     
     // 3. Yerel dosya yolu
-    final f = File(trimmed);
-    if (f.existsSync()) {
-      return Image.file(
-        f,
-        width: 240,
-        height: 240,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
-          width: 240,
-          height: 240,
-          color: const Color(0xFF1E2235),
-          child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
-        ),
-      );
+    if (!kIsWeb) {
+      try {
+        final f = File(trimmed);
+        if (f.existsSync()) {
+          return Image.file(
+            f,
+            width: 240,
+            height: 240,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: 240,
+              height: 240,
+              color: const Color(0xFF1E2235),
+              child: const Icon(Icons.broken_image_rounded, color: Colors.white60, size: 36),
+            ),
+          );
+        }
+      } catch (_) {}
     }
     
     return Container(
@@ -2346,19 +2361,23 @@ class _VoiceMessageBubbleState extends State<VoiceMessageBubble> {
           debugPrint('Error playing base64 audio: $e');
         }
       } else {
-        final f = File(url);
-        if (await f.exists()) {
-          await _player.stop();
-          await _player.play(DeviceFileSource(url));
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Ses kaydı bu cihazda bulunamadı veya henüz sunucuya yüklenmemiş.'),
-                duration: Duration(seconds: 2),
-              ),
-            );
-          }
+        if (!kIsWeb) {
+          try {
+            final f = File(url);
+            if (await f.exists()) {
+              await _player.stop();
+              await _player.play(DeviceFileSource(url));
+              return;
+            }
+          } catch (_) {}
+        }
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Ses kaydı bu cihazda bulunamadı veya henüz sunucuya yüklenmemiş.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
       }
     }

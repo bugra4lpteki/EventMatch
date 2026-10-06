@@ -16,9 +16,9 @@ class SecurityScreenService {
   /// Ekran görüntüsü ve ekran kaydı almayı engeller.
   /// Android'de `WindowManager.LayoutParams.FLAG_SECURE` bayrağını ayarlar.
   Future<void> enableSecure() async {
-    if (kIsWeb) return;
+    _isSecure = true;
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
-      _isSecure = true;
       await _channel.invokeMethod('enableSecure');
       debugPrint('[SecurityScreenService] 🛡️ Ekran koruması aktif (FLAG_SECURE)');
     } catch (e) {
@@ -28,9 +28,9 @@ class SecurityScreenService {
 
   /// Ekran korumasını kaldırır.
   Future<void> disableSecure() async {
-    if (kIsWeb) return;
+    _isSecure = false;
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
     try {
-      _isSecure = false;
       await _channel.invokeMethod('disableSecure');
       debugPrint('[SecurityScreenService] 🔓 Ekran koruması devre dışı bırakıldı');
     } catch (e) {

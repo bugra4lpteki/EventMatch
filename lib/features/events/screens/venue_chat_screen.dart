@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +17,15 @@ import '../../../core/widgets/report_block_sheet.dart';
 import '../models/event_model.dart';
 import '../services/mock_event_service.dart';
 import '../services/moderation_service.dart';
+
+bool _safeFileExists(String path) {
+  if (kIsWeb || path.trim().isEmpty) return false;
+  try {
+    return File(path.trim()).existsSync();
+  } catch (_) {
+    return false;
+  }
+}
 
 /// Floating Reaction Particle Model for Streamer Live Chat
 class _FloatingReaction {
@@ -374,8 +384,16 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
     Widget imgWidget;
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       imgWidget = Image.network(trimmed, fit: BoxFit.contain);
-    } else if (File(trimmed).existsSync()) {
-      imgWidget = Image.file(File(trimmed), fit: BoxFit.contain);
+    } else if (!kIsWeb) {
+      try {
+        if (File(trimmed).existsSync()) {
+          imgWidget = Image.file(File(trimmed), fit: BoxFit.contain);
+        } else {
+          imgWidget = const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64);
+        }
+      } catch (_) {
+        imgWidget = const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64);
+      }
     } else {
       imgWidget = const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 64);
     }
@@ -1306,7 +1324,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                     placeholder: (_, __) => _buildInitialsAvatar(senderName, senderColor),
                     errorWidget: (_, __, ___) => _buildInitialsAvatar(senderName, senderColor),
                   )
-                : (File(userAvatar).existsSync()
+                : (!kIsWeb && _safeFileExists(userAvatar)
                     ? Image.file(
                         File(userAvatar),
                         fit: BoxFit.cover,
@@ -1364,16 +1382,25 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
           child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
         ),
       );
-    } else {
-      final f = File(trimmed);
-      if (f.existsSync()) {
-        imgWidget = Image.file(
-          f,
-          width: 220,
-          height: 220,
-          fit: BoxFit.cover,
-        );
-      } else {
+    } else if (!kIsWeb) {
+      try {
+        final f = File(trimmed);
+        if (f.existsSync()) {
+          imgWidget = Image.file(
+            f,
+            width: 220,
+            height: 220,
+            fit: BoxFit.cover,
+          );
+        } else {
+          imgWidget = Container(
+            width: 220,
+            height: 220,
+            color: const Color(0xFF1E2235),
+            child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
+          );
+        }
+      } catch (_) {
         imgWidget = Container(
           width: 220,
           height: 220,
@@ -1381,6 +1408,13 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
           child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
         );
       }
+    } else {
+      imgWidget = Container(
+        width: 220,
+        height: 220,
+        color: const Color(0xFF1E2235),
+        child: const Icon(Icons.broken_image_rounded, color: Colors.white54, size: 36),
+      );
     }
 
     return GestureDetector(
@@ -1767,7 +1801,7 @@ class _VenueVoiceMessageBubbleState extends State<_VenueVoiceMessageBubble> {
       if (url.startsWith('http://') || url.startsWith('https://')) {
         await _player.stop();
         await _player.play(UrlSource(url));
-      } else if (File(url).existsSync()) {
+      } else if (!kIsWeb && _safeFileExists(url)) {
         await _player.stop();
         await _player.play(DeviceFileSource(url));
       }

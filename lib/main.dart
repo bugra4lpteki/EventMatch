@@ -23,32 +23,7 @@ import 'core/constants/supabase_config.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Supabase Başlat (Tüm servislerden önce hazır olmalı)
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
-
-  // 2. Yüksek Öncelikli WhatsApp Tarzı Bildirim & OneSignal Servisini Başlat
-  await NotificationService().initialize();
-
-  // Halihazırda oturum açmış kullanıcı varsa OneSignal ile anında eşle
-  final existingUser = Supabase.instance.client.auth.currentUser;
-  if (existingUser != null) {
-    NotificationService().syncUserWithOneSignal(existingUser.id);
-  }
-
-  // Görsel cache'ini sıfırla: Eski bellek görselleri temizlensin
-  PaintingBinding.instance.imageCache.clear();
-  PaintingBinding.instance.imageCache.clearLiveImages();
-  SpotifyService().clearCache();
-
-  try {
-    await initializeDateFormatting('tr_TR', null);
-  } catch (e) {
-    debugPrint('DateFormatting init error: $e');
-  }
-
+  // 0. Global Hata Yakalayıcıları en başta bağla (Tüm başlatma hatalarını yakalar)
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
     debugPrint('[EventMatch Global Error] ${details.exception}');
@@ -58,6 +33,51 @@ void main() async {
     debugPrint('[EventMatch Platform Error] $error');
     return true;
   };
+
+  // 1. Supabase Başlat (Tüm servislerden önce hazır olmalı)
+  try {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
+  } catch (e) {
+    debugPrint('[EventMatch Init Error] Supabase başlatma hatası: $e');
+  }
+
+  // 2. Yüksek Öncelikli WhatsApp Tarzı Bildirim & OneSignal Servisini Başlat
+  try {
+    await NotificationService().initialize();
+  } catch (e) {
+    debugPrint('[EventMatch Init Error] Bildirim servisi hatası: $e');
+  }
+
+  // Halihazırda oturum açmış kullanıcı varsa OneSignal ile anında eşle
+  try {
+    final existingUser = Supabase.instance.client.auth.currentUser;
+    if (existingUser != null) {
+      NotificationService().syncUserWithOneSignal(existingUser.id);
+    }
+  } catch (e) {
+    debugPrint('[EventMatch Init Error] OneSignal kullanıcı senkronizasyon hatası: $e');
+  }
+
+  // Görsel cache'ini sıfırla: Eski bellek görselleri temizlensin
+  try {
+    PaintingBinding.instance.imageCache.clear();
+    PaintingBinding.instance.imageCache.clearLiveImages();
+  } catch (e) {
+    debugPrint('[EventMatch Init Error] imageCache temizleme hatası: $e');
+  }
+
+  try {
+    SpotifyService().clearCache();
+  } catch (_) {}
+
+  try {
+    await initializeDateFormatting('tr_TR', null);
+  } catch (e) {
+    debugPrint('DateFormatting init error: $e');
+  }
 
   ErrorWidget.builder = (FlutterErrorDetails details) {
     return const Material(
