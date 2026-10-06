@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/content_filter_service.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../auth/services/auth_service.dart';
 import '../../events/services/moderation_service.dart';
@@ -18,6 +19,7 @@ class PrivacySettingsScreen extends StatefulWidget {
 class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _hideEventActivity = false;
   bool _enableLocationSharing = true;
+  bool _enableContentFilter = true;
 
   @override
   void initState() {
@@ -41,6 +43,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
       _enableLocationSharing = prefs.getBool('${userId}_privacy_location_sharing') ??
                                prefs.getBool('${userName}_privacy_location_sharing') ??
                                prefs.getBool('privacy_location_sharing') ?? true;
+      _enableContentFilter = ContentFilterService.instance.isFilterEnabled;
     });
   }
 
@@ -107,6 +110,22 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   subtitle: 'Yakınınızdaki etkinlik severlerle eşleşmek için konum kullanılır.',
                   value: _enableLocationSharing,
                   onChanged: (val) => _updateSetting('privacy_location_sharing', val, (v) => _enableLocationSharing = v),
+                ),
+                Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
+                _buildPrivacyTile(
+                  icon: Icons.verified_user_outlined,
+                  title: 'Akıllı Argo & Küfür Filtresi',
+                  subtitle: 'Mesajlardaki uygunsuz sözcükleri akıllıca gizler (***). Kapatılırsa sansür uygulanmaz.',
+                  value: _enableContentFilter,
+                  onChanged: (val) async {
+                    HapticFeedback.lightImpact();
+                    await ContentFilterService.instance.setFilterEnabled(val);
+                    if (mounted) {
+                      setState(() {
+                        _enableContentFilter = val;
+                      });
+                    }
+                  },
                 ),
               ],
             ),
