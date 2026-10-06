@@ -1,10 +1,11 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:event_match/features/events/models/user_model.dart';
 import 'package:event_match/features/events/services/mock_event_service.dart';
 import 'package:event_match/features/events/services/mock_match_service.dart';
 import 'package:event_match/features/profile/widgets/vip_paywall_sheet.dart';
+import 'package:event_match/core/services/ios_in_app_purchase_service.dart';
 
 void main() {
   setUpAll(() async {
@@ -139,5 +140,32 @@ void main() {
       expect(VipFeature.values.contains(VipFeature.venueBadge), isTrue);
       expect(VipFeature.values.contains(VipFeature.mapBoost), isTrue);
     });
+
+    test('IosInAppPurchaseService product IDs and purchase simulation work accurately', () async {
+      final eventService = MockEventService();
+      final iapService = IosInAppPurchaseService();
+      await iapService.initialize(eventService);
+
+      expect(IosInAppPurchaseService.productIds.contains(IosInAppPurchaseService.vipWeeklyId), isTrue);
+      expect(IosInAppPurchaseService.productIds.contains(IosInAppPurchaseService.vipMonthlyId), isTrue);
+      expect(IosInAppPurchaseService.productIds.contains(IosInAppPurchaseService.vipQuarterlyId), isTrue);
+      expect(IosInAppPurchaseService.productIds.contains(IosInAppPurchaseService.boostSingleId), isTrue);
+
+      // Buy weekly
+      final boughtWeekly = await iapService.buyProduct(IosInAppPurchaseService.vipWeeklyId);
+      expect(boughtWeekly, isTrue);
+      expect(eventService.currentUser.isVip, isTrue);
+
+      // Buy boost
+      final boughtBoost = await iapService.buyProduct(IosInAppPurchaseService.boostSingleId);
+      expect(boughtBoost, isTrue);
+      expect(eventService.currentUser.isBoosted, isTrue);
+
+      // Restore purchases
+      final restored = await iapService.restorePurchases();
+      // On non-ios without Supabase session, returns false safely without throwing
+      expect(restored, isFalse);
+    });
   });
 }
+

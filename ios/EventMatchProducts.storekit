@@ -1,0 +1,138 @@
+{
+  "identifier" : "E2B7A23A",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "39.99",
+      "familyShareable" : false,
+      "internalID" : "B001",
+      "localizations" : [
+        {
+          "description" : "Profilinizi 1 saat boyunca harita ve radarda en üstte gösterir.",
+          "displayName" : "1 Saatlik Radar Boost",
+          "locale" : "tr"
+        },
+        {
+          "description" : "Boosts your profile on the map and radar for 1 hour.",
+          "displayName" : "1 Hour Radar Boost",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "com.eventmatch.app.boost.single",
+      "referenceName" : "Single Radar Boost",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "tr",
+    "_storefront" : "TUR"
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21049382",
+      "localizations" : [
+
+      ],
+      "name" : "EventMatch VIP",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "89.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "V001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Tüm VIP ayrıcalıklarına 1 hafta boyunca sınırsız erişim.",
+              "displayName" : "EventMatch VIP Haftalık",
+              "locale" : "tr"
+            },
+            {
+              "description" : "Full access to VIP features for 1 week.",
+              "displayName" : "EventMatch VIP Weekly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.eventmatch.app.vip.weekly",
+          "recurringSubscriptionPeriod" : "P1W",
+          "referenceName" : "VIP Weekly",
+          "subscriptionGroupID" : "21049382",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "199.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "V002",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "En popüler paket! 1 ay boyunca tüm VIP ayrıcalıkları.",
+              "displayName" : "EventMatch VIP Aylık",
+              "locale" : "tr"
+            },
+            {
+              "description" : "Most popular! Full access to VIP features for 1 month.",
+              "displayName" : "EventMatch VIP Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.eventmatch.app.vip.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "VIP Monthly",
+          "subscriptionGroupID" : "21049382",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "449.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "V003",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Avantajlı paket! 3 ay boyunca tüm VIP ayrıcalıkları.",
+              "displayName" : "EventMatch VIP 3 Aylık",
+              "locale" : "tr"
+            },
+            {
+              "description" : "Best value! Full access to VIP features for 3 months.",
+              "displayName" : "EventMatch VIP Quarterly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.eventmatch.app.vip.quarterly",
+          "recurringSubscriptionPeriod" : "P3M",
+          "referenceName" : "VIP Quarterly",
+          "subscriptionGroupID" : "21049382",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

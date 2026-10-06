@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/ios_in_app_purchase_service.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import '../../events/services/mock_event_service.dart';
 
 enum VipFeature {
@@ -69,35 +71,68 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
     setState(() => _isProcessing = true);
     HapticFeedback.heavyImpact();
 
-    final eventService = context.read<MockEventService>();
     final selectedPlan = _plans[_selectedPlanIndex];
     final days = selectedPlan['days'] as int;
 
-    await Future.delayed(const Duration(milliseconds: 600)); // Doğal ödeme hissi
-    await eventService.activateVip(days: days);
+    String productId = IosInAppPurchaseService.vipMonthlyId;
+    if (days == 7) productId = IosInAppPurchaseService.vipWeeklyId;
+    if (days == 90) productId = IosInAppPurchaseService.vipQuarterlyId;
+
+    // Apple StoreKit In-App Purchase akışı
+    final success = await IosInAppPurchaseService().buyProduct(productId);
 
     if (!mounted) return;
     setState(() => _isProcessing = false);
-    Navigator.pop(context);
+
+    if (success) {
+      final eventService = context.read<MockEventService>();
+      await eventService.activateVip(days: days);
+
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: const [
+              Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24), size: 24),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Tebrikler! EventMatch VIP aktif edildi. Ayrıcalıkların tadını çıkarın! 👑',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF1E1E2E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+    }
+  }
+
+  /// Apple App Store Guideline 3.1.1 Zorunluluğu: Satın Alımları Geri Yükle
+  Future<void> _handleRestore() async {
+    setState(() => _isProcessing = true);
+    HapticFeedback.lightImpact();
+
+    final restored = await IosInAppPurchaseService().restorePurchases();
+
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: const [
-            Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24), size: 24),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Tebrikler! EventMatch VIP aktif edildi. Ayrıcalıkların tadını çıkarın! 👑',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+        content: Text(
+          restored
+              ? 'Satın alımlarınız başarıyla geri yüklendi! 🍏'
+              : 'Aktif bir VIP aboneliği bulunamadı.',
         ),
-        backgroundColor: const Color(0xFF1E1E2E),
+        backgroundColor: AppColors.surface,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        margin: const EdgeInsets.all(16),
       ),
     );
   }
@@ -428,14 +463,65 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
               ),
             ],
 
-            const SizedBox(height: 12),
+            // Apple App Store Guideline 3.1.1: Restore Purchases Button
+            Center(
+              child: TextButton.icon(
+                onPressed: _isProcessing ? null : _handleRestore,
+                icon: const Icon(Icons.restore_rounded, color: Color(0xFFFBBF24), size: 16),
+                label: Text(
+                  'Satın Alımları Geri Yükle',
+                  style: GoogleFonts.outfit(
+                    color: const Color(0xFFFBBF24),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            // Apple Guideline 3.1.2: Auto-renewable Subscriptions Disclosure
             Text(
-              'Abonelik dilediğiniz zaman iptal edilebilir. Güvenli ödeme ve Apple / Google güvencesi altındadır.',
+              'Ödeme onaylandığında Apple Kimliği hesabınızdan tahsil edilecektir. Abonelik, mevcut dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir. Aboneliğinizi App Store Hesap Ayarları üzerinden dilediğiniz zaman yönetebilir veya iptal edebilirsiniz.',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 color: Colors.white38,
-                fontSize: 11,
+                fontSize: 10,
+                height: 1.3,
               ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Apple Guideline 3.1.2: EULA and Privacy Policy Links
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => UrlLauncherHelper.launchURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
+                  child: Text(
+                    'Kullanım Şartları (EULA)',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white60,
+                      fontSize: 10.5,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+                const Text('  •  ', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                GestureDetector(
+                  onTap: () => UrlLauncherHelper.launchURL('https://eventmatch.app/privacy'),
+                  child: Text(
+                    'Gizlilik Politikası',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white60,
+                      fontSize: 10.5,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

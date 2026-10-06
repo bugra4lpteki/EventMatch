@@ -11,6 +11,7 @@ import '../models/user_model.dart';
 import 'external_event_service.dart';
 import 'moderation_service.dart';
 import '../../../core/services/content_filter_service.dart';
+import '../../../core/services/ios_in_app_purchase_service.dart';
 
 class MockEventService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -55,6 +56,7 @@ class MockEventService extends ChangeNotifier {
   }
 
   Future<void> _initService() async {
+    unawaited(IosInAppPurchaseService().initialize(this));
     await Future.wait([
       loadUserProfile(),
       fetchEvents(),
