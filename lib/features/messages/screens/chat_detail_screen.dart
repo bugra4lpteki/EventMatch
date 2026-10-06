@@ -1023,6 +1023,10 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                             ),
                           ),
                         ),
+                        if (currentChat.participant.isVerifiedBadgeVisible) ...[
+                          const SizedBox(width: 4),
+                          const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF38BDF8)),
+                        ],
                         const SizedBox(width: 6),
                         Icon(Icons.arrow_forward_ios_rounded, size: 11, color: AppColors.primary),
                       ],

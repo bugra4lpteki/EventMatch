@@ -23,6 +23,7 @@ class UserModel {
   bool hideEvents;
   bool enableLocationSharing;
   bool isVerified;
+  bool showVerifiedBadge;
 
   UserModel({
     required this.id,
@@ -44,6 +45,7 @@ class UserModel {
     this.hideEvents = false,
     this.enableLocationSharing = true,
     this.isVerified = false,
+    this.showVerifiedBadge = true,
     List<String>? badges,
     List<String>? tags,
     List<String>? avatarUrls,
@@ -54,6 +56,8 @@ class UserModel {
         avatarUrls = avatarUrls ?? [],
         plannedEvents = plannedEvents ?? [],
         pastEvents = pastEvents ?? [];
+
+  bool get isVerifiedBadgeVisible => isVerified && showVerifiedBadge;
 
   String? get age {
     if (birthDate == null) return null;
@@ -158,6 +162,8 @@ class UserModel {
       'enable_location_sharing': enableLocationSharing,
       'is_verified': isVerified,
       'isVerified': isVerified,
+      'show_verified_badge': showVerifiedBadge,
+      'showVerifiedBadge': showVerifiedBadge,
       'badges': badges,
       'tags': tags,
       'plannedEvents': plannedEvents,
@@ -196,6 +202,7 @@ class UserModel {
       isVerified: map['is_verified'] == true ||
           map['isVerified'] == true ||
           (map['badges'] is List && (map['badges'] as List).contains('verified')),
+      showVerifiedBadge: map['show_verified_badge'] != false && map['showVerifiedBadge'] != false,
       badges: List<String>.from(map['badges'] ?? []),
       tags: List<String>.from(map['tags'] ?? []),
       plannedEvents: List<String>.from(map['plannedEvents'] ?? []),

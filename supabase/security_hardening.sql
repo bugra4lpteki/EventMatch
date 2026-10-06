@@ -11,6 +11,12 @@ ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user' CHECK (role IN ('user', 'organ
 ALTER TABLE public.users 
 ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT FALSE;
 
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS show_verified_badge BOOLEAN DEFAULT TRUE;
+
 -- Güvenli Rol Doğrulama Fonksiyonları (Server-Side Execution)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$

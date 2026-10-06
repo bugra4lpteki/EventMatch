@@ -936,6 +936,14 @@ class MockEventService extends ChangeNotifier {
             await prefs.setBool('${userId}_privacy_location_sharing', currentUser.enableLocationSharing);
             await prefs.setBool('privacy_location_sharing', currentUser.enableLocationSharing);
           }
+          if (userData['is_verified'] != null) {
+            currentUser.isVerified = userData['is_verified'] == true;
+            await prefs.setBool('${userId}_is_verified', currentUser.isVerified);
+          }
+          if (userData['show_verified_badge'] != null) {
+            currentUser.showVerifiedBadge = userData['show_verified_badge'] != false;
+            await prefs.setBool('${userId}_show_verified_badge', currentUser.showVerifiedBadge);
+          }
         } else {
           final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
           currentUser.name = userName;
@@ -1099,6 +1107,9 @@ class MockEventService extends ChangeNotifier {
     currentUser.isVerified = prefs.getBool('${userId}_is_verified') ??
                              prefs.getBool('${currentUser.name}_is_verified') ??
                              prefs.getBool('user_email_verified') ?? false;
+    currentUser.showVerifiedBadge = prefs.getBool('${userId}_show_verified_badge') ??
+                                    prefs.getBool('${currentUser.name}_show_verified_badge') ??
+                                    prefs.getBool('show_verified_badge') ?? true;
 
     if (currentUser.isVerified && !currentUser.badges.contains('verified')) {
       currentUser.badges.add('verified');
@@ -1112,12 +1123,16 @@ class MockEventService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final userId = currentUser.id;
     currentUser.isVerified = true;
+    currentUser.showVerifiedBadge = true;
     if (!currentUser.badges.contains('verified')) {
       currentUser.badges.add('verified');
     }
     await prefs.setBool('${userId}_is_verified', true);
     await prefs.setBool('${currentUser.name}_is_verified', true);
     await prefs.setBool('user_email_verified', true);
+    await prefs.setBool('${userId}_show_verified_badge', true);
+    await prefs.setBool('${currentUser.name}_show_verified_badge', true);
+    await prefs.setBool('show_verified_badge', true);
     await prefs.setString('${userId}_verified_email', email);
 
     try {
@@ -1125,6 +1140,7 @@ class MockEventService extends ChangeNotifier {
       final targetId = (sbUser != null && sbUser.id.isNotEmpty) ? sbUser.id : userId;
       await _supabase.from('users').update({
         'is_verified': true,
+        'show_verified_badge': true,
         'email': email,
       }).or('id.eq.$targetId,id.eq.$userId');
     } catch (e) {
@@ -1154,6 +1170,7 @@ class MockEventService extends ChangeNotifier {
     bool? privateProfile,
     bool? hideEvents,
     bool? locationSharing,
+    bool? showVerifiedBadge,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     currentUser.isPrivateProfile = false;
@@ -1192,6 +1209,25 @@ class MockEventService extends ChangeNotifier {
           }).eq('id', currentUser.id);
         } catch (e) {
           debugPrint('[EventService] Supabase enable_location_sharing guncelleme hatasi: $e');
+        }
+      }
+    }
+    if (showVerifiedBadge != null) {
+      currentUser.showVerifiedBadge = showVerifiedBadge;
+      await prefs.setBool('show_verified_badge', showVerifiedBadge);
+      await prefs.setBool('${currentUser.id}_show_verified_badge', showVerifiedBadge);
+      await prefs.setBool('${currentUser.name}_show_verified_badge', showVerifiedBadge);
+      if (currentUser.username != null && currentUser.username!.isNotEmpty) {
+        await prefs.setBool('${currentUser.username}_show_verified_badge', showVerifiedBadge);
+      }
+      if (_isValidUuid(currentUser.id)) {
+        try {
+          await _supabase.from('users').update({
+            'show_verified_badge': showVerifiedBadge,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', currentUser.id);
+        } catch (e) {
+          debugPrint('[EventService] Supabase show_verified_badge guncelleme hatasi: $e');
         }
       }
     }

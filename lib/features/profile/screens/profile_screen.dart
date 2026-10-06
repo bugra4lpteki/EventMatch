@@ -200,7 +200,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                              letterSpacing: -0.4,
                                            ),
                                          ),
-                                         if (user.isVerified) ...[
+                                         if (user.isVerifiedBadgeVisible) ...[
                                            const SizedBox(width: 6),
                                            GestureDetector(
                                              onTap: () => _showVerifiedBadgeDialog(context),

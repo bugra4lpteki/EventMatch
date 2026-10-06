@@ -322,4 +322,130 @@ class EmailService {
     debugPrint('═══════════════════════════════════════════════════════════════');
     return true;
   }
+
+  /// Profil Doğrulama (Mavi Tik) Kodunu Kullanıcının E-posta Adresine Gönderir
+  Future<bool> sendProfileVerificationOtp({
+    required String toEmail,
+    required String otpCode,
+  }) async {
+    const subject = '🛡️ EventMatch - Profil Doğrulama (Mavi Tik) Kodunuz';
+    final htmlContent = '''
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #08080C; color: #FFFFFF; margin: 0; padding: 24px; }
+    .card { background-color: #13131A; border: 1.5px solid rgba(56, 189, 248, 0.4); border-radius: 20px; max-width: 480px; margin: 0 auto; padding: 32px 24px; text-align: center; }
+    .logo { font-size: 26px; font-weight: bold; background: linear-gradient(135deg, #38BDF8, #818CF8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+    .badge-icon { font-size: 36px; margin-bottom: 12px; }
+    .title { font-size: 20px; font-weight: bold; color: #FFFFFF; margin-bottom: 10px; }
+    .desc { font-size: 14px; color: #94A3B8; line-height: 1.5; margin-bottom: 24px; }
+    .otp-box { background: rgba(56, 189, 248, 0.12); border: 2px solid #38BDF8; border-radius: 14px; display: inline-block; padding: 14px 28px; margin-bottom: 24px; }
+    .otp-code { font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #38BDF8; }
+    .footer { font-size: 12px; color: #64748B; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 20px; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">EventMatch</div>
+    <div class="badge-icon">🛡️ ✓</div>
+    <div class="title">Profil Doğrulama ve Mavi Tik Talebi</div>
+    <div class="desc">
+      EventMatch hesabınızı doğrulamak ve Doğrulanmış Profil (Mavi Tik) rozetinizi aktifleştirmek için 6 haneli kodunuz:
+    </div>
+    <div class="otp-box">
+      <div class="otp-code">$otpCode</div>
+    </div>
+    <div class="desc" style="font-size: 12.5px; color: #CBD5E1;">
+      Bu kod <strong>10 dakika</strong> boyunca geçerlidir.<br>
+      Doğrulamayı tamamladığınızda profilinizde mavi onay rozeti görüntülenecektir.
+    </div>
+    <div class="footer">
+      Bu otomatik bir güvenlik e-postasıdır. Lütfen yanıtlamayınız.<br>
+      © 2026 EventMatch. Tüm hakları saklıdır.
+    </div>
+  </div>
+</body>
+</html>
+''';
+
+    if (_resendApiKey != null && _resendApiKey!.isNotEmpty) {
+      try {
+        final res = await http.post(
+          Uri.parse('https://api.resend.com/emails'),
+          headers: {
+            'Authorization': 'Bearer $_resendApiKey',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'from': '$_senderName <$_senderEmail>',
+            'to': [toEmail],
+            'subject': '$subject: $otpCode',
+            'html': htmlContent,
+          }),
+        );
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          debugPrint('[EmailService] ✅ Resend ile Doğrulama e-postası gönderildi: $toEmail');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[EmailService] Resend exception: $e');
+      }
+    }
+
+    if (_brevoApiKey != null && _brevoApiKey!.isNotEmpty) {
+      try {
+        final res = await http.post(
+          Uri.parse('https://api.brevo.com/v3/smtp/email'),
+          headers: {
+            'api-key': _brevoApiKey!,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'sender': {'name': _senderName, 'email': _senderEmail},
+            'to': [{'email': toEmail}],
+            'subject': '$subject: $otpCode',
+            'htmlContent': htmlContent,
+          }),
+        );
+        if (res.statusCode == 200 || res.statusCode == 201) {
+          debugPrint('[EmailService] ✅ Brevo ile Doğrulama e-postası gönderildi: $toEmail');
+          return true;
+        }
+      } catch (e) {
+        debugPrint('[EmailService] Brevo exception: $e');
+      }
+    }
+
+    if (_smtpHost != null && _smtpUsername != null && _smtpPassword != null) {
+      try {
+        final smtpServer = SmtpServer(
+          _smtpHost!,
+          port: _smtpPort ?? (_smtpSsl ? 465 : 587),
+          ssl: _smtpSsl,
+          username: _smtpUsername,
+          password: _smtpPassword,
+        );
+        final message = Message()
+          ..from = Address(_senderEmail, _senderName)
+          ..recipients.add(toEmail)
+          ..subject = '$subject: $otpCode'
+          ..html = htmlContent;
+        await send(message, smtpServer);
+        debugPrint('[EmailService] ✅ SMTP ile Doğrulama e-postası gönderildi: $toEmail');
+        return true;
+      } catch (e) {
+        debugPrint('[EmailService] ⚠️ SMTP hatası: $e');
+      }
+    }
+
+    debugPrint('═══════════════════════════════════════════════════════════════');
+    debugPrint('[EmailService] 🛡️ [PROFİL DOĞRULAMA (MAVİ TİK) KODU]');
+    debugPrint('Alıcı E-posta : $toEmail');
+    debugPrint('Doğrulama Kodu: $otpCode');
+    debugPrint('Geçerlilik    : 10 Dakika');
+    debugPrint('═══════════════════════════════════════════════════════════════');
+    return true;
+  }
 }

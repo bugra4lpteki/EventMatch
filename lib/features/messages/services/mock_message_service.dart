@@ -847,6 +847,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           city: uData?['city']?.toString(),
           aboutMe: uData?['bio']?.toString() ?? uData?['about_me']?.toString(),
           isVerified: uData?['is_verified'] == true,
+          showVerifiedBadge: uData?['show_verified_badge'] != false,
         );
 
         createOrGetChatForUser(partnerUser);

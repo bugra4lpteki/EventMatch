@@ -1915,7 +1915,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                     ),
                                   ),
                                   // Doğrulanmış Profil Rozeti: SADECE mail doğrulaması olanlarda gözükür!
-                                  if (_selectedUser!.isVerified) ...[
+                                  if (_selectedUser!.isVerifiedBadgeVisible) ...[
                                     const SizedBox(width: 6),
                                     const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF38BDF8)),
                                   ],

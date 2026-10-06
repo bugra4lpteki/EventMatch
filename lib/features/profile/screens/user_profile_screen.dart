@@ -559,7 +559,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (user.isVerified) ...[
+                                if (user.isVerifiedBadgeVisible) ...[
                                   const SizedBox(width: 8),
                                   const Icon(Icons.verified_rounded, size: 24, color: Color(0xFF38BDF8)),
                                 ],

@@ -305,7 +305,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (user.isVerified) ...[
+                      if (user.isVerifiedBadgeVisible) ...[
                         const SizedBox(width: 6),
                         const Icon(Icons.verified_rounded, size: 19, color: Color(0xFF38BDF8)),
                       ],

@@ -831,6 +831,7 @@ class MockMatchService extends ChangeNotifier {
             gender: profile?['gender']?.toString(),
             isVerified: profile?['is_verified'] == true ||
                 (profile?['badges'] is List && (profile?['badges'] as List).contains('verified')),
+            showVerifiedBadge: profile?['show_verified_badge'] != false,
             city: profile?['city']?.toString() ?? '',
             aboutMe: profile?['bio']?.toString() ?? '',
           );

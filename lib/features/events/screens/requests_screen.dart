@@ -137,7 +137,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              if (req.fromUser.isVerified) ...[
+                              if (req.fromUser.isVerifiedBadgeVisible) ...[
                                 const SizedBox(width: 5),
                                 const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF38BDF8)),
                               ],

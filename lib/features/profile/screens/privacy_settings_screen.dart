@@ -8,6 +8,7 @@ import '../../../core/services/content_filter_service.dart';
 import '../../events/services/mock_event_service.dart';
 import '../../auth/services/auth_service.dart';
 import '../../events/services/moderation_service.dart';
+import '../widgets/profile_verification_dialog.dart';
 
 class PrivacySettingsScreen extends StatefulWidget {
   const PrivacySettingsScreen({super.key});
@@ -20,6 +21,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
   bool _hideEventActivity = false;
   bool _enableLocationSharing = true;
   bool _enableContentFilter = true;
+  bool _showVerifiedBadge = true;
 
   @override
   void initState() {
@@ -44,6 +46,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                                prefs.getBool('${userName}_privacy_location_sharing') ??
                                prefs.getBool('privacy_location_sharing') ?? true;
       _enableContentFilter = ContentFilterService.instance.isFilterEnabled;
+      _showVerifiedBadge = prefs.getBool('${userId}_show_verified_badge') ??
+                           prefs.getBool('${userName}_show_verified_badge') ??
+                           prefs.getBool('show_verified_badge') ??
+                           eventService.currentUser.showVerifiedBadge;
     });
   }
 
@@ -66,11 +72,15 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
     eventService.updatePrivacySettings(
       hideEvents: key == 'privacy_hide_events' ? value : null,
       locationSharing: key == 'privacy_location_sharing' ? value : null,
+      showVerifiedBadge: key == 'show_verified_badge' ? value : null,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final eventService = context.watch<MockEventService>();
+    final isUserVerified = eventService.currentUser.isVerified;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -110,6 +120,63 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                   subtitle: 'Yakınınızdaki etkinlik severlerle eşleşmek için konum kullanılır.',
                   value: _enableLocationSharing,
                   onChanged: (val) => _updateSetting('privacy_location_sharing', val, (v) => _enableLocationSharing = v),
+                ),
+                Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
+                _buildPrivacyTile(
+                  icon: Icons.verified_rounded,
+                  iconColor: const Color(0xFF38BDF8),
+                  title: 'Mavi Tik Rozetini Göster',
+                  subtitle: isUserVerified
+                      ? (_showVerifiedBadge
+                          ? 'Mavi Tik onay rozetiniz profilinizde ve sohbetlerde herkese açıktır.'
+                          : 'Mavi Tik onay rozetiniz gizlendi. Rozet profilinizde görünmez.')
+                      : 'Doğrulanmış kullanıcı mavi tik rozetinizin görünürlüğünü yönetin (Doğrulamak için dokunun).',
+                  value: _showVerifiedBadge && isUserVerified,
+                  onChanged: (val) async {
+                    HapticFeedback.lightImpact();
+                    if (!isUserVerified) {
+                      showProfileVerificationSheet(
+                        context,
+                        onVerified: () {
+                          if (mounted) {
+                            setState(() {
+                              _showVerifiedBadge = true;
+                            });
+                          }
+                        },
+                      );
+                      return;
+                    }
+                    await _updateSetting('show_verified_badge', val, (v) => _showVerifiedBadge = v);
+                    await eventService.updatePrivacySettings(showVerifiedBadge: val);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              Icon(
+                                val ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+                                color: const Color(0xFF38BDF8),
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  val
+                                      ? 'Mavi Tik rozetiniz artık herkese açık ve görünür.'
+                                      : 'Mavi Tik rozetiniz profilinizde ve sohbetlerde gizlendi.',
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: AppColors.surface,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          margin: const EdgeInsets.all(16),
+                        ),
+                      );
+                    }
+                  },
                 ),
                 Divider(color: Colors.white.withOpacity(0.06), height: 1, indent: 60),
                 _buildPrivacyTile(
@@ -241,11 +308,13 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
 
   Widget _buildPrivacyTile({
     required IconData icon,
+    Color? iconColor,
     required String title,
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
   }) {
+    final effectiveColor = iconColor ?? AppColors.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       child: Row(
@@ -253,10 +322,10 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.12),
+              color: effectiveColor.withValues(alpha: 0.12),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: AppColors.primary, size: 22),
+            child: Icon(icon, color: effectiveColor, size: 22),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -278,8 +347,8 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
           const SizedBox(width: 8),
           Switch(
             value: value,
-            activeColor: AppColors.primary,
-            activeTrackColor: AppColors.primary.withOpacity(0.3),
+            activeColor: effectiveColor,
+            activeTrackColor: effectiveColor.withValues(alpha: 0.3),
             onChanged: onChanged,
           ),
         ],

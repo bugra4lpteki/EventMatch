@@ -488,6 +488,10 @@ class _MessagesScreenState extends State<MessagesScreen> {
                 ),
               ),
             ),
+            if (chat.participant.isVerifiedBadgeVisible) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.verified_rounded, size: 15, color: Color(0xFF38BDF8)),
+            ],
             if (chat.isMuted) ...[
               const SizedBox(width: 5),
               Icon(Icons.notifications_off_rounded, size: 14, color: AppColors.textSecondary.withValues(alpha: 0.7)),
