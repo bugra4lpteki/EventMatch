@@ -52,18 +52,18 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
     },
     {
       'title': '1 AY',
-      'price': '₺199.99',
+      'price': '₺499.99',
       'period': 'ay',
       'days': 30,
-      'badge': '%40 TASARRUF',
+      'badge': 'EN POPÜLER',
       'isPopular': true,
     },
     {
       'title': '3 AY',
-      'price': '₺449.99',
+      'price': '₺799.99',
       'period': '3 ay',
       'days': 90,
-      'badge': 'AVANTAJLI',
+      'badge': 'EN AVANTAJLI',
       'isPopular': false,
     },
   ];

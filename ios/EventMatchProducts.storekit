@@ -45,7 +45,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "89.99",
+          "displayPrice" : "149.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "V001",
@@ -65,7 +65,7 @@
           "productID" : "com.eventmatch.app.vip.weekly",
           "recurringSubscriptionPeriod" : "P1W",
           "referenceName" : "VIP Weekly",
-          "subscriptionGroupID" : "21049382",
+          "subscriptionGroupID" : "22448190",
           "type" : "RecurringSubscription"
         },
         {
@@ -75,7 +75,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "199.99",
+          "displayPrice" : "499.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "V002",
@@ -95,7 +95,7 @@
           "productID" : "com.eventmatch.app.vip.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "VIP Monthly",
-          "subscriptionGroupID" : "21049382",
+          "subscriptionGroupID" : "22448190",
           "type" : "RecurringSubscription"
         },
         {
@@ -105,7 +105,7 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "449.99",
+          "displayPrice" : "799.99",
           "familyShareable" : false,
           "groupNumber" : 1,
           "internalID" : "V003",
@@ -125,7 +125,7 @@
           "productID" : "com.eventmatch.app.vip.quarterly",
           "recurringSubscriptionPeriod" : "P3M",
           "referenceName" : "VIP Quarterly",
-          "subscriptionGroupID" : "21049382",
+          "subscriptionGroupID" : "22448190",
           "type" : "RecurringSubscription"
         }
       ]
