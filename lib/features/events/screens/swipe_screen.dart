@@ -110,6 +110,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
   Widget build(BuildContext context) {
     return Consumer<MockMatchService>(
       builder: (context, matchService, child) {
+        final eventService = context.watch<MockEventService>();
         final allItems = matchService.getPotentialMatches();
         final blockedIds = ModerationService().blockedUserIds;
         final items = allItems.where((user) {
@@ -621,7 +622,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
     setState(() {
       _currentIndex = targetIndex;
     });
-    final matchService = context.read<MockMatchService>();
     if (previousIndex < 0 || previousIndex >= items.length) return;
     final item = items[previousIndex];
     
