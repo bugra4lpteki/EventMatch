@@ -14,6 +14,7 @@ import '../../events/screens/event_detail_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
 import 'edit_profile_screen.dart';
+import '../widgets/vip_paywall_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -265,6 +266,159 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                 ),
                               ),
+                              // ── EventMatch VIP Kartı / Bannerı ───────────
+                              if (user.hasActiveVip)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 12),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        const Color(0xFF2C220E).withValues(alpha: 0.95),
+                                        const Color(0xFF1B150A).withValues(alpha: 0.95),
+                                      ],
+                                    ),
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: const Color(0xFFFFD700).withValues(alpha: 0.8), width: 1.2),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.amber.withValues(alpha: 0.2),
+                                        blurRadius: 12,
+                                        spreadRadius: 1,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.all(7),
+                                        decoration: const BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                                          ),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Text('👑', style: TextStyle(fontSize: 15)),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'EventMatch VIP Üyesisin',
+                                              style: TextStyle(
+                                                color: Color(0xFFFFD700),
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 13.5,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              user.vipExpiryDate != null
+                                                  ? 'Bitiş: ${user.vipExpiryDate!.day}.${user.vipExpiryDate!.month}.${user.vipExpiryDate!.year}'
+                                                  : 'Tüm VIP ayrıcalıkların aktif',
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 11,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () => VipPaywallSheet.show(context),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(0xFFFFD700),
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                        ),
+                                        child: const Text('Yönet', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                GestureDetector(
+                                  onTap: () => VipPaywallSheet.show(context),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(top: 12),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF261E14),
+                                          Color(0xFF181512),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: const Color(0xFFFFD700).withValues(alpha: 0.5),
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.amber.withValues(alpha: 0.15),
+                                          blurRadius: 10,
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(7),
+                                          decoration: BoxDecoration(
+                                            color: Colors.amber.withValues(alpha: 0.2),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Text('💎', style: TextStyle(fontSize: 15)),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        const Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'EventMatch VIP',
+                                                style: TextStyle(
+                                                  color: Color(0xFFFFD700),
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13.5,
+                                                ),
+                                              ),
+                                              SizedBox(height: 2),
+                                              Text(
+                                                'Seni beğenenleri gör, geri al ve parılda!',
+                                                style: TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 11,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Text(
+                                            'Keşfet 👑',
+                                            style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),

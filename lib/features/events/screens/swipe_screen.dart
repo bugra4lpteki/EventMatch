@@ -5,9 +5,11 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/app_image_widget.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../services/mock_match_service.dart';
+import '../services/mock_event_service.dart';
 import '../models/user_model.dart';
 import '../widgets/match_dialog.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../../profile/widgets/vip_paywall_sheet.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../../core/widgets/report_block_sheet.dart';
@@ -26,6 +28,62 @@ class _SwipeScreenState extends State<SwipeScreen> {
   int _refreshCount = 0;
   int _currentIndex = 0;
   final Set<String> _locallySwipedIds = {};
+  final List<UserModel> _swipedHistory = [];
+
+  Future<void> _handleUndoSwipe() async {
+    final eventService = context.read<MockEventService>();
+    final isVip = eventService.currentUser.hasActiveVip;
+
+    if (!isVip) {
+      VipPaywallSheet.show(
+        context,
+        initialFeature: VipFeature.undoSwipe,
+      );
+      return;
+    }
+
+    if (_swipedHistory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Geri alınacak son bir profil bulunmuyor.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final lastSwiped = _swipedHistory.removeLast();
+    _locallySwipedIds.remove(lastSwiped.id.toLowerCase().trim());
+    final matchService = context.read<MockMatchService>();
+    await matchService.undoSwipe(lastSwiped);
+
+    if (mounted) {
+      setState(() {
+        _refreshCount++;
+        _currentIndex = 0;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFF1E1B18),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: Row(
+            children: [
+              const Icon(Icons.replay_rounded, color: Colors.amber, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '${lastSwiped.name} geri getirildi! 👑',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -90,32 +148,50 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       ),
                     ],
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                    ),
-                    child: IconButton(
-                      icon: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
-                      tooltip: 'Profilleri Yenile',
-                      onPressed: () async {
-                        _locallySwipedIds.clear();
-                        await matchService.loadPotentialMatches();
-                        if (mounted) {
-                          setState(() {
-                            _refreshCount++;
-                            _currentIndex = 0;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Profiller yenilendi! 🔄'),
-                              duration: Duration(seconds: 1),
-                            ),
-                          );
-                        }
-                      },
-                    ),
+                  Row(
+                    children: [
+                      // Geri Al (Undo) Button (VIP)
+                      Container(
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.replay_rounded, color: Colors.amber, size: 20),
+                          tooltip: 'Geri Al (VIP)',
+                          onPressed: _handleUndoSwipe,
+                        ),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: IconButton(
+                          icon: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
+                          tooltip: 'Profilleri Yenile',
+                          onPressed: () async {
+                            _locallySwipedIds.clear();
+                            await matchService.loadPotentialMatches();
+                            if (mounted) {
+                              setState(() {
+                                _refreshCount++;
+                                _currentIndex = 0;
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Profiller yenilendi! 🔄'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -158,6 +234,25 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                       ),
+                      if (_swipedHistory.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: _handleUndoSwipe,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.amber,
+                            side: const BorderSide(color: Colors.amber),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          icon: const Icon(Icons.replay_rounded, color: Colors.amber, size: 18),
+                          label: const Text(
+                            'Son Kartı Geri Al 👑',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -375,10 +470,27 @@ class _SwipeScreenState extends State<SwipeScreen> {
     final currentItem = items[safeIndex];
     final String name = currentItem.name;
 
-    return Container(
+      return Container(
       padding: const EdgeInsets.only(bottom: 20.0, top: 4.0, left: 16.0, right: 16.0),
       child: Row(
         children: [
+          // Undo Swipe Button
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.surface,
+              border: Border.all(
+                color: Colors.amber.withValues(alpha: 0.5),
+                width: 1.2,
+              ),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.replay_rounded, color: Colors.amber, size: 19),
+              tooltip: 'Son Kartı Geri Al (VIP)',
+              onPressed: _handleUndoSwipe,
+            ),
+          ),
           // Message TextField
           Expanded(
             child: Container(
@@ -448,6 +560,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
     if (previousIndex >= 0 && previousIndex < items.length) {
       final swipedItem = items[previousIndex];
       _locallySwipedIds.add(swipedItem.id.toLowerCase().trim());
+      _swipedHistory.add(swipedItem);
     }
     setState(() {
       _currentIndex = targetIndex;

@@ -17,6 +17,15 @@ ADD COLUMN IF NOT EXISTS is_verified BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.users 
 ADD COLUMN IF NOT EXISTS show_verified_badge BOOLEAN DEFAULT TRUE;
 
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS is_vip BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS vip_expires_at TIMESTAMPTZ;
+
+ALTER TABLE public.users 
+ADD COLUMN IF NOT EXISTS boost_expires_at TIMESTAMPTZ;
+
 -- Güvenli Rol Doğrulama Fonksiyonları (Server-Side Execution)
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$

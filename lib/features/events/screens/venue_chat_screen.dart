@@ -1139,7 +1139,9 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
 
     // Role tags
     final isHost = index == 0 && !isMe;
-    final isVip = (index % 3 == 0) && !isMe;
+    final isUserVip = isMe
+        ? service.currentUser.hasActiveVip
+        : (msg['is_vip'] == true || msg['isVip'] == true);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -1161,21 +1163,50 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
           decoration: BoxDecoration(
-            color: isMe
-                ? AppColors.primary.withValues(alpha: 0.18)
-                : const Color(0xFF141724).withValues(alpha: 0.7),
+            gradient: isUserVip
+                ? LinearGradient(
+                    colors: [
+                      const Color(0xFF2C220E).withValues(alpha: 0.95),
+                      const Color(0xFF1B150A).withValues(alpha: 0.95),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : (isMe
+                    ? LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: 0.22),
+                          AppColors.primary.withValues(alpha: 0.12),
+                        ],
+                      )
+                    : null),
+            color: (!isUserVip && !isMe)
+                ? const Color(0xFF141724).withValues(alpha: 0.7)
+                : null,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isMe
-                  ? AppColors.primary.withValues(alpha: 0.35)
-                  : Colors.white.withValues(alpha: 0.06),
+              color: isUserVip
+                  ? const Color(0xFFFFD700).withValues(alpha: 0.8)
+                  : (isMe
+                      ? AppColors.primary.withValues(alpha: 0.35)
+                      : Colors.white.withValues(alpha: 0.06)),
+              width: isUserVip ? 1.5 : 1,
             ),
+            boxShadow: isUserVip
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFFFD700).withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ]
+                : null,
           ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // User photo avatar
-            _buildUserAvatarWidget(userAvatar, senderName, senderColor),
+            _buildUserAvatarWidget(userAvatar, senderName, senderColor, isVip: isUserVip),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -1184,7 +1215,38 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                   // Badges, Name and Time row
                   Row(
                     children: [
-                      if (isHost)
+                      if (isUserVip)
+                        Container(
+                          margin: const EdgeInsets.only(right: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFFA000)],
+                            ),
+                            borderRadius: BorderRadius.circular(5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amber.withValues(alpha: 0.5),
+                                blurRadius: 6,
+                              ),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '👑 VIP',
+                                style: TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (isHost)
                         Container(
                           margin: const EdgeInsets.only(right: 6),
                           padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
@@ -1196,20 +1258,6 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                           child: const Text(
                             '👑 EV SAHİBİ',
                             style: TextStyle(color: Colors.amberAccent, fontSize: 8.5, fontWeight: FontWeight.w900),
-                          ),
-                        )
-                      else if (isVip)
-                        Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00E5FF).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: const Color(0xFF00E5FF).withValues(alpha: 0.6), width: 0.8),
-                          ),
-                          child: const Text(
-                            '🔥 VIP',
-                            style: TextStyle(color: Color(0xFF00E5FF), fontSize: 8.5, fontWeight: FontWeight.w900),
                           ),
                         )
                       else if (isMe)
@@ -1230,7 +1278,7 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
                       Text(
                         isMe ? 'Sen' : senderName,
                         style: TextStyle(
-                          color: senderColor,
+                          color: isUserVip ? const Color(0xFFFFD700) : (isMe ? Colors.white : senderColor),
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
                         ),
@@ -1298,18 +1346,20 @@ class _VenueChatScreenState extends State<VenueChatScreen> with TickerProviderSt
   );
 }
 
-  Widget _buildUserAvatarWidget(String? userAvatar, String senderName, Color senderColor) {
+  Widget _buildUserAvatarWidget(String? userAvatar, String senderName, Color senderColor, {bool isVip = false}) {
+    final ringColor = isVip ? const Color(0xFFFFD700) : senderColor;
     return Container(
-      width: 34,
-      height: 34,
+      width: isVip ? 36 : 34,
+      height: isVip ? 36 : 34,
       margin: const EdgeInsets.only(top: 2),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: senderColor.withValues(alpha: 0.8), width: 1.5),
+        border: Border.all(color: ringColor, width: isVip ? 2.0 : 1.5),
         boxShadow: [
           BoxShadow(
-            color: senderColor.withValues(alpha: 0.3),
-            blurRadius: 6,
+            color: ringColor.withValues(alpha: isVip ? 0.6 : 0.3),
+            blurRadius: isVip ? 10 : 6,
+            spreadRadius: isVip ? 1 : 0,
           ),
         ],
       ),

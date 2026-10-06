@@ -944,6 +944,22 @@ class MockEventService extends ChangeNotifier {
             currentUser.showVerifiedBadge = userData['show_verified_badge'] != false;
             await prefs.setBool('${userId}_show_verified_badge', currentUser.showVerifiedBadge);
           }
+          if (userData['is_vip'] != null) {
+            currentUser.isVip = userData['is_vip'] == true;
+            await prefs.setBool('${userId}_is_vip', currentUser.isVip);
+          }
+          if (userData['vip_expires_at'] != null) {
+            currentUser.vipExpiryDate = DateTime.tryParse(userData['vip_expires_at'].toString());
+            if (currentUser.vipExpiryDate != null) {
+              await prefs.setString('${userId}_vip_expires_at', currentUser.vipExpiryDate!.toIso8601String());
+            }
+          }
+          if (userData['boost_expires_at'] != null) {
+            currentUser.boostExpiryDate = DateTime.tryParse(userData['boost_expires_at'].toString());
+            if (currentUser.boostExpiryDate != null) {
+              await prefs.setString('${userId}_boost_expires_at', currentUser.boostExpiryDate!.toIso8601String());
+            }
+          }
         } else {
           final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
           currentUser.name = userName;
@@ -1229,6 +1245,83 @@ class MockEventService extends ChangeNotifier {
         } catch (e) {
           debugPrint('[EventService] Supabase show_verified_badge guncelleme hatasi: $e');
         }
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> activateVip({int days = 30}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final expiry = DateTime.now().add(Duration(days: days));
+    currentUser.isVip = true;
+    currentUser.vipExpiryDate = expiry;
+    if (!currentUser.badges.contains('vip')) {
+      currentUser.badges.add('vip');
+    }
+
+    await prefs.setBool('is_vip', true);
+    await prefs.setBool('${currentUser.id}_is_vip', true);
+    await prefs.setString('vip_expires_at', expiry.toIso8601String());
+    await prefs.setString('${currentUser.id}_vip_expires_at', expiry.toIso8601String());
+
+    if (_isValidUuid(currentUser.id)) {
+      try {
+        await _supabase.from('users').update({
+          'is_vip': true,
+          'vip_expires_at': expiry.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', currentUser.id);
+        debugPrint('[EventService] ✅ Supabase VIP başarıyla aktifleştirildi.');
+      } catch (e) {
+        debugPrint('[EventService] Supabase is_vip güncelleme notu: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> cancelVip() async {
+    final prefs = await SharedPreferences.getInstance();
+    currentUser.isVip = false;
+    currentUser.vipExpiryDate = null;
+    currentUser.badges.remove('vip');
+
+    await prefs.setBool('is_vip', false);
+    await prefs.setBool('${currentUser.id}_is_vip', false);
+    await prefs.remove('vip_expires_at');
+    await prefs.remove('${currentUser.id}_vip_expires_at');
+
+    if (_isValidUuid(currentUser.id)) {
+      try {
+        await _supabase.from('users').update({
+          'is_vip': false,
+          'vip_expires_at': null,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', currentUser.id);
+        debugPrint('[EventService] Supabase VIP iptal edildi.');
+      } catch (e) {
+        debugPrint('[EventService] Supabase cancel VIP notu: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> activateBoost({int hours = 1}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final expiry = DateTime.now().add(Duration(hours: hours));
+    currentUser.boostExpiryDate = expiry;
+
+    await prefs.setString('boost_expires_at', expiry.toIso8601String());
+    await prefs.setString('${currentUser.id}_boost_expires_at', expiry.toIso8601String());
+
+    if (_isValidUuid(currentUser.id)) {
+      try {
+        await _supabase.from('users').update({
+          'boost_expires_at': expiry.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', currentUser.id);
+        debugPrint('[EventService] ⚡ Supabase 1 Saatlik Boost başarıyla aktifleştirildi.');
+      } catch (e) {
+        debugPrint('[EventService] Supabase boost_expires_at notu: $e');
       }
     }
     notifyListeners();
@@ -2456,6 +2549,7 @@ class MockEventService extends ChangeNotifier {
     final uName = currentUser.name;
     final uAvatar = (userAvatar != null && userAvatar.isNotEmpty) ? userAvatar : currentUser.avatarUrl;
     final now = DateTime.now();
+    final isVip = currentUser.hasActiveVip;
 
     _venueChats.putIfAbsent(eventId, () => []);
     _venueChats[eventId]!.add({
@@ -2467,6 +2561,7 @@ class MockEventService extends ChangeNotifier {
       'audioUrl': audioUrl,
       'audioDuration': audioDuration,
       'time': now,
+      'is_vip': isVip,
     });
     await _saveVenueMessagesToStorage(eventId);
     notifyListeners();
@@ -2484,6 +2579,7 @@ class MockEventService extends ChangeNotifier {
           'audioUrl': audioUrl,
           'audioDuration': audioDuration,
           'time': now.toIso8601String(),
+          'is_vip': isVip,
         },
       );
     } catch (_) {}

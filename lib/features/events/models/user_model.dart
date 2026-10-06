@@ -24,6 +24,9 @@ class UserModel {
   bool enableLocationSharing;
   bool isVerified;
   bool showVerifiedBadge;
+  bool isVip;
+  DateTime? vipExpiryDate;
+  DateTime? boostExpiryDate;
 
   UserModel({
     required this.id,
@@ -46,6 +49,9 @@ class UserModel {
     this.enableLocationSharing = true,
     this.isVerified = false,
     this.showVerifiedBadge = true,
+    this.isVip = false,
+    this.vipExpiryDate,
+    this.boostExpiryDate,
     List<String>? badges,
     List<String>? tags,
     List<String>? avatarUrls,
@@ -58,6 +64,18 @@ class UserModel {
         pastEvents = pastEvents ?? [];
 
   bool get isVerifiedBadgeVisible => isVerified && showVerifiedBadge;
+
+  bool get hasActiveVip {
+    if (!isVip) return false;
+    if (vipExpiryDate != null) {
+      return vipExpiryDate!.isAfter(DateTime.now());
+    }
+    return true;
+  }
+
+  bool get isBoosted => boostExpiryDate != null && boostExpiryDate!.isAfter(DateTime.now());
+
+  Duration? get boostRemainingTime => isBoosted ? boostExpiryDate!.difference(DateTime.now()) : null;
 
   String? get age {
     if (birthDate == null) return null;
@@ -164,6 +182,12 @@ class UserModel {
       'isVerified': isVerified,
       'show_verified_badge': showVerifiedBadge,
       'showVerifiedBadge': showVerifiedBadge,
+      'is_vip': isVip,
+      'isVip': isVip,
+      'vip_expires_at': vipExpiryDate?.toIso8601String(),
+      'vipExpiryDate': vipExpiryDate?.toIso8601String(),
+      'boost_expires_at': boostExpiryDate?.toIso8601String(),
+      'boostExpiryDate': boostExpiryDate?.toIso8601String(),
       'badges': badges,
       'tags': tags,
       'plannedEvents': plannedEvents,
@@ -203,6 +227,13 @@ class UserModel {
           map['isVerified'] == true ||
           (map['badges'] is List && (map['badges'] as List).contains('verified')),
       showVerifiedBadge: map['show_verified_badge'] != false && map['showVerifiedBadge'] != false,
+      isVip: map['is_vip'] == true || map['isVip'] == true || (map['badges'] is List && (map['badges'] as List).contains('vip')),
+      vipExpiryDate: map['vip_expires_at'] != null
+          ? DateTime.tryParse(map['vip_expires_at'].toString())
+          : (map['vipExpiryDate'] != null ? DateTime.tryParse(map['vipExpiryDate'].toString()) : null),
+      boostExpiryDate: map['boost_expires_at'] != null
+          ? DateTime.tryParse(map['boost_expires_at'].toString())
+          : (map['boostExpiryDate'] != null ? DateTime.tryParse(map['boostExpiryDate'].toString()) : null),
       badges: List<String>.from(map['badges'] ?? []),
       tags: List<String>.from(map['tags'] ?? []),
       plannedEvents: List<String>.from(map['plannedEvents'] ?? []),

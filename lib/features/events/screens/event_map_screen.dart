@@ -19,6 +19,7 @@ import '../services/map_poi_service.dart';
 import '../widgets/match_dialog.dart';
 import 'event_detail_screen.dart';
 import '../../profile/screens/user_profile_screen.dart';
+import '../../profile/widgets/vip_paywall_sheet.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../../services/notification_service.dart';
@@ -267,7 +268,14 @@ class _EventMapScreenState extends State<EventMapScreen> {
       }
     }
 
-    return usersMap.values.toList();
+    final users = usersMap.values.toList();
+    // ⚡ Boost'lanan profilleri harita ve radarda en öne sırala!
+    users.sort((a, b) {
+      if (a.isBoosted && !b.isBoosted) return -1;
+      if (!a.isBoosted && b.isBoosted) return 1;
+      return 0;
+    });
+    return users;
   }
 
   String _getDistanceString(double targetLat, double targetLng) {
@@ -831,24 +839,42 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           _currentPosition?.latitude ?? currentUser.latitude ?? 41.0082,
                           _currentPosition?.longitude ?? currentUser.longitude ?? 28.9784,
                         ),
-                        width: 56,
-                        height: 80,
+                        width: currentUser.isBoosted ? 68 : 56,
+                        height: currentUser.isBoosted ? 86 : 80,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Stack(
                               clipBehavior: Clip.none,
+                              alignment: Alignment.center,
                               children: [
+                                if (currentUser.isBoosted)
+                                  Container(
+                                    width: 52,
+                                    height: 52,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.amber.withValues(alpha: 0.65),
+                                          blurRadius: 18,
+                                          spreadRadius: 4,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 Container(
                                   width: 44,
                                   height: 44,
                                   padding: const EdgeInsets.all(2.5),
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    gradient: const LinearGradient(colors: [Color(0xFF00F2FE), Color(0xFF4FACFE)]),
+                                    gradient: currentUser.isBoosted
+                                        ? const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9100)])
+                                        : const LinearGradient(colors: [Color(0xFF00F2FE), Color(0xFF4FACFE)]),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF00F2FE).withOpacity(0.6),
+                                        color: (currentUser.isBoosted ? Colors.amber : const Color(0xFF00F2FE)).withValues(alpha: 0.6),
                                         blurRadius: 10,
                                         spreadRadius: 2,
                                       ),
@@ -867,7 +893,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                     width: 12,
                                     height: 12,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981),
+                                      color: currentUser.isBoosted ? const Color(0xFFFFD700) : const Color(0xFF10B981),
                                       shape: BoxShape.circle,
                                       border: Border.all(color: Colors.black, width: 2),
                                     ),
@@ -879,7 +905,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0284C7),
+                                gradient: currentUser.isBoosted
+                                    ? const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFFA000)])
+                                    : null,
+                                color: currentUser.isBoosted ? null : const Color(0xFF0284C7),
                                 borderRadius: BorderRadius.circular(8),
                                 boxShadow: [
                                   BoxShadow(
@@ -888,10 +917,10 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   ),
                                 ],
                               ),
-                              child: const Text(
-                                'Sen 📍',
+                              child: Text(
+                                currentUser.isBoosted ? '⚡ SEN (BOOST)' : 'Sen 📍',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: currentUser.isBoosted ? Colors.black : Colors.white,
                                   fontSize: 10,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -904,10 +933,11 @@ class _EventMapScreenState extends State<EventMapScreen> {
                     // Canlı Radardaki Gerçek Kullanıcıların Profil Fotoğraflı (PP) Pinleri
                     ...activeMatchUsers.map((user) {
                       final isSelected = _selectedUser?.id == user.id;
+                      final isUserBoosted = user.isBoosted;
                       return Marker(
                         point: LatLng(user.latitude!, user.longitude!),
-                        width: isSelected ? 56 : 48,
-                        height: isSelected ? 72 : 64,
+                        width: isSelected ? 60 : 48,
+                        height: isSelected ? 76 : 64,
                         child: GestureDetector(
                           onTap: () {
                             setState(() {
@@ -925,19 +955,39 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             children: [
                               Stack(
                                 clipBehavior: Clip.none,
+                                alignment: Alignment.center,
                                 children: [
+                                  if (isUserBoosted)
+                                    Container(
+                                      width: isSelected ? 52 : 46,
+                                      height: isSelected ? 52 : 46,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.amber.withValues(alpha: 0.6),
+                                            blurRadius: 14,
+                                            spreadRadius: 3,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   Container(
                                     width: isSelected ? 46 : 40,
                                     height: isSelected ? 46 : 40,
                                     padding: const EdgeInsets.all(2),
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      gradient: isSelected
-                                          ? const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFF0055)])
-                                          : const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)]),
+                                      gradient: isUserBoosted
+                                          ? const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9100)])
+                                          : (isSelected
+                                              ? const LinearGradient(colors: [Color(0xFFFFB703), Color(0xFFFF0055)])
+                                              : const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFFEC4899)])),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: (isSelected ? const Color(0xFFFF0055) : const Color(0xFF8B5CF6)).withOpacity(0.55),
+                                          color: isUserBoosted
+                                              ? Colors.amber.withValues(alpha: 0.7)
+                                              : (isSelected ? const Color(0xFFFF0055) : const Color(0xFF8B5CF6)).withOpacity(0.55),
                                           blurRadius: isSelected ? 12 : 6,
                                           spreadRadius: isSelected ? 2 : 0,
                                         ),
@@ -959,7 +1009,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                       width: 10,
                                       height: 10,
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFF10B981),
+                                        color: isUserBoosted ? const Color(0xFFFFD700) : const Color(0xFF10B981),
                                         shape: BoxShape.circle,
                                         border: Border.all(color: Colors.black, width: 2),
                                       ),
@@ -971,19 +1021,21 @@ class _EventMapScreenState extends State<EventMapScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.8),
+                                  color: isUserBoosted ? const Color(0xFFFFA000) : Colors.black.withOpacity(0.8),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: isSelected ? const Color(0xFFFFB703) : Colors.white24,
-                                    width: isSelected ? 1 : 0.5,
+                                    color: isUserBoosted
+                                        ? const Color(0xFFFFD700)
+                                        : (isSelected ? const Color(0xFFFFB703) : Colors.white24),
+                                    width: (isUserBoosted || isSelected) ? 1 : 0.5,
                                   ),
                                 ),
                                 child: Text(
-                                  user.name.split(' ').first,
+                                  isUserBoosted ? '⚡ ${user.name.split(' ').first}' : user.name.split(' ').first,
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: isUserBoosted ? Colors.black : Colors.white,
                                     fontSize: 9.5,
-                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                                    fontWeight: (isUserBoosted || isSelected) ? FontWeight.bold : FontWeight.w600,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -1298,17 +1350,44 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      activeMatchUsers.isNotEmpty
-                          ? '${activeMatchUsers.length} Kullanıcı Match Haritasında Canlı'
-                          : 'Radarın Açık (Kullanıcı Aranıyor)',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              activeMatchUsers.isNotEmpty
+                                  ? '${activeMatchUsers.length} Canlı'
+                                  : 'Kullanıcı Aranıyor',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (currentUser.isBoosted) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFFF9100)]),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '⚡ ${currentUser.boostRemainingTime?.inMinutes ?? 60}dk Boost',
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     // Hayalet Modu & Görünürlük Butonu (Tüm cihazlar ve Supabase ile canlı senkronize)
                     GestureDetector(
                       onTap: () async {
@@ -1366,13 +1445,123 @@ class _EventMapScreenState extends State<EventMapScreen> {
               ),
             ),
 
-          // Sağ Alt Butonlar (Zoom ve Konumuma Git)
+          // Sağ Alt Butonlar (⚡ Boost, Zoom ve Konumuma Git)
           Positioned(
             right: 16,
             bottom: (_selectedEvent != null || _selectedUser != null) ? 240 : 20,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // ⚡ 1 SAATLİK RADAR BOOST BUTONU (VIP)
+                GestureDetector(
+                  onTap: () async {
+                    final isBoosted = currentUser.isBoosted;
+                    if (isBoosted) {
+                      final rem = currentUser.boostRemainingTime;
+                      final mins = rem != null ? rem.inMinutes : 60;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: const Color(0xFF1E1B18),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          content: Row(
+                            children: [
+                              const Text('⚡', style: TextStyle(fontSize: 20)),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Harita Boostun Aktif! Kalan süre: $mins dakika. Profilin radardaki herkese en üstte gösteriliyor 👑',
+                                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                          duration: const Duration(seconds: 3),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (!currentUser.hasActiveVip) {
+                      VipPaywallSheet.show(
+                        context,
+                        initialFeature: VipFeature.mapBoost,
+                      );
+                      return;
+                    }
+
+                    // VIP üye -> Boost'u 1 saatliğine aktifleştir
+                    await eventService.activateBoost(hours: 1);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          backgroundColor: const Color(0xFF1E1B18),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          content: const Row(
+                            children: [
+                              Text('⚡', style: TextStyle(fontSize: 22)),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'Harita Boost Aktifleştirildi! Profilin 1 saat boyunca yakındaki tüm kullanıcılarda en üstte parlayacak! 👑',
+                                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                    }
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      gradient: currentUser.isBoosted
+                          ? const LinearGradient(
+                              colors: [Color(0xFFFFD700), Color(0xFFFF9100)],
+                            )
+                          : const LinearGradient(
+                              colors: [Color(0xFF2C2411), Color(0xFF1E190E)],
+                            ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFFFFD700),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFFD700).withValues(alpha: currentUser.isBoosted ? 0.6 : 0.25),
+                          blurRadius: currentUser.isBoosted ? 14 : 8,
+                          spreadRadius: currentUser.isBoosted ? 2 : 0,
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.bolt_rounded,
+                          color: currentUser.isBoosted ? Colors.black : const Color(0xFFFFD700),
+                          size: 22,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          currentUser.isBoosted
+                              ? '${currentUser.boostRemainingTime?.inMinutes ?? 60}d'
+                              : 'Boost',
+                          style: TextStyle(
+                            color: currentUser.isBoosted ? Colors.black : const Color(0xFFFFD700),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.surface,
@@ -1845,10 +2034,17 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.35), width: 1.5),
+                  border: Border.all(
+                    color: _selectedUser!.isBoosted
+                        ? const Color(0xFFFFD700)
+                        : const Color(0xFF8B5CF6).withOpacity(0.35),
+                    width: _selectedUser!.isBoosted ? 2.0 : 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.45),
+                      color: _selectedUser!.isBoosted
+                          ? const Color(0xFFFFD700).withValues(alpha: 0.25)
+                          : Colors.black.withOpacity(0.45),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),

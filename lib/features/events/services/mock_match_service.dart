@@ -668,6 +668,36 @@ class MockMatchService extends ChangeNotifier {
     }
   }
 
+  /// VIP Özelliği: Son kaydırılan kartı geri al (Undo Swipe)
+  Future<void> undoSwipe(UserModel targetUser) async {
+    final targetId = targetUser.id.toLowerCase().trim();
+    final currentId = currentUserId;
+
+    // 1. Görüldü listesinden ve istek anahtarlarından çıkar
+    _seenUserIds.remove(targetId);
+    _sentRequestKeys.remove(targetId);
+    _saveCachedSeenUsers();
+
+    // 2. Kart destesine en başa geri ekle
+    if (!_potentialMatches.any((u) => u.id.toLowerCase().trim() == targetId)) {
+      _potentialMatches.insert(0, targetUser);
+    }
+    notifyListeners();
+
+    // 3. Supabase eşleşme tablosundaki olası beğeni / ret kaydını temizle
+    try {
+      if (_supabase.auth.currentUser != null && _isValidUuid(currentId) && _isValidUuid(targetUser.id)) {
+        await _supabase
+            .from('matches')
+            .delete()
+            .or('and(user_id_1.eq.$currentId,user_id_2.eq.${targetUser.id}),and(user_id_1.eq.${targetUser.id},user_id_2.eq.$currentId)');
+      }
+    } catch (e) {
+      debugPrint('[MatchService] ⚠️ undoSwipe Supabase cleanup error: $e');
+    }
+  }
+
+
   // --- 3. INCOMING REQUESTS & DEDUPLICATION ---
 
   List<MatchRequest> get incomingRequests {
