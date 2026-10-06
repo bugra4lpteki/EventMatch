@@ -10,6 +10,7 @@ import 'package:event_match/features/events/services/mock_event_service.dart';
 import 'package:event_match/features/events/services/mock_match_service.dart';
 import 'package:event_match/features/messages/services/mock_message_service.dart';
 import 'package:event_match/features/events/services/location_radar_service.dart';
+import 'package:event_match/core/services/connectivity_service.dart';
 import 'package:event_match/core/constants/supabase_config.dart';
 
 void main() {
@@ -31,6 +32,7 @@ void main() {
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => ThemeService()),
+          ChangeNotifierProvider(create: (_) => ConnectivityService()),
           ChangeNotifierProvider(create: (_) => AuthService()),
           ChangeNotifierProvider(create: (_) => eventService),
           ChangeNotifierProxyProvider<MockEventService, MockMatchService>(

@@ -1,62 +1,90 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../services/connectivity_service.dart';
 
 class OfflineBannerWidget extends StatelessWidget {
-  final bool isOffline;
-  final VoidCallback? onRetry;
-
-  const OfflineBannerWidget({
-    super.key,
-    required this.isOffline,
-    this.onRetry,
-  });
+  const OfflineBannerWidget({super.key});
 
   @override
   Widget build(BuildContext context) {
-    if (!isOffline) return const SizedBox.shrink();
+    ConnectivityService connectivity;
+    try {
+      connectivity = context.watch<ConnectivityService>();
+    } catch (_) {
+      connectivity = ConnectivityService();
+    }
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.amber.shade900.withValues(alpha: 0.92),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.wifi_off_rounded, color: Colors.white, size: 16),
-          const SizedBox(width: 8),
-          Text(
-            'İnternet bağlantısı kesildi. Çevrimdışı moddasınız.',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-          if (onRetry != null) ...[
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: onRetry,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'Yenile',
-                  style: GoogleFonts.outfit(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+    final isOffline = connectivity.isOffline;
+    final showRestored = connectivity.showRestoredBanner;
+    final isVisible = isOffline || showRestored;
+
+        return Positioned(
+          top: MediaQuery.of(context).padding.top + 8,
+          left: 16,
+          right: 16,
+          child: IgnorePointer(
+            ignoring: !isVisible,
+            child: AnimatedSlide(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
+              offset: isVisible ? Offset.zero : const Offset(0, -1.5),
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 250),
+                opacity: isVisible ? 1.0 : 0.0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isOffline
+                          ? const Color(0xFF1E1E2E).withValues(alpha: 0.95)
+                          : const Color(0xFF064E3B).withValues(alpha: 0.95),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: isOffline
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.6)
+                            : const Color(0xFF10B981).withValues(alpha: 0.6),
+                        width: 1.2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isOffline ? const Color(0xFFEF4444) : const Color(0xFF10B981))
+                              .withValues(alpha: 0.25),
+                          blurRadius: 16,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isOffline ? Icons.wifi_off_rounded : Icons.wifi_rounded,
+                          color: isOffline ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            isOffline
+                                ? 'İnternet bağlantısı kesildi. Çevrimdışı mod.'
+                                : 'İnternet bağlantısı yeniden kuruldu!',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ],
-        ],
-      ),
-    );
+          ),
+        );
   }
 }

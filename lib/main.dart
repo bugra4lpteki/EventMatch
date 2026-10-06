@@ -20,6 +20,9 @@ import 'features/events/services/spotify_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/constants/supabase_config.dart';
 
+import 'core/services/connectivity_service.dart';
+import 'core/widgets/offline_banner_widget.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -112,6 +115,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeService()),
+        ChangeNotifierProvider(create: (_) => ConnectivityService()),
         ChangeNotifierProvider(create: (_) => AuthService()),
         ChangeNotifierProvider(create: (_) => MockEventService()),
         ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
@@ -234,6 +238,14 @@ class _EventMatchAppState extends State<EventMatchApp> {
           theme: AppTheme.getTheme(isLight: themeService.isLightTheme),
           debugShowCheckedModeBanner: false,
           home: const SplashScreen(),
+          builder: (context, child) {
+            return Stack(
+              children: [
+                if (child != null) child,
+                const OfflineBannerWidget(),
+              ],
+            );
+          },
         );
       },
     );

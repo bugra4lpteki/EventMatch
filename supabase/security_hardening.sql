@@ -165,3 +165,5 @@ BEGIN
   DELETE FROM auth.users WHERE id = v_user_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+GRANT EXECUTE ON FUNCTION public.delete_user_account() TO authenticated;

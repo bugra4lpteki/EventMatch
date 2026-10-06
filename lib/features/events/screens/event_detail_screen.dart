@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -467,6 +471,229 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
+  Future<void> _shareEvent() async {
+    HapticFeedback.lightImpact();
+    final event = widget.event;
+    final formattedDate =
+        '${event.dateTime.day} ${_getTurkishMonthName(event.dateTime.month)} ${event.dateTime.year} - ${event.dateTime.hour.toString().padLeft(2, '0')}:${event.dateTime.minute.toString().padLeft(2, '0')}';
+    final ticketPart = event.effectiveTicketUrl.isNotEmpty ? '\n🎟️ Bilet & Detay: ${event.effectiveTicketUrl}' : '';
+
+    final shareText = '''
+🎵 ${event.title}
+📅 Tarih: $formattedDate
+📍 Konum: ${event.location}
+$ticketPart
+
+EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
+'''.trim();
+
+    try {
+      await Share.share(
+        shareText,
+        subject: 'EventMatch: ${event.title}',
+      );
+    } catch (e) {
+      debugPrint('[Share] Error: $e');
+    }
+  }
+
+  void _showAddToCalendarModal() {
+    HapticFeedback.lightImpact();
+    final event = widget.event;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF38BDF8).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Takvime Ekle',
+                          style: GoogleFonts.outfit(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          event.title,
+                          style: GoogleFonts.outfit(
+                            color: AppColors.textSecondary,
+                            fontSize: 12.5,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.open_in_browser_rounded, color: Color(0xFF4285F4), size: 22),
+                ),
+                title: Text(
+                  'Google Takvim',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'Google Takvim servisine doğrudan aktar',
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _openGoogleCalendar(event);
+                },
+              ),
+              const Divider(color: Colors.white12, height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.06),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.apple_rounded, color: Colors.white, size: 22),
+                ),
+                title: Text(
+                  'Apple Takvim / iCal (.ics Dosyası)',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'iOS Takvim uygulamasına veya yerel takvime aktar',
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _exportIcsFile(event);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openGoogleCalendar(EventModel event) async {
+    final startUtc = event.dateTime.toUtc();
+    final endUtc = startUtc.add(const Duration(hours: 3));
+
+    String formatUtc(DateTime dt) {
+      return '${dt.year.toString().padLeft(4, '0')}'
+          '${dt.month.toString().padLeft(2, '0')}'
+          '${dt.day.toString().padLeft(2, '0')}T'
+          '${dt.hour.toString().padLeft(2, '0')}'
+          '${dt.minute.toString().padLeft(2, '0')}'
+          '${dt.second.toString().padLeft(2, '0')}Z';
+    }
+
+    final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+        '&text=${Uri.encodeComponent(event.title)}'
+        '&dates=${formatUtc(startUtc)}/${formatUtc(endUtc)}'
+        '&details=${Uri.encodeComponent("${event.description}\n\nEventMatch ile eklendi.")}'
+        '&location=${Uri.encodeComponent(event.location)}';
+
+    await UrlLauncherHelper.launchURL(url);
+  }
+
+  Future<void> _exportIcsFile(EventModel event) async {
+    final startUtc = event.dateTime.toUtc();
+    final endUtc = startUtc.add(const Duration(hours: 3));
+
+    String formatUtc(DateTime dt) {
+      return '${dt.year.toString().padLeft(4, '0')}'
+          '${dt.month.toString().padLeft(2, '0')}'
+          '${dt.day.toString().padLeft(2, '0')}T'
+          '${dt.hour.toString().padLeft(2, '0')}'
+          '${dt.minute.toString().padLeft(2, '0')}'
+          '${dt.second.toString().padLeft(2, '0')}Z';
+    }
+
+    final icsContent = '''BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//EventMatch//TR
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:${event.id}@eventmatch.app
+SUMMARY:${event.title}
+DESCRIPTION:${event.description.replaceAll('\n', '\\n')}
+LOCATION:${event.location}
+DTSTART:${formatUtc(startUtc)}
+DTEND:${formatUtc(endUtc)}
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR''';
+
+    try {
+      final tempDir = await getTemporaryDirectory();
+      final cleanTitle = event.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
+      final file = File('${tempDir.path}/etkinlik_${cleanTitle}_${event.id}.ics');
+      await file.writeAsString(icsContent);
+
+      await Share.shareXFiles(
+        [XFile(file.path, mimeType: 'text/calendar')],
+        subject: 'EventMatch Takvim: ${event.title}',
+      );
+    } catch (e) {
+      debugPrint('[ICS Export] Error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Takvim dosyası oluşturulamadı: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final event = widget.event;
@@ -515,7 +742,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             actions: [
               Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                child: _buildGlassIconButton(
+                  icon: Icons.calendar_month_rounded,
+                  onTap: _showAddToCalendarModal,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                child: _buildGlassIconButton(
+                  icon: Icons.share_rounded,
+                  onTap: _shareEvent,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 4.0, right: 8.0, top: 8.0, bottom: 8.0),
                 child: _buildGlassIconButton(
                   icon: Icons.more_vert_rounded,
                   onTap: () {
@@ -977,6 +1218,77 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               ),
                             ),
                           ],
+                          const SizedBox(height: 10),
+                          // Secondary Action Row: Takvime Ekle & Arkadaşınla Paylaş
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _showAddToCalendarModal,
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Takvime Ekle',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: _shareEvent,
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.share_rounded, color: Color(0xFFA855F7), size: 18),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Paylaş',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       );
                     },

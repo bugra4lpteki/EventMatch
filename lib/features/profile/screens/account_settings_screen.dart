@@ -46,7 +46,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 85);
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+      maxWidth: 1440,
+      maxHeight: 1440,
+    );
     if (pickedFile != null) {
       setState(() {
         _selectedAvatarPath = pickedFile.path;

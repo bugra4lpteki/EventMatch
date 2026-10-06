@@ -745,20 +745,52 @@ class AuthService extends ChangeNotifier {
   Future<bool> deleteAccount() async {
     try {
       final userId = currentUserId;
-      if (userId != null) {
+      if (userId != null && userId.isNotEmpty) {
+        // 1. Supabase PostgreSQL RPC (KVKK/GDPR ve Apple Store Uyumu)
         try {
-          await _supabase.from('users').delete().eq('id', userId);
-        } catch (_) {}
+          await _supabase.rpc('delete_user_account');
+          debugPrint('[Auth] ✅ delete_user_account RPC başarıyla tamamlandı.');
+        } catch (rpcErr) {
+          debugPrint('[Auth] ⚠️ RPC delete_user_account hatası (Doğrudan tablo temizliği deneniyor): $rpcErr');
+          // Fallback: public tablolarından manuel silme
+          try {
+            await _supabase.from('messages').delete().or('sender_id.eq.$userId,receiver_id.eq.$userId');
+          } catch (_) {}
+          try {
+            await _supabase.from('matches').delete().or('user_id_1.eq.$userId,user_id_2.eq.$userId');
+          } catch (_) {}
+          try {
+            await _supabase.from('event_attendees').delete().eq('user_id', userId);
+          } catch (_) {}
+          try {
+            await _supabase.from('user_photos').delete().eq('user_id', userId);
+          } catch (_) {}
+          try {
+            await _supabase.from('user_social_links').delete().eq('user_id', userId);
+          } catch (_) {}
+          try {
+            await _supabase.from('users').delete().eq('id', userId);
+          } catch (_) {}
+        }
       }
+
+      // 2. Cihaz yerel önbelleğini ve tercihlerini temizle
       try {
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
       } catch (_) {}
+
+      // 3. Supabase oturumunu kapat
       await _supabase.auth.signOut();
+      _isDemoUser = false;
+      _isTwoFactorPending = false;
+      _activeTwoFactorCode = null;
+      _activeTwoFactorExpiry = null;
+      _pendingTwoFactorEmail = null;
       notifyListeners();
       return true;
     } catch (e) {
-      debugPrint('Delete Account Error: $e');
+      debugPrint('[Auth] Delete Account Error: $e');
       return false;
     }
   }
