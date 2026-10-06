@@ -44,7 +44,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
   final List<Map<String, dynamic>> _plans = [
     {
       'title': '1 HAFTA',
-      'price': '₺89.99',
+      'price': '₺149.99',
       'period': 'hafta',
       'days': 7,
       'badge': '7 GÜN DENEME',
