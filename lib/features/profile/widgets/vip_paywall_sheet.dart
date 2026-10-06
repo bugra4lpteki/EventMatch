@@ -1,4 +1,5 @@
-import 'dart:ui';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -79,36 +80,61 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
     if (days == 7) productId = IosInAppPurchaseService.vipWeeklyId;
     if (days == 90) productId = IosInAppPurchaseService.vipQuarterlyId;
 
-    // Apple StoreKit In-App Purchase akışı
-    final success = await IosInAppPurchaseService().buyProduct(productId);
+    try {
+      // Apple StoreKit In-App Purchase akışı
+      final success = await IosInAppPurchaseService().buyProduct(productId);
 
-    if (!mounted) return;
-    setState(() => _isProcessing = false);
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
 
-    if (success) {
-      final eventService = context.read<MockEventService>();
-      await eventService.activateVip(days: days);
+      if (kIsWeb || (!kIsWeb && !Platform.isIOS)) {
+        // iOS harici platformda simülasyon tamamlandığı için doğrudan aktifleştir
+        if (success) {
+          final eventService = context.read<MockEventService>();
+          await eventService.activateVip(days: days);
 
-      Navigator.pop(context);
-
+          if (mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: const [
+                    Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24), size: 24),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Tebrikler! EventMatch VIP aktif edildi. Ayrıcalıkların tadını çıkarın! 👑',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: const Color(0xFF1E1E2E),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                margin: const EdgeInsets.all(16),
+              ),
+            );
+          }
+        }
+      } else {
+        // iOS ortamı: Apple StoreKit Face ID / Şifre akışı tetiklendi.
+        // Satın alma tamamlandığında _deliverProduct VIP'yi teslim edecektir.
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Row(
-            children: const [
-              Icon(Icons.workspace_premium_rounded, color: Color(0xFFFBBF24), size: 24),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Tebrikler! EventMatch VIP aktif edildi. Ayrıcalıkların tadını çıkarın! 👑',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
+          content: Text(
+            e.toString().replaceAll('Exception: ', ''),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
           ),
-          backgroundColor: const Color(0xFF1E1E2E),
+          backgroundColor: const Color(0xFFE11D48),
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 4),
         ),
       );
     }

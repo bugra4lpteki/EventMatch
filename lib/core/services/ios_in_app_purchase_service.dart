@@ -150,22 +150,49 @@ class IosInAppPurchaseService {
   /// Apple In-App Purchase Satın Alma Başlat
   Future<bool> buyProduct(String productId) async {
     try {
-      if (!Platform.isIOS || !_isAvailable || _products.isEmpty) {
-        debugPrint('[StoreKit] ⚠️ StoreKit bağlı değil veya iOS harici platform, simülasyon akışı çalıştırılıyor.');
-        // Simülatör veya sandbox ortamında geliştirme için doğrudan teslim et
+      if (kIsWeb || (!kIsWeb && !Platform.isIOS)) {
+        debugPrint('[StoreKit] ⚠️ iOS harici platform, simülasyon akışı çalıştırılıyor.');
         return _simulatePurchase(productId);
+      }
+
+      // iOS Platformundayız
+      if (!_isAvailable) {
+        _isAvailable = await _iap.isAvailable();
+      }
+
+      if (!_isAvailable) {
+        throw Exception('Apple App Store (StoreKit) servislerine erişilemiyor. Lütfen Apple Kimliğinizle App Store\'a giriş yaptığınızdan emin olun.');
+      }
+
+      // Ürünler henüz yüklenmediyse tekrar Apple'dan sorgula
+      if (_products.isEmpty) {
+        debugPrint('[StoreKit] 🔄 Ürünler boş, Apple StoreKit üzerinden yeniden sorgulanıyor...');
+        final ProductDetailsResponse response = await _iap.queryProductDetails(productIds);
+        _products = response.productDetails;
+        debugPrint('[StoreKit] 📦 Sorgu sonucu yüklenen ürün sayısı: ${_products.length}');
+      }
+
+      if (_products.isEmpty) {
+        throw Exception(
+          'Abonelik ürünleri Apple sunucularında henüz işleniyor.\n'
+          'Banka ve sözleşme onayı (24 saatlik süreç) tamamlandığında doğrudan Apple Pay ile açılacaktır.',
+        );
       }
 
       final product = _products.firstWhere(
         (p) => p.id == productId,
-        orElse: () => throw Exception('Ürün bulunamadı: $productId'),
+        orElse: () => throw Exception('Seçilen ürün Apple StoreKit üzerinde bulunamadı: $productId'),
       );
 
       final purchaseParam = PurchaseParam(productDetails: product);
-      return await _iap.buyNonConsumable(purchaseParam: purchaseParam);
+      if (productId == boostSingleId) {
+        return await _iap.buyConsumable(purchaseParam: purchaseParam);
+      } else {
+        return await _iap.buyNonConsumable(purchaseParam: purchaseParam);
+      }
     } catch (e) {
       debugPrint('[StoreKit] Satın alma başlatma hatası: $e');
-      return _simulatePurchase(productId);
+      rethrow;
     }
   }
 
