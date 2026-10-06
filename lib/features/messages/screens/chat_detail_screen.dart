@@ -1351,7 +1351,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Text(
                           _replyingToMessage!.isAudio
                               ? '🎤 Sesli Mesaj'
-                              : (_replyingToMessage!.isImage ? '📷 Fotoğraf' : _replyingToMessage!.text),
+                              : (_replyingToMessage!.isViewOnce
+                                  ? '📷 Tek seferlik fotoğraf'
+                                  : (_replyingToMessage!.isImage ? '📷 Fotoğraf' : _replyingToMessage!.text)),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white70, fontSize: 12),
@@ -1745,7 +1747,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            isOpened ? 'Açıldı' : 'Fotoğraf',
+                            isOpened ? 'Açıldı' : 'Tek seferlik fotoğraf',
                             style: TextStyle(
                               color: isOpened ? Colors.white60 : Colors.white,
                               fontWeight: FontWeight.bold,
@@ -1756,7 +1758,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                           const SizedBox(height: 2),
                           Text(
                             isOpened
-                                ? 'Tek seferlik fotoğraf'
+                                ? 'Görüntülendi'
                                 : (canOpen ? 'Görüntülemek için dokun' : 'Tek seferlik fotoğraf'),
                             style: TextStyle(
                               color: canOpen ? AppColors.primary : Colors.white54,

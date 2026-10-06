@@ -992,10 +992,21 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
           // Arka planda/kapalıyken Supabase trigger üzerinden OneSignal push zaten gönderiliyor.
           // İkisi birden çalışması = çift bildirim!
           if (!chat.isMuted && NotificationService().isAppInForeground) {
+            String notifMsg = parsed.cleanText.isNotEmpty ? parsed.cleanText : content;
+            if (parsed.isViewOnce || content.startsWith('[view_once:')) {
+              final caption = notifMsg.replaceAll(RegExp(r'\[view_once:[^\]]*\]\s*'), '').trim();
+              notifMsg = (caption.isNotEmpty && caption != 'Fotoğraf' && caption != 'Tek seferlik fotoğraf')
+                  ? '📷 Tek seferlik fotoğraf: $caption'
+                  : '📷 Tek seferlik fotoğraf';
+            } else if (parsed.messageType == 'image' || content.startsWith('[image:')) {
+              notifMsg = '📷 Fotoğraf';
+            } else if (parsed.messageType == 'audio' || content.startsWith('[audio:')) {
+              notifMsg = '🎤 Sesli Mesaj';
+            }
             NotificationService().showMessageNotification(
               chatId: partnerId,
               senderName: chat.participant.name,
-              message: parsed.cleanText.isNotEmpty ? parsed.cleanText : content,
+              message: notifMsg,
               unreadCount: chat.unreadCount,
               messageId: msgId,
             );
@@ -2440,14 +2451,14 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
             : chat.participant.name;
         replyText = replyToMessage.isAudio
             ? '🎤 Sesli Mesaj'
-            : (replyToMessage.isViewOnce ? '① Fotoğraf' : (replyToMessage.isImage ? '📷 Fotoğraf' : replyToMessage.text));
+            : (replyToMessage.isViewOnce ? '📷 Tek seferlik fotoğraf' : (replyToMessage.isImage ? '📷 Fotoğraf' : replyToMessage.text));
       }
 
       final newMsg = MessageModel(
         id: newMsgId,
         senderId: currentId,
         receiverId: partnerId,
-        text: trimmedCaption.isNotEmpty ? trimmedCaption : 'Fotoğraf',
+        text: trimmedCaption.isNotEmpty ? trimmedCaption : 'Tek seferlik fotoğraf',
         timestamp: now,
         status: MessageStatus.sending,
         mediaUrl: imageUrl,

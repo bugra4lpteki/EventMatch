@@ -67,10 +67,21 @@ BEGIN
     FROM public.users
     WHERE id::text = NEW.receiver_id::text;
 
-    -- Mesaj içeriğini temizle (Ses, fotoğraf veya alıntı etiketlerini insan diline çevir)
+    -- Mesaj içeriğini temizle (Ses, fotoğraf, tek seferlik fotoğraf veya alıntı etiketlerini insan diline çevir)
     v_clean_content := CASE 
       WHEN NEW.content LIKE '%[audio:%' THEN '🎤 Sesli Mesaj'
-      WHEN NEW.content LIKE '%[image:%' THEN '📷 Fotoğraf'
+      WHEN NEW.content LIKE '%[view_once:%' THEN 
+        CASE 
+          WHEN regexp_replace(NEW.content, '^\[view_once:[^\]]*\]\s*', '') <> '' 
+          THEN '📷 Tek seferlik fotoğraf: ' || regexp_replace(NEW.content, '^\[view_once:[^\]]*\]\s*', '')
+          ELSE '📷 Tek seferlik fotoğraf'
+        END
+      WHEN NEW.content LIKE '%[image:%' THEN 
+        CASE 
+          WHEN regexp_replace(NEW.content, '^\[image:[^\]]*\]\s*', '') <> '' 
+          THEN '📷 Fotoğraf: ' || regexp_replace(NEW.content, '^\[image:[^\]]*\]\s*', '')
+          ELSE '📷 Fotoğraf'
+        END
       WHEN NEW.content LIKE '[reply:%' THEN 
         COALESCE(NULLIF(regexp_replace(NEW.content, '^\[reply:[^\]]*\]\s*', ''), ''), 'Yeni Mesaj')
       ELSE COALESCE(NULLIF(NEW.content, ''), 'Yeni Mesaj')

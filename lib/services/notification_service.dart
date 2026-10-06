@@ -266,6 +266,22 @@ class NotificationService with WidgetsBindingObserver {
       } catch (_) {}
 
       final url = Uri.parse('https://onesignal.com/api/v1/notifications');
+      String cleanContent = content.trim();
+      if (cleanContent.contains('[view_once:')) {
+        final caption = cleanContent.replaceAll(RegExp(r'\[view_once:[^\]]*\]\s*'), '').trim();
+        cleanContent = (caption.isNotEmpty && caption != 'Fotoğraf' && caption != 'Tek seferlik fotoğraf')
+            ? '📷 Tek seferlik fotoğraf: $caption'
+            : '📷 Tek seferlik fotoğraf';
+      } else if (cleanContent.contains('[image:')) {
+        final caption = cleanContent.replaceAll(RegExp(r'\[image:[^\]]*\]\s*'), '').trim();
+        cleanContent = caption.isNotEmpty ? '📷 Fotoğraf: $caption' : '📷 Fotoğraf';
+      } else if (cleanContent.contains('[audio:')) {
+        cleanContent = '🎤 Sesli Mesaj';
+      } else if (cleanContent.contains('[reply:')) {
+        cleanContent = cleanContent.replaceAll(RegExp(r'\[reply:[^\]]*\]\s*'), '').trim();
+        if (cleanContent.isEmpty) cleanContent = 'Yeni Mesaj';
+      }
+
       final Map<String, dynamic> payload = {
         'app_id': OneSignalConfig.appId,
         'target_channel': 'push',
@@ -281,8 +297,8 @@ class NotificationService with WidgetsBindingObserver {
           'tr': senderName,
         },
         'contents': {
-          'en': content.trim().isNotEmpty ? content : 'You have a new message',
-          'tr': content.trim().isNotEmpty ? content : 'Yeni mesajınız var',
+          'en': cleanContent.isNotEmpty ? cleanContent : 'You have a new message',
+          'tr': cleanContent.isNotEmpty ? cleanContent : 'Yeni mesajınız var',
         },
         'data': {
           'chat_id': senderId ?? '',
@@ -432,8 +448,24 @@ class NotificationService with WidgetsBindingObserver {
         ? '$senderName ($unreadCount yeni mesaj)'
         : senderName;
 
+    String cleanMessage = message;
+    if (cleanMessage.contains('[view_once:')) {
+      final caption = cleanMessage.replaceAll(RegExp(r'\[view_once:[^\]]*\]\s*'), '').trim();
+      cleanMessage = (caption.isNotEmpty && caption != 'Fotoğraf' && caption != 'Tek seferlik fotoğraf')
+          ? '📷 Tek seferlik fotoğraf: $caption'
+          : '📷 Tek seferlik fotoğraf';
+    } else if (cleanMessage.contains('[image:')) {
+      final caption = cleanMessage.replaceAll(RegExp(r'\[image:[^\]]*\]\s*'), '').trim();
+      cleanMessage = caption.isNotEmpty ? '📷 Fotoğraf: $caption' : '📷 Fotoğraf';
+    } else if (cleanMessage.contains('[audio:')) {
+      cleanMessage = '🎤 Sesli Mesaj';
+    } else if (cleanMessage.contains('[reply:')) {
+      cleanMessage = cleanMessage.replaceAll(RegExp(r'\[reply:[^\]]*\]\s*'), '').trim();
+      if (cleanMessage.isEmpty) cleanMessage = 'Yeni Mesaj';
+    }
+
     if (kIsWeb) {
-      debugPrint('[NotificationService Web] $title: $message');
+      debugPrint('[NotificationService Web] $title: $cleanMessage');
       return;
     }
 
@@ -462,7 +494,7 @@ class NotificationService with WidgetsBindingObserver {
       enableLights: true,
       ledColor: const Color(0xFFEC4899),
       styleInformation: BigTextStyleInformation(
-        message,
+        cleanMessage,
         htmlFormatBigText: false,
         contentTitle: title,
         htmlFormatContentTitle: false,
@@ -472,7 +504,7 @@ class NotificationService with WidgetsBindingObserver {
       fullScreenIntent: false,
       channelShowBadge: true,
       visibility: NotificationVisibility.public,
-      ticker: '💬 $senderName: $message',
+      ticker: '💬 $senderName: $cleanMessage',
     );
 
     final iosDetails = DarwinNotificationDetails(
@@ -492,11 +524,11 @@ class NotificationService with WidgetsBindingObserver {
       await _notificationsPlugin.show(
         chatId.hashCode.abs(),
         title,
-        message,
+        cleanMessage,
         details,
         payload: 'chat_$chatId',
       );
-      debugPrint('[NotificationService] 📢 WhatsApp tarzı heads-up bildirim gösterildi: $title -> $message (Ön planda mı: $isAppInForeground)');
+      debugPrint('[NotificationService] 📢 WhatsApp tarzı heads-up bildirim gösterildi: $title -> $cleanMessage (Ön planda mı: $isAppInForeground)');
     } catch (e) {
       debugPrint('[NotificationService] ❌ Bildirim gösterme hatası: $e');
     }

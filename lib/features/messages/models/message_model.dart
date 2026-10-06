@@ -82,6 +82,29 @@ class MessageModel {
     return false;
   }
 
+  /// Sohbet listesi ve bildirimler için insan dostu önizleme metni
+  String get previewText {
+    if (isDeleted) return '🚫 Bu mesaj silindi';
+    if (isViewOnce) {
+      if (isViewOnceOpened) return '📷 Tek seferlik fotoğraf (Açıldı)';
+      if (text.isNotEmpty &&
+          text != 'Fotoğraf' &&
+          text != 'Tek seferlik fotoğraf' &&
+          text != 'Açıldı') {
+        return '📷 Tek seferlik fotoğraf: $text';
+      }
+      return '📷 Tek seferlik fotoğraf';
+    }
+    if (isAudio) return '🎤 Sesli Mesaj';
+    if (isImage) {
+      if (text.isNotEmpty && text != 'Fotoğraf' && text != '📷 Fotoğraf') {
+        return '📷 Fotoğraf: $text';
+      }
+      return '📷 Fotoğraf';
+    }
+    return text.isNotEmpty ? text : 'Mesaj';
+  }
+
   Map<String, int> get reactionCounts {
     final counts = <String, int>{};
     for (var emoji in reactions.values) {
@@ -232,7 +255,7 @@ class MessageModel {
         isViewOnce = true;
         isViewOnceOpened = opened;
         final rest = currentText.substring(closeBracket + 1).trim();
-        currentText = rest.isNotEmpty ? rest : (opened ? 'Açıldı' : 'Fotoğraf');
+        currentText = rest.isNotEmpty ? rest : (opened ? 'Açıldı' : 'Tek seferlik fotoğraf');
       }
     }
     // 3. Parse [image:URL] or [image:DATA_URI]
@@ -361,7 +384,7 @@ class MessageModel {
       receiverId: map['receiver_id']?.toString(),
       text: isDeleted
           ? (rawContent.contains('sildiniz') || parsed.cleanText.contains('sildiniz') ? 'Bu mesajı sildiniz' : 'Bu mesaj silindi')
-          : (parsed.cleanText.isNotEmpty ? parsed.cleanText : (isViewOnceOpened ? 'Açıldı' : (isViewOnce ? 'Fotoğraf' : rawContent))),
+          : (parsed.cleanText.isNotEmpty ? parsed.cleanText : (isViewOnceOpened ? 'Açıldı' : (isViewOnce ? 'Tek seferlik fotoğraf' : rawContent))),
       timestamp: map['created_at'] != null
           ? DateTime.tryParse(map['created_at'].toString())?.toLocal() ?? DateTime.now()
           : (map['timestamp'] != null

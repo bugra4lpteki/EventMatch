@@ -17,6 +17,43 @@ void main() {
       expect(parsed.messageType, equals('view_once'));
     });
 
+    test('Uncaptioned view-once message parses cleanText as Tek seferlik fotoğraf', () {
+      const rawUncaptioned = '[view_once:https://example.com/photos/secret.jpg]';
+      final parsed = MessageModel.parseEncodedContent(rawUncaptioned);
+
+      expect(parsed.isViewOnce, isTrue);
+      expect(parsed.isViewOnceOpened, isFalse);
+      expect(parsed.cleanText, equals('Tek seferlik fotoğraf'));
+      expect(parsed.mediaUrl, equals('https://example.com/photos/secret.jpg'));
+    });
+
+    test('previewText formats view-once messages properly for chat list and notifications', () {
+      final uncaptionedMsg = MessageModel(
+        id: 'vo_uncaptioned',
+        senderId: 'u1',
+        text: 'Tek seferlik fotoğraf',
+        timestamp: DateTime.now(),
+        messageType: 'view_once',
+        isViewOnce: true,
+        isViewOnceOpened: false,
+      );
+      expect(uncaptionedMsg.previewText, equals('📷 Tek seferlik fotoğraf'));
+
+      final captionedMsg = MessageModel(
+        id: 'vo_captioned',
+        senderId: 'u1',
+        text: 'Özel parti fotoğrafı',
+        timestamp: DateTime.now(),
+        messageType: 'view_once',
+        isViewOnce: true,
+        isViewOnceOpened: false,
+      );
+      expect(captionedMsg.previewText, equals('📷 Tek seferlik fotoğraf: Özel parti fotoğrafı'));
+
+      final openedMsg = uncaptionedMsg.copyWith(isViewOnceOpened: true, text: 'Açıldı');
+      expect(openedMsg.previewText, equals('📷 Tek seferlik fotoğraf (Açıldı)'));
+    });
+
     test('Opened view-once message parses correctly with opened status', () {
       const rawOpened = '[view_once:https://example.com/photos/secret.jpg|||opened]';
       final parsed = MessageModel.parseEncodedContent(rawOpened);

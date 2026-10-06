@@ -508,9 +508,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         subtitle: Text(
           isBlocked
               ? '🚫 Bu kullanıcı engellendi'
-              : (lastMsg?.isDeleted == true
-                  ? '🚫 Bu mesaj silindi'
-                  : (lastMsg?.text ?? 'Eşleşme sağlandı! Sohbet başlatın.')),
+              : (lastMsg != null ? lastMsg.previewText : 'Eşleşme sağlandı! Sohbet başlatın.'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
