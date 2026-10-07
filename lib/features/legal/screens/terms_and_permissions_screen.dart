@@ -411,7 +411,7 @@ class _TermsAndPermissionsScreenState
               number: '2',
               heading: 'Hizmet Tanımı',
               body:
-                  'EventMatch; kullanıcıların etkinlikler keşfetmesini, etkinlik eşleşmesi yapmasını ve ortak ilgi alanlarına sahip kişilerle buluşmasını sağlayan sosyal bir platformdur. Şirket, hizmetlerin kesintisiz veya hatasız çalışacağını garanti etmez.',
+                  'EventMatch; kullanıcıların etkinlikler keşfetmesini, etkinlik arkadaşı bulmasını ve ortak ilgi alanlarına sahip katılımcılarla buluşmasını sağlayan sosyal bir etkinlik platformudur. Şirket, hizmetlerin kesintisiz veya hatasız çalışacağını garanti etmez.',
             ),
             _LegalItem(
               number: '3',
@@ -558,7 +558,7 @@ class _TermsAndPermissionsScreenState
               number: '',
               heading: '🔔 Bildirim İzni',
               body:
-                  'Neden İstenir: Yeni eşleşme, mesaj ve etkinlik hatırlatma bildirimleri göndermek.\n\nKullanım Şekli: OneSignal push bildirim altyapısı kullanılır. Cihaz kimliği şifrelenmiş şekilde saklanır.\n\nReddetme Sonucu: Push bildirimler alınmaz; uygulama içinde mesajlar ve eşleşmeler yine de görüntülenebilir.',
+                  'Neden İstenir: Yeni katılım isteği, mesaj ve etkinlik hatırlatma bildirimleri göndermek.\n\nKullanım Şekli: OneSignal push bildirim altyapısı kullanılır. Cihaz kimliği şifrelenmiş şekilde saklanır.\n\nReddetme Sonucu: Push bildirimler alınmaz; uygulama içinde mesajlar ve bağlantılar yine de görüntülenebilir.',
             ),
             _LegalItem(
               number: '',

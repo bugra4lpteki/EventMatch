@@ -260,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Etkinliklere katıl, yeni insanlarla tanış.',
+                        'Etkinlikleri keşfet, konser ve festival arkadaşları bul.',
                         textAlign: TextAlign.center,
                         style: GoogleFonts.outfit(
                           fontSize: 15,
