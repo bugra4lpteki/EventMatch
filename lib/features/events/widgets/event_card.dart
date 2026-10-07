@@ -479,7 +479,7 @@ class _LiveEventBadge extends StatelessWidget {
       badgeGradient = AppColors.goldGradient;
       shadowColor = const Color(0xFFF59E0B);
     } else if (isHighMatch) {
-      badgeText = '💖 YÜKSEK EŞLEŞME';
+      badgeText = '🎯 SANA ÖZEL';
       badgeGradient = AppColors.primaryGradient;
       shadowColor = AppColors.primary;
     } else if (isUpcoming) {

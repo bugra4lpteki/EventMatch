@@ -1744,7 +1744,7 @@ END:VCALENDAR''';
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                "Bu etkinlikteki diğer katılımcıları görmek, eşleşmek ve mekan sohbetine katılmak için katılımınızı onaylayın.",
+                                "Bu etkinlikteki diğer katılımcıları görmek, bağlantı kurmak ve mekan sohbetine katılmak için katılımınızı onaylayın.",
                                 textAlign: TextAlign.center,
                                 style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
                               ),

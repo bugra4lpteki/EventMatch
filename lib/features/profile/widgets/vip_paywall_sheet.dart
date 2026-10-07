@@ -270,7 +270,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Etkinliklerin ve Eşleşmelerin Ayrıcalıklı Dünyası',
+              'Etkinliklerin ve Topluluğun Ayrıcalıklı Dünyası',
               textAlign: TextAlign.center,
               style: GoogleFonts.outfit(
                 color: AppColors.textSecondary,
@@ -322,8 +322,8 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             _buildFeatureTile(
               icon: Icons.visibility_rounded,
               iconColor: const Color(0xFF38BDF8),
-              title: 'Seni Beğenenleri Gör',
-              description: 'Seni beğenen tüm profillerin fotoğraflarını net gör ve beklemeden anında eşleş.',
+              title: 'Katılım İsteklerini Gör',
+              description: 'Sana gelen tüm katılım isteklerini net gör ve beklemeden anında bağlantı kur.',
               isHighlighted: widget.highlightedFeature == VipFeature.seeLikes,
             ),
             const SizedBox(height: 10),
@@ -339,7 +339,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
               icon: Icons.map_rounded,
               iconColor: const Color(0xFF10B981),
               title: 'Sınırsız 7/24 Match Haritası',
-              description: 'Ücretsiz 1 saat sınırını kaldır, civardaki katılımcıları ve canlı eşleşmeleri 7/24 haritada gör.',
+              description: 'Ücretsiz 1 saat sınırını kaldır, civardaki katılımcıları 7/24 haritada gör.',
               isHighlighted: false,
             ),
             const SizedBox(height: 10),
@@ -352,7 +352,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             ),
             const SizedBox(height: 10),
             _buildFeatureTile(
-              icon: Icons.local_fire_department_rounded,
+              icon: Icons.stars_rounded,
               iconColor: const Color(0xFFEC4899),
               title: 'Mekan Sohbetinde VIP Rozeti',
               description: 'Konser ve mekan sohbetlerinde altın parlayan mesaj balonu ve 👑 VIP tacı ile parılda.',

@@ -371,8 +371,8 @@ class NotificationService with WidgetsBindingObserver {
         'priority': 10,
         'android_priority': 5,
         'headings': {
-          'en': 'Yeni Eşleşme İsteği',
-          'tr': 'Yeni Eşleşme İsteği',
+          'en': 'New Event Buddy Request',
+          'tr': 'Yeni Katılım İsteği',
         },
         'contents': {
           'en': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',

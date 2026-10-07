@@ -3,17 +3,17 @@
 <plist version="1.0">
 <dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>EventMatch, yakınınızdaki konser, festival ve etkinlikleri haritada görüntülemek ve etkinlik alanındaki diğer katılımcılarla eşleşebilmenizi sağlamak için konumunuza erişir.</string>
+	<string>EventMatch, yakınınızdaki konser, festival ve etkinlikleri haritada görüntülemek ve etkinlik alanındaki diğer katılımcıları keşfedebilmenizi sağlamak için konumunuza erişir.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>EventMatch, katıldığınız etkinlik alanına yaklaştığınızda bildirim göndermek ve çevre etkinlikleri listelemek için konumunuza erişir.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>EventMatch, yakınınızdaki canlı etkinlikleri göstermek ve etkinlik alanındaki eşleşmeleri bildirmek için konumunuza erişir.</string>
+	<string>EventMatch, yakınınızdaki canlı etkinlikleri göstermek ve etkinlik alanındaki diğer katılımcıları bildirmek için konumunuza erişir.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>EventMatch, profilinizi özelleştirmek ve diğer katılımcılara göstermek amacıyla profil fotoğrafı seçebilmeniz için fotoğraf galerinize erişim izni gerektirir.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>EventMatch, profil fotoğrafınızı doğrudan kameranızla çekip yükleyebilmeniz için kamera erişim izni gerektirir.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>EventMatch, eşleştiğiniz kişilere sesli mesaj gönderebilmeniz için mikrofon erişim izni gerektirir.</string>
+	<string>EventMatch, etkinlik arkadaşlarınıza sesli mesaj gönderebilmeniz için mikrofon erişim izni gerektirir.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

@@ -136,11 +136,11 @@ class _SwipeScreenState extends State<SwipeScreen> {
                           color: AppColors.primary.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(Icons.style_rounded, color: AppColors.primary, size: 20),
+                        child: Icon(Icons.groups_rounded, color: AppColors.primary, size: 20),
                       ),
                       const SizedBox(width: 10),
                       const Text(
-                        'Eşleşme Keşfi',
+                        'Etkinlik Katılımcıları',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -247,7 +247,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                       Icon(Icons.style_outlined, size: 64, color: AppColors.surface),
                       const SizedBox(height: 16),
                       Text(
-                        'Şu an için yeni eşleşme bulunamadı.',
+                        'Şu an için yeni etkinlik katılımcısı bulunamadı.',
                         style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                       ),
                       const SizedBox(height: 20),
@@ -551,7 +551,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _sendMatchMessage(currentItem),
                 decoration: InputDecoration(
-                  hintText: '$name kişisine mesaj yaz...',
+                  hintText: '$name kişisine etkinlik mesajı yaz...',
                   hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                   border: InputBorder.none,
                   isDense: true,
@@ -578,7 +578,7 @@ class _SwipeScreenState extends State<SwipeScreen> {
             ),
             child: IconButton(
               icon: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
-              tooltip: 'Eşleşme İsteği & Mesaj Gönder',
+              tooltip: 'Katılım İsteği & Mesaj Gönder',
               onPressed: () => _sendMatchMessage(currentItem),
             ),
           ),

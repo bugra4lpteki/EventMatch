@@ -65,12 +65,12 @@ class MatchDialog extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.redAccent.withOpacity(0.15),
+                color: AppColors.primary.withOpacity(0.15),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.favorite_rounded,
-                color: Colors.redAccent,
+              child: Icon(
+                Icons.celebration_rounded,
+                color: AppColors.primary,
                 size: 36,
               ),
             ),
@@ -85,7 +85,7 @@ class MatchDialog extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              "Eşleşme Sağlandı!",
+              "Katılım Bağlantısı Kuruldu!",
               style: TextStyle(
                 color: AppColors.primary,
                 fontSize: 18,
@@ -130,7 +130,7 @@ class MatchDialog extends StatelessWidget {
                       child: Container(
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
-                          color: Colors.pinkAccent,
+                          color: AppColors.secondary,
                           shape: BoxShape.circle,
                         ),
                         child: UserAvatar(
@@ -168,7 +168,7 @@ class MatchDialog extends StatelessWidget {
                         decoration: TextDecoration.underline,
                       ),
                     ),
-                    const TextSpan(text: " birbirinizi beğendiniz!"),
+                    const TextSpan(text: " artık etkinlik arkadaşısınız!"),
                   ],
                 ),
                 textAlign: TextAlign.center,

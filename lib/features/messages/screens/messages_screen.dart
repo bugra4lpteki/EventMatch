@@ -41,9 +41,9 @@ class _MessagesScreenState extends State<MessagesScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Sohbeti Sil / Eşleşmeyi Bitir', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text('Sohbeti Sil / Bağlantıyı Kaldır', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
-          '$partnerName ile sohbeti silmek istediğinizden emin misiniz? İleride birbirinizi tekrar keşfedip eşleşebilirsiniz.',
+          '$partnerName ile sohbeti silmek istediğinizden emin misiniz?',
           style: TextStyle(color: AppColors.textSecondary, height: 1.3),
         ),
         actions: [
@@ -57,7 +57,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Sil ve Bitir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Sil ve Kaldır', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -207,7 +207,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
                   Icon(Icons.chat_bubble_outline_rounded, size: 64, color: AppColors.surface),
                   const SizedBox(height: 16),
                   Text(
-                    "Henüz hiç eşleşmeniz veya mesajınız yok.",
+                    "Henüz hiç bağlantınız veya mesajınız yok.",
                     style: TextStyle(color: AppColors.textSecondary, fontSize: 16),
                   ),
                 ],
@@ -512,7 +512,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         subtitle: Text(
           isBlocked
               ? '🚫 Bu kullanıcı engellendi'
-              : (lastMsg != null ? lastMsg.previewText : 'Eşleşme sağlandı! Sohbet başlatın.'),
+              : (lastMsg != null ? lastMsg.previewText : 'Bağlantı kuruldu! Sohbet başlatın.'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(

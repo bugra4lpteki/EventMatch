@@ -789,7 +789,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                         );
                                         ScaffoldMessenger.of(context).showSnackBar(
                                           SnackBar(
-                                            content: const Text("⚡ Eşleşme isteği gönderildi! Karşı taraf kabul ettiğinde sohbetiniz başlayacak."),
+                                            content: const Text("⚡ Katılım isteği gönderildi! Karşı taraf kabul ettiğinde sohbetiniz başlayacak."),
                                             backgroundColor: AppColors.primary,
                                             behavior: SnackBarBehavior.floating,
                                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

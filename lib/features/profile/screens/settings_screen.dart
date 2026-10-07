@@ -89,7 +89,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingsTile(
               icon: Icons.notifications_none_rounded,
               title: 'Bildirim Tercihleri',
-              subtitle: 'Eşleşme, mesaj ve etkinlik anımsatıcıları',
+              subtitle: 'Bağlantı, mesaj ve etkinlik anımsatıcıları',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen())),
             ),
           ]),
@@ -350,7 +350,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Bu işlem GERİ ALINAMAZ. Tüm profil verileriniz, eşleşmeleriniz, fotoğraflarınız ve mesaj geçmişiniz kalıcı olarak silinecektir.',
+                    'Bu işlem GERİ ALINAMAZ. Tüm profil verileriniz, bağlantılarınız, fotoğraflarınız ve mesaj geçmişiniz kalıcı olarak silinecektir.',
                     style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
                   ),
                   const SizedBox(height: 16),

@@ -43,7 +43,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text(
-          'Eşleşme İstekleri',
+          'Katılım İstekleri',
           style: GoogleFonts.outfit(
             fontWeight: FontWeight.bold,
             color: AppColors.textPrimary,
@@ -163,7 +163,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        hasVip ? '👑 VIP Aktif: Tüm Beğeniler Görünür' : 'Seni Beğenenleri Gör 👑',
+                                        hasVip ? '👑 VIP Aktif: Tüm Katılım İstekleri Görünür' : 'Katılım İsteklerini Gör 👑',
                                         style: GoogleFonts.outfit(
                                           color: const Color(0xFFFDE68A),
                                           fontWeight: FontWeight.bold,
@@ -173,8 +173,8 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                       const SizedBox(height: 2),
                                       Text(
                                         hasVip
-                                            ? '${requests.length} kişi seni beğendi. Profiller açık ve net.'
-                                            : 'Kimin beğendiğini görmek için EventMatch VIP\'ye geç!',
+                                            ? '${requests.length} kişi seninle etkinliğe katılmak istiyor.'
+                                            : 'Katılım isteklerini öncelikli görmek için EventMatch VIP\'ye geç!',
                                         style: GoogleFonts.outfit(
                                           color: Colors.white70,
                                           fontSize: 12,
@@ -294,7 +294,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                       hasVip
                                           ? (req.message != null && req.message!.trim().isNotEmpty
                                               ? '💬 "${req.message!.trim()}"'
-                                              : "Seninle eşleşmek istiyor!")
+                                              : "Seninle etkinliğe katılmak istiyor!")
                                           : '🔒 Profil gizlendi. Görmek için dokun.',
                                       style: TextStyle(
                                         color: hasVip ? AppColors.textSecondary : const Color(0xFFFDE68A).withValues(alpha: 0.8),
@@ -344,7 +344,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                           NotificationService().sendRemotePushNotification(
                                             receiverId: req.fromUser.id,
                                             senderName: myName.isNotEmpty ? myName : 'Biri',
-                                            content: 'Eşleşme isteğini kabul etti! 🎉 Hemen sohbete başlayabilirsin.',
+                                            content: 'Katılım isteğini kabul etti! 🎉 Hemen sohbete başlayabilirsin.',
                                           );
 
                                           final msgService = context.read<MockMessageService>();

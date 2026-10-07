@@ -925,9 +925,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Eşleşmeyi Bitir', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
+        title: Text('Bağlantıyı Kaldır', style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold)),
         content: Text(
-          '${widget.chat.participant.name} ile eşleşmeyi bitirmek ve sohbeti silmek istediğinizden emin misiniz? İleride birbirinizi tekrar keşfedip eşleşebilirsiniz.',
+          '${widget.chat.participant.name} ile bağlantıyı kaldırmak ve sohbeti silmek istediğinizden emin misiniz?',
           style: TextStyle(color: AppColors.textSecondary, height: 1.3),
         ),
         actions: [
@@ -950,11 +950,11 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 matchService.unmarkSeenUser(partnerId);
                 nav.pop();
                 scaffoldMessenger.showSnackBar(
-                  SnackBar(content: Text('${widget.chat.participant.name} ile eşleşme sonlandırıldı.')),
+                  SnackBar(content: Text('${widget.chat.participant.name} ile bağlantı sonlandırıldı.')),
                 );
               }
             },
-            child: const Text('Eşleşmeyi Bitir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text('Bağlantıyı Kaldır', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -1174,9 +1174,9 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 value: 'end_match',
                 child: Row(
                   children: [
-                    Icon(Icons.heart_broken_rounded, color: Colors.redAccent, size: 20),
+                    Icon(Icons.person_remove_rounded, color: Colors.redAccent, size: 20),
                     SizedBox(width: 12),
-                    Text('Eşleşmeyi Bitir', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
+                    Text('Bağlantıyı Kaldır', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600)),
                   ],
                 ),
               ),
@@ -1273,7 +1273,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Icon(Icons.chat_bubble_outline_rounded, size: 48, color: AppColors.surface),
                         const SizedBox(height: 12),
                         Text(
-                          'Eşleşme sağlandı! 🎉',
+                          'Bağlantı kuruldu! 🎉',
                           style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 4),

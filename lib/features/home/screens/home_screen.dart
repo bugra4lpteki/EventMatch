@@ -325,7 +325,7 @@ class _RadarIconWidgetState extends State<RadarIconWidget> with SingleTickerProv
                                                                  );
                                                                  ScaffoldMessenger.of(context).showSnackBar(
                                                                    SnackBar(
-                                                                     content: Text('⚡ ${u.name} kişisine eşleşme isteği gönderildi! Kabul ettiğinde sohbetiniz başlayacak.'),
+                                                                     content: Text('⚡ ${u.name} kişisine katılım isteği gönderildi! Kabul ettiğinde sohbetiniz başlayacak.'),
                                                                      backgroundColor: AppColors.primary,
                                                                      behavior: SnackBarBehavior.floating,
                                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -577,8 +577,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Row(
                     children: [
                       _buildNavItem(0, Icons.explore_outlined, Icons.explore_rounded, 'Keşfet'),
-                      _buildNavItem(1, Icons.local_fire_department_outlined, Icons.local_fire_department_rounded, 'Eşleş'),
-                      _buildNavItemWithBadge(2, Icons.favorite_border_rounded, Icons.favorite_rounded, 'İstekler'),
+                      _buildNavItem(1, Icons.groups_outlined, Icons.groups_rounded, 'Katılımcılar'),
+                      _buildNavItemWithBadge(2, Icons.mail_outline_rounded, Icons.mark_email_read_rounded, 'İstekler'),
                       _buildMessagesNavItemWithBadge(3, Icons.forum_outlined, Icons.forum_rounded, 'Mesajlar'),
                       _buildProfileNavItem(4, 'Profil'),
                     ],

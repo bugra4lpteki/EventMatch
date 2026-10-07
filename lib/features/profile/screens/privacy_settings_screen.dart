@@ -117,7 +117,7 @@ class _PrivacySettingsScreenState extends State<PrivacySettingsScreen> {
                 _buildPrivacyTile(
                   icon: Icons.location_on_rounded,
                   title: 'Konum Paylaşımı',
-                  subtitle: 'Yakınınızdaki etkinlik severlerle eşleşmek için konum kullanılır.',
+                  subtitle: 'Yakınınızdaki etkinlik severlerle bağlantı kurmak için konum kullanılır.',
                   value: _enableLocationSharing,
                   onChanged: (val) => _updateSetting('privacy_location_sharing', val, (v) => _enableLocationSharing = v),
                 ),
