@@ -593,7 +593,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                       ),
                       const SizedBox(width: 5),
                       Text(
-                        'Match Haritası',
+                        'Katılımcı Haritası',
                         style: TextStyle(
                           color: _currentMapMode == MapMode.matchMap ? Colors.white : AppColors.textSecondary,
                           fontWeight: _currentMapMode == MapMode.matchMap ? FontWeight.bold : FontWeight.w500,
@@ -1131,7 +1131,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                         const SizedBox(width: 8),
                         Text(
                           currentUser.hasActiveVip
-                              ? '👑 VIP: Sınırsız Match Haritası'
+                              ? '👑 VIP: Sınırsız Katılımcı Haritası'
                               : '⏱️ Günlük Kalan: ${_matchMapRemainingSeconds ~/ 60} dk (VIP ile Sınırsız)',
                           style: TextStyle(
                             color: currentUser.hasActiveVip
@@ -2511,13 +2511,13 @@ class _EventMapScreenState extends State<EventMapScreen> {
                           ),
                           const SizedBox(height: 20),
                           const Text(
-                            'Günlük 1 Saatlik Match Haritası Süreniz Doldu',
+                            'Günlük 1 Saatlik Katılımcı Haritası Süreniz Doldu',
                             style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 10),
                           const Text(
-                            'Ücretsiz hesaplar günde 1 saat Match Haritası kullanabilir. Etkinlik haritası herkese sınırsız açıktır. 7/24 sınırsız radar ve eşleşme için VIP\'e geçebilirsiniz.',
+                            'Ücretsiz hesaplar günde 1 saat Katılımcı Haritası kullanabilir. Etkinlik haritası herkese sınırsız açıktır. 7/24 sınırsız radar ve yeni bağlantılar için VIP\'e geçebilirsiniz.',
                             style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
                             textAlign: TextAlign.center,
                           ),

@@ -278,7 +278,7 @@ class _ProfileVerificationSheetContentState extends State<ProfileVerificationShe
           const SizedBox(height: 6),
           Text(
             isAlreadyVerified
-                ? 'E-posta adresiniz doğrulandı! Profilinizde, Match Haritası\'nda ve eşleşmelerde Doğrulanmış Kullanıcı (Mavi Tik) rozetiniz aktif.'
+                ? 'E-posta adresiniz doğrulandı! Profilinizde, Katılımcı Haritası\'nda ve yeni bağlantılarda Doğrulanmış Kullanıcı (Mavi Tik) rozetiniz aktif.'
                 : 'E-postanı doğrula, gerçek kullanıcı olduğunu kanıtla ve profiline Doğrulanmış Kullanıcı Mavi Tik rozetini ekle!',
             textAlign: TextAlign.center,
             style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13),

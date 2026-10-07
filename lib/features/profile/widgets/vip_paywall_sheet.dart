@@ -338,7 +338,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             _buildFeatureTile(
               icon: Icons.map_rounded,
               iconColor: const Color(0xFF10B981),
-              title: 'Sınırsız 7/24 Match Haritası',
+              title: 'Sınırsız 7/24 Katılımcı Haritası',
               description: 'Ücretsiz 1 saat sınırını kaldır, civardaki katılımcıları 7/24 haritada gör.',
               isHighlighted: false,
             ),
