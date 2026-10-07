@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -568,7 +569,7 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
+                    color: const Color(0xFF4285F4).withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.open_in_browser_rounded, color: Color(0xFF4285F4), size: 22),
@@ -593,23 +594,48 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
                 leading: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
+                    color: Colors.white.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(Icons.apple_rounded, color: Colors.white, size: 22),
                 ),
                 title: Text(
-                  'Apple Takvim / iCal (.ics Dosyası)',
+                  'Apple Takvim / iCal (.ics)',
                   style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: Text(
-                  'iOS Takvim uygulamasına veya yerel takvime aktar',
+                  'iOS Takvim uygulamasına ekle veya dosya olarak aç',
                   style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _exportIcsFile(event);
+                },
+              ),
+              const Divider(color: Colors.white12, height: 16),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0078D4).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.mail_outline_rounded, color: Color(0xFF0078D4), size: 22),
+                ),
+                title: Text(
+                  'Outlook / Office 365 Takvim',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'Microsoft Outlook web veya mobil takvimine aktar',
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _openOutlookCalendar(event);
                 },
               ),
               const SizedBox(height: 8),
@@ -633,18 +659,66 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
           '${dt.second.toString().padLeft(2, '0')}Z';
     }
 
-    final url = 'https://calendar.google.com/calendar/render?action=TEMPLATE'
-        '&text=${Uri.encodeComponent(event.title)}'
-        '&dates=${formatUtc(startUtc)}/${formatUtc(endUtc)}'
-        '&details=${Uri.encodeComponent("${event.description}\n\nEventMatch ile eklendi.")}'
-        '&location=${Uri.encodeComponent(event.location)}';
+    String cleanDesc = event.description.replaceAll(RegExp(r'<[^>]*>'), ' ').trim();
+    if (cleanDesc.length > 300) {
+      cleanDesc = '${cleanDesc.substring(0, 300)}...';
+    }
+    cleanDesc = '$cleanDesc\n\nEventMatch Etkinlik Detayı: ${event.title}';
 
-    await UrlLauncherHelper.launchURL(url);
+    final googleUri = Uri.https('calendar.google.com', '/calendar/render', {
+      'action': 'TEMPLATE',
+      'text': event.title.trim(),
+      'dates': '${formatUtc(startUtc)}/${formatUtc(endUtc)}',
+      'details': cleanDesc,
+      'location': event.location.trim(),
+    });
+
+    final success = await UrlLauncherHelper.launchURL(googleUri.toString());
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Google Takvim açılamadı. Lütfen internet bağlantınızı kontrol edin.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _openOutlookCalendar(EventModel event) async {
+    final startUtc = event.dateTime.toUtc();
+    final endUtc = startUtc.add(const Duration(hours: 3));
+
+    String cleanDesc = event.description.replaceAll(RegExp(r'<[^>]*>'), ' ').trim();
+    if (cleanDesc.length > 300) {
+      cleanDesc = '${cleanDesc.substring(0, 300)}...';
+    }
+    cleanDesc = '$cleanDesc\n\nEventMatch Etkinlik Detayı: ${event.title}';
+
+    final outlookUri = Uri.https('outlook.live.com', '/calendar/0/deeplink/compose', {
+      'path': '/calendar/action/compose',
+      'rru': 'addevent',
+      'subject': event.title.trim(),
+      'startdt': startUtc.toIso8601String(),
+      'enddt': endUtc.toIso8601String(),
+      'body': cleanDesc,
+      'location': event.location.trim(),
+    });
+
+    final success = await UrlLauncherHelper.launchURL(outlookUri.toString());
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Outlook Takvim açılamadı. Lütfen internet bağlantınızı kontrol edin.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
   }
 
   Future<void> _exportIcsFile(EventModel event) async {
     final startUtc = event.dateTime.toUtc();
     final endUtc = startUtc.add(const Duration(hours: 3));
+    final nowUtc = DateTime.now().toUtc();
 
     String formatUtc(DateTime dt) {
       return '${dt.year.toString().padLeft(4, '0')}'
@@ -655,32 +729,75 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
           '${dt.second.toString().padLeft(2, '0')}Z';
     }
 
+    String escapeIcs(String text) {
+      return text
+          .replaceAll('\\', '\\\\')
+          .replaceAll(';', '\\;')
+          .replaceAll(',', '\\,')
+          .replaceAll('\r\n', '\\n')
+          .replaceAll('\n', '\\n');
+    }
+
+    String cleanDesc = event.description.replaceAll(RegExp(r'<[^>]*>'), ' ').trim();
+    if (cleanDesc.length > 400) {
+      cleanDesc = '${cleanDesc.substring(0, 400)}...';
+    }
+    cleanDesc = '$cleanDesc\n\nEventMatch: ${event.title}';
+
     final icsContent = '''BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//EventMatch//TR
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
-UID:${event.id}@eventmatch.app
-SUMMARY:${event.title}
-DESCRIPTION:${event.description.replaceAll('\n', '\\n')}
-LOCATION:${event.location}
+UID:event_${event.id}_${startUtc.millisecondsSinceEpoch}@eventmatch.app
+DTSTAMP:${formatUtc(nowUtc)}
 DTSTART:${formatUtc(startUtc)}
 DTEND:${formatUtc(endUtc)}
+SUMMARY:${escapeIcs(event.title)}
+DESCRIPTION:${escapeIcs(cleanDesc)}
+LOCATION:${escapeIcs(event.location)}
 STATUS:CONFIRMED
+SEQUENCE:0
 END:VEVENT
 END:VCALENDAR''';
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final cleanTitle = event.title.replaceAll(RegExp(r'[^\w\s]+'), '').replaceAll(' ', '_');
-      final file = File('${tempDir.path}/etkinlik_${cleanTitle}_${event.id}.ics');
-      await file.writeAsString(icsContent);
+      final file = File('${tempDir.path}/etkinlik_${event.id}.ics');
+      await file.writeAsString(icsContent, encoding: utf8);
+
+      final box = mounted ? (context.findRenderObject() as RenderBox?) : null;
+      final origin = box != null
+          ? (box.localToGlobal(Offset.zero) & box.size)
+          : const Rect.fromLTWH(0, 0, 300, 300);
 
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/calendar')],
+        [XFile(file.path, mimeType: 'text/calendar', name: '${event.title.replaceAll(' ', '_')}.ics')],
         subject: 'EventMatch Takvim: ${event.title}',
+        text: '${event.title} - ${event.location}',
+        sharePositionOrigin: origin,
       );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text('Takvim dosyası hazırlandı! Açılan pencereden Takvim uygulamasını seçebilirsiniz.'),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.primary,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     } catch (e) {
       debugPrint('[ICS Export] Error: $e');
       if (mounted) {
