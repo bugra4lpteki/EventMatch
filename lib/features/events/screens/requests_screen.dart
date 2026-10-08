@@ -14,6 +14,7 @@ import '../../messages/services/mock_message_service.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../../services/notification_service.dart';
 import '../services/mock_event_service.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 
 class RequestsScreen extends StatefulWidget {
   const RequestsScreen({super.key});
@@ -327,6 +328,26 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                 Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.more_vert_rounded, color: Colors.white54, size: 18),
+                                      tooltip: 'Şikayet Et / Engelle',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () {
+                                        ReportBlockSheet.showOptionsModal(
+                                          context,
+                                          userId: fromUser.id,
+                                          userName: fromUser.name,
+                                          onUserBlocked: () async {
+                                            await matchService.rejectRequest(req);
+                                            if (context.mounted) {
+                                              context.read<MockMessageService>().reloadChats();
+                                            }
+                                          },
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(width: 4),
                                     IconButton(
                                       icon: Icon(Icons.close, color: AppColors.textSecondary, size: 20),
                                       onPressed: () async {

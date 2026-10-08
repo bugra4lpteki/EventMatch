@@ -235,7 +235,7 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const TermsAndPermissionsScreen(),
+                        builder: (_) => const TermsAndPermissionsScreen(initialTabIndex: 1),
                       ),
                     ),
                   ),

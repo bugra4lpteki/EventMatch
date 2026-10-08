@@ -9,8 +9,14 @@ import '../../../core/constants/app_colors.dart';
 class TermsAndPermissionsScreen extends StatefulWidget {
   /// [isOnboarding] = true → kayıt akışındaki tam sayfa modu (geri yok, kabul butonu var)
   final bool isOnboarding;
+  /// Açılışta görüntülenecek aktif sekme (0: EULA, 1: Gizlilik, 2: İzinler, 3: Topluluk)
+  final int initialTabIndex;
 
-  const TermsAndPermissionsScreen({super.key, this.isOnboarding = false});
+  const TermsAndPermissionsScreen({
+    super.key,
+    this.isOnboarding = false,
+    this.initialTabIndex = 0,
+  });
 
   @override
   State<TermsAndPermissionsScreen> createState() =>
@@ -30,7 +36,12 @@ class _TermsAndPermissionsScreenState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _activeTab = widget.initialTabIndex.clamp(0, 3);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: _activeTab,
+    );
     _tabController.addListener(() {
       setState(() {
         _activeTab = _tabController.index;
@@ -435,11 +446,11 @@ class _TermsAndPermissionsScreenState
             ),
             _LegalItem(
               number: '6',
-              heading: 'Sıfır Tolerans Politikası',
+              heading: 'Sıfır Tolerans Politikası (Apple EULA & UGC Uyumu)',
               body:
-                  'Aşağıdaki davranışlar kesinlikle yasaktır ve hesap kalıcı kapatılmasına yol açar:\n• Taciz, zorbalık, cinsel istismar içerikli mesajlar\n• Nefret söylemi (ırk, din, cinsiyet, engellilik vb. temelli)\n• Sahte kimlik veya profil oluşturma\n• Spam, dolandırıcılık veya kimlik avı girişimleri\n• Yasadışı içerik paylaşımı',
+                  'EventMatch, Apple Standart Lisans Sözleşmesi (Apple Standard EULA) ve App Store Topluluk Kuralları ile tam uyumludur.\n\nSakıncalı içerik (objectionable content) paylaşımına ve tacizkar davranışlara karşı kesinlikle SIFIR TOLERANS (Zero Tolerance) politikası uygulanır:\n• Taciz, zorbalık, hakaret veya cinsel istismar içerikli mesajlar\n• Nefret söylemi (ırk, din, cinsiyet, yönelim vb. temelli)\n• Sahte profil oluşturma, spam ve dolandırıcılık\n• Yasadışı içerik paylaşımı\n\nKullanıcılar sakıncalı içerikleri veya kullanıcıları doğrudan uygulama içinden tek dokunuşla bildirebilir ve engelleyebilir. Güvenlik ekibimiz tüm bildirimleri en geç 24 saat içinde inceler; sakıncalı içerikleri derhal kaldırır ve kural ihlali yapan kullanıcıların hesaplarını kalıcı olarak fesheder.',
               highlight: true,
-              highlightColor: Color(0xFFEF4444),
+              highlightColor: const Color(0xFFEF4444),
             ),
             _LegalItem(
               number: '7',

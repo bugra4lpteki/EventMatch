@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/services/ios_in_app_purchase_service.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../events/services/mock_event_service.dart';
+import '../../legal/screens/terms_and_permissions_screen.dart';
 
 enum VipFeature {
   seeLikes,
@@ -571,27 +572,56 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
             const SizedBox(height: 10),
 
             // Apple Guideline 3.1.2: EULA and Privacy Policy Links
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 GestureDetector(
-                  onTap: () => UrlLauncherHelper.launchURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TermsAndPermissionsScreen(initialTabIndex: 0),
+                      ),
+                    );
+                  },
                   child: Text(
                     'Kullanım Şartları (EULA)',
                     style: GoogleFonts.outfit(
-                      color: Colors.white60,
+                      color: Colors.white70,
                       fontSize: 10.5,
                       decoration: TextDecoration.underline,
                     ),
                   ),
                 ),
-                const Text('  •  ', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                const Text('•', style: TextStyle(color: Colors.white30, fontSize: 10)),
                 GestureDetector(
-                  onTap: () => UrlLauncherHelper.launchURL('https://eventmatch.app/privacy'),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TermsAndPermissionsScreen(initialTabIndex: 1),
+                      ),
+                    );
+                  },
                   child: Text(
                     'Gizlilik Politikası',
                     style: GoogleFonts.outfit(
-                      color: Colors.white60,
+                      color: Colors.white70,
+                      fontSize: 10.5,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+                const Text('•', style: TextStyle(color: Colors.white30, fontSize: 10)),
+                GestureDetector(
+                  onTap: () => UrlLauncherHelper.launchURL('https://www.apple.com/legal/internet-services/itunes/dev/stdeula/'),
+                  child: Text(
+                    'Apple Standart EULA',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white70,
                       fontSize: 10.5,
                       decoration: TextDecoration.underline,
                     ),

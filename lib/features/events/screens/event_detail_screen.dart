@@ -489,9 +489,15 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
 '''.trim();
 
     try {
+      final box = mounted ? (context.findRenderObject() as RenderBox?) : null;
+      final origin = box != null
+          ? (box.localToGlobal(Offset.zero) & box.size)
+          : const Rect.fromLTWH(0, 0, 300, 300);
+
       await Share.share(
         shareText,
         subject: 'EventMatch: ${event.title}',
+        sharePositionOrigin: origin,
       );
     } catch (e) {
       debugPrint('[Share] Error: $e');

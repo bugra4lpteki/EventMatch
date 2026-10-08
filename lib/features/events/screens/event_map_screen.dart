@@ -25,6 +25,7 @@ import '../../profile/widgets/vip_paywall_sheet.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../../services/notification_service.dart';
+import '../../../core/widgets/report_block_sheet.dart';
 
 enum MapMode {
   events,
@@ -2255,6 +2256,27 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             ],
                           ),
                         ),
+                        // Seçenekler & Şikayet Butonu
+                        IconButton(
+                          onPressed: () {
+                            ReportBlockSheet.showOptionsModal(
+                              context,
+                              userId: _selectedUser!.id,
+                              userName: _selectedUser!.name,
+                              onUserBlocked: () {
+                                setState(() {
+                                  _selectedUser = null;
+                                  _isWritingMatchMessage = false;
+                                });
+                              },
+                            );
+                          },
+                          icon: const Icon(Icons.more_vert_rounded, color: Colors.white70, size: 20),
+                          tooltip: 'Seçenekler & Şikayet',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                        const SizedBox(width: 8),
                         // Kapat Butonu
                         IconButton(
                           onPressed: () {
@@ -2434,9 +2456,9 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                                   padding: const EdgeInsets.symmetric(horizontal: 10),
                                                 ),
-                                                icon: const Icon(Icons.favorite_rounded, size: 16, color: Colors.white),
+                                                icon: const Icon(Icons.person_add_rounded, size: 16, color: Colors.white),
                                                 label: const Text(
-                                                  'Eşleşme İsteği Gönder',
+                                                  'Bağlantı İsteği Gönder',
                                                   style: TextStyle(
                                                     color: Colors.white,
                                                     fontSize: 12.5,

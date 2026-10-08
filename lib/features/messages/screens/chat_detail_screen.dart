@@ -779,6 +779,28 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                 });
               },
             ),
+            if (message.senderId != myId) ...[
+              const Divider(color: Colors.white10),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.flag_outlined, color: Colors.orangeAccent),
+                title: const Text('Mesajı Şikayet Et & Engelle', style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.w600)),
+                subtitle: const Text('Uygunsuz içerik ve taciz bildirimi (24 saatte incelenir)', style: TextStyle(color: Colors.white54, fontSize: 11)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  ReportBlockSheet.showMessageOptionsModal(
+                    context,
+                    messageId: message.id,
+                    senderId: message.senderId,
+                    senderName: widget.chat.participant.name,
+                    messageText: message.text,
+                    onActionDone: () {
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                  );
+                },
+              ),
+            ],
             const Divider(color: Colors.white10),
             ListTile(
               dense: true,

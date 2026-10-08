@@ -355,7 +355,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'Onaylamak için aşağıya "SIL" yazın:',
+                    'Onaylamak için aşağıya "SIL" veya "DELETE" yazın:',
                     style: GoogleFonts.outfit(color: AppColors.textPrimary, fontSize: 12, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -363,7 +363,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: securityConfirmController,
                     style: GoogleFonts.outfit(color: Colors.white, fontSize: 14),
                     decoration: InputDecoration(
-                      hintText: 'SIL',
+                      hintText: 'SIL / DELETE',
                       hintStyle: GoogleFonts.outfit(color: AppColors.textMuted),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       filled: true,
@@ -372,7 +372,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     onChanged: (val) {
                       setDialogState(() {
-                        isConfirmValid = val.trim().toUpperCase() == 'SIL';
+                        final raw = val.trim().toLowerCase().replaceAll('ı', 'i');
+                        isConfirmValid = raw == 'sil' || raw == 'delete';
                       });
                     },
                   ),
