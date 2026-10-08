@@ -21,6 +21,10 @@ import '../../../core/widgets/custom_app_background.dart';
 import '../../events/widgets/match_dialog.dart';
 import '../../messages/screens/chat_detail_screen.dart';
 import '../../../services/notification_service.dart';
+import '../../../core/services/quick_actions_service.dart';
+import '../../../core/services/spotlight_search_service.dart';
+import '../../events/screens/event_detail_screen.dart';
+import '../../profile/widgets/vip_paywall_sheet.dart';
 
 class RadarIconWidget extends StatefulWidget {
   const RadarIconWidget({super.key});
@@ -447,10 +451,46 @@ class _HomeScreenState extends State<HomeScreen> {
       _KeepAlivePage(child: MessagesScreen(key: PageStorageKey('MessagesScreen'))),
       _KeepAlivePage(child: ProfileScreen(key: PageStorageKey('ProfileScreen'))),
     ];
+
+    QuickActionsService().initialize();
+    QuickActionsService.onShortcutTapped = _handleQuickAction;
+    SpotlightSearchService.onEventSelectedFromSpotlight = _handleSpotlightSelection;
+  }
+
+  void _handleQuickAction(String shortcutType) {
+    if (!mounted) return;
+    switch (shortcutType) {
+      case 'shortcut_radar':
+        _handleTabChange(1);
+        break;
+      case 'shortcut_nearby':
+        _handleTabChange(0);
+        break;
+      case 'shortcut_my_events':
+        _handleTabChange(2);
+        break;
+      case 'shortcut_vip':
+        VipPaywallSheet.show(context);
+        break;
+    }
+  }
+
+  void _handleSpotlightSelection(String eventId) {
+    if (!mounted) return;
+    final eventService = context.read<MockEventService>();
+    final event = eventService.getEventById(eventId);
+    if (event != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)),
+      );
+    }
   }
 
   @override
   void dispose() {
+    QuickActionsService.onShortcutTapped = null;
+    SpotlightSearchService.onEventSelectedFromSpotlight = null;
     _pageController.dispose();
     super.dispose();
   }

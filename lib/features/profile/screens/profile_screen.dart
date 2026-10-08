@@ -15,6 +15,7 @@ import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
 import 'edit_profile_screen.dart';
 import '../widgets/vip_paywall_sheet.dart';
+import '../../events/widgets/apple_wallet_pass_sheet.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -666,6 +667,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
 
   void _showAllEventsBottomSheet(BuildContext context, List<EventModel> events) {
+    final currentUser = context.read<MockEventService>().currentUser;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -751,7 +753,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                           ),
-                          trailing: Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.wallet_rounded, color: Color(0xFF38BDF8), size: 20),
+                                tooltip: 'Apple Cüzdan Bilet Kartı',
+                                onPressed: () {
+                                  Navigator.pop(ctx);
+                                  AppleWalletPassSheet.show(context, event: event, user: currentUser);
+                                },
+                              ),
+                              Icon(Icons.chevron_right_rounded, color: AppColors.textSecondary, size: 20),
+                            ],
+                          ),
                           onTap: () {
                             Navigator.pop(ctx);
                             Navigator.push(

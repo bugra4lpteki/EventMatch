@@ -27,6 +27,8 @@ import '../screens/venue_chat_screen.dart';
 import '../../../core/widgets/report_block_sheet.dart';
 import '../../../core/services/in_app_review_service.dart';
 import '../../../core/services/spotlight_search_service.dart';
+import '../widgets/apple_wallet_pass_sheet.dart';
+import '../widgets/event_vibe_guide_sheet.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -1285,6 +1287,69 @@ END:VCALENDAR''';
                             ),
                           ),
 
+                          if (isAttending) ...[
+                            const SizedBox(height: 10),
+                            // Apple Wallet PKPass Button
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF1E1E2E), Color(0xFF11111B)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(0xFF38BDF8).withOpacity(0.5),
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: const Color(0xFF38BDF8).withOpacity(0.18),
+                                      blurRadius: 14,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      AppleWalletPassSheet.show(
+                                        context,
+                                        event: event,
+                                        user: eventService.currentUser,
+                                      );
+                                    },
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(
+                                          Icons.wallet_rounded,
+                                          color: Color(0xFF38BDF8),
+                                          size: 19,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'Apple Cüzdan / Biletini Gör 🎟️',
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 14.5,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: 0.2,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+
                           if (event.effectiveTicketUrl.isNotEmpty) ...[
                             const SizedBox(height: 10),
                             // Secondary Button: Bilet Al (Firmaya Özel Renk: Biletix=Mavi, Passo=Kırmızı, Biletinial=Sarı, Bubilet=Yeşil)
@@ -1355,7 +1420,7 @@ END:VCALENDAR''';
                             ),
                           ],
                           const SizedBox(height: 10),
-                          // Secondary Action Row: Takvime Ekle & Arkadaşınla Paylaş
+                          // Secondary Action Row: Takvime Ekle, Kombin & Rehber, Arkadaşınla Paylaş
                           Row(
                             children: [
                               Expanded(
@@ -1374,14 +1439,14 @@ END:VCALENDAR''';
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 18),
-                                          const SizedBox(width: 8),
+                                          const Icon(Icons.calendar_month_rounded, color: Color(0xFF38BDF8), size: 16),
+                                          const SizedBox(width: 6),
                                           Text(
                                             'Takvime Ekle',
                                             style: GoogleFonts.outfit(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w600,
-                                              fontSize: 13,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ],
@@ -1390,7 +1455,40 @@ END:VCALENDAR''';
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: Colors.white.withOpacity(0.12)),
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => EventVibeGuideSheet.show(context, event: event),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(Icons.checkroom_rounded, color: Color(0xFFEC4899), size: 16),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'Kombin & Vibe',
+                                            style: GoogleFonts.outfit(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: Container(
                                   height: 44,
@@ -1407,14 +1505,14 @@ END:VCALENDAR''';
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
-                                          const Icon(Icons.share_rounded, color: Color(0xFFA855F7), size: 18),
-                                          const SizedBox(width: 8),
+                                          const Icon(Icons.share_rounded, color: Color(0xFFA855F7), size: 16),
+                                          const SizedBox(width: 6),
                                           Text(
                                             'Paylaş',
                                             style: GoogleFonts.outfit(
                                               color: Colors.white,
                                               fontWeight: FontWeight.w600,
-                                              fontSize: 13,
+                                              fontSize: 12,
                                             ),
                                           ),
                                         ],
