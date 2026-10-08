@@ -570,31 +570,7 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
                 ],
               ),
               const SizedBox(height: 18),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4285F4).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.open_in_browser_rounded, color: Color(0xFF4285F4), size: 22),
-                ),
-                title: Text(
-                  'Google Takvim',
-                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: Text(
-                  'Google Takvim servisine doğrudan aktar',
-                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  await _openGoogleCalendar(event);
-                },
-              ),
-              const Divider(color: Colors.white12, height: 16),
+              // 1. Apple Takvim (iOS için 1. Öncelikli Seçenek)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Container(
@@ -617,6 +593,32 @@ EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
                 onTap: () async {
                   Navigator.pop(ctx);
                   await _exportIcsFile(event);
+                },
+              ),
+              const Divider(color: Colors.white12, height: 16),
+              // 2. Google Takvim
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4285F4).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.open_in_browser_rounded, color: Color(0xFF4285F4), size: 22),
+                ),
+                title: Text(
+                  'Google Takvim',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'Google Takvim servisine doğrudan aktar',
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _openGoogleCalendar(event);
                 },
               ),
               const Divider(color: Colors.white12, height: 16),
@@ -778,8 +780,14 @@ END:VCALENDAR''';
           ? (box.localToGlobal(Offset.zero) & box.size)
           : const Rect.fromLTWH(0, 0, 300, 300);
 
+      final safeTitle = event.title
+          .replaceAll(RegExp(r'[^\w\s\-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_');
+      final fileName = safeTitle.isNotEmpty ? '$safeTitle.ics' : 'etkinlik_${event.id}.ics';
+
       await Share.shareXFiles(
-        [XFile(file.path, mimeType: 'text/calendar', name: '${event.title.replaceAll(' ', '_')}.ics')],
+        [XFile(file.path, mimeType: 'text/calendar', name: fileName)],
         subject: 'EventMatch Takvim: ${event.title}',
         text: '${event.title} - ${event.location}',
         sharePositionOrigin: origin,

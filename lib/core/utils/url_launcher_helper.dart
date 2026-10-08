@@ -7,7 +7,12 @@ class UrlLauncherHelper {
     if (urlString.trim().isEmpty) return false;
 
     String cleanUrl = urlString.trim();
-    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+    final isSpecialScheme = cleanUrl.startsWith('mailto:') ||
+        cleanUrl.startsWith('tel:') ||
+        cleanUrl.startsWith('sms:') ||
+        cleanUrl.startsWith('calshow:');
+
+    if (!isSpecialScheme && !cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
       cleanUrl = 'https://$cleanUrl';
     }
 
@@ -15,6 +20,15 @@ class UrlLauncherHelper {
     if (uri == null) {
       debugPrint('Geçersiz URL: $cleanUrl');
       return false;
+    }
+
+    if (isSpecialScheme) {
+      try {
+        return await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (e) {
+        debugPrint('Özel şema ($cleanUrl) açma hatası: $e');
+        return false;
+      }
     }
 
     try {
