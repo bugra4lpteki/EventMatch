@@ -25,6 +25,8 @@ import '../services/external_event_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../screens/venue_chat_screen.dart';
 import '../../../core/widgets/report_block_sheet.dart';
+import '../../../core/services/in_app_review_service.dart';
+import '../../../core/services/spotlight_search_service.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -127,6 +129,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void initState() {
     super.initState();
+    SpotlightSearchService().indexEvent(widget.event);
     _initAudioListeners();
     _checkReminderStatus();
     if (_isMusicEvent) {
@@ -1237,6 +1240,7 @@ END:VCALENDAR''';
                                       );
                                     } else {
                                       eventService.joinEvent(event.id, event);
+                                    InAppReviewService().triggerEventAttendedReview();
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           content: const Row(
@@ -1313,6 +1317,7 @@ END:VCALENDAR''';
                                     onTap: () async {
                                       final targetUrl = event.effectiveTicketUrl;
                                       await UrlLauncherHelper.launchURL(targetUrl);
+                                      InAppReviewService().triggerTicketPurchaseReview();
                                     },
                                     borderRadius: BorderRadius.circular(14),
                                     child: Padding(

@@ -8,6 +8,7 @@ import '../../../core/widgets/user_avatar.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../../profile/widgets/vip_paywall_sheet.dart';
 import '../models/match_request.dart';
+import '../../../core/services/in_app_review_service.dart';
 import '../services/mock_match_service.dart';
 import '../widgets/match_dialog.dart';
 import '../../messages/services/mock_message_service.dart';
@@ -361,6 +362,7 @@ class _RequestsScreenState extends State<RequestsScreen> {
                                       onPressed: () async {
                                         final success = await matchService.acceptRequest(req);
                                         if (success && context.mounted) {
+                                          InAppReviewService().triggerMatchSuccessReview();
                                           final myName = context.read<MockEventService>().currentUser.name;
                                           NotificationService().sendRemotePushNotification(
                                             receiverId: req.fromUser.id,

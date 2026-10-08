@@ -19,6 +19,7 @@ import '../widgets/profile_verification_dialog.dart';
 import '../widgets/vip_paywall_sheet.dart';
 import '../../../core/services/ios_in_app_purchase_service.dart';
 import '../../../core/utils/url_launcher_helper.dart';
+import '../../../core/services/in_app_review_service.dart';
 import 'package:flutter/services.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -181,6 +182,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Hakkında',
               subtitle: 'Uygulama sürümü, gizlilik ve kullanım koşulları',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AboutSettingsScreen())),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
+              icon: Icons.star_rate_rounded,
+              iconColor: const Color(0xFFFBBF24),
+              title: 'Uygulamayı Değerlendir (App Store)',
+              subtitle: 'EventMatch deneyiminizi App Store\'da yıldızlayın',
+              trailing: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 18),
+              onTap: () => InAppReviewService().openStoreListing(),
             ),
           ]),
 
