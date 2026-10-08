@@ -11,6 +11,7 @@ import '../../home/screens/home_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../events/services/mock_event_service.dart';
 import 'two_factor_verification_screen.dart';
+import '../../legal/screens/terms_and_permissions_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -541,7 +542,27 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 6),
+                      // Apple Guideline 5.1.1(i): Pre-login EULA & Privacy Policy Link
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const TermsAndPermissionsScreen(),
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Kullanım Koşulları (EULA) ve Gizlilik Politikası',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
                     ],
                   ),
                 ),

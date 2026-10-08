@@ -84,10 +84,14 @@ class _ConsentSheetState extends State<_ConsentSheet>
 
   @override
   Widget build(BuildContext context) {
-    return ScaleTransition(
-      scale: _scaleAnim,
-      child: Container(
-        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+    return SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 550),
+          child: ScaleTransition(
+            scale: _scaleAnim,
+            child: Container(
+              margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(28),
@@ -388,7 +392,10 @@ class _ConsentSheetState extends State<_ConsentSheet>
           ],
         ),
       ),
-    );
+    ),
+  ),
+),
+);
   }
 
   Widget _buildConsentDivider() {

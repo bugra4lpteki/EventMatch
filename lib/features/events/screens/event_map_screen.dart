@@ -1831,11 +1831,11 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 const Spacer(),
                                 GestureDetector(
                                   onTap: () async {
-                                    final dest = (_selectedEvent!.latitude != null && _selectedEvent!.longitude != null)
-                                        ? '${_selectedEvent!.latitude},${_selectedEvent!.longitude}'
-                                        : Uri.encodeComponent(_selectedEvent!.location);
-                                    final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=$dest';
-                                    await UrlLauncherHelper.launchURL(mapsUrl);
+                                    await UrlLauncherHelper.openDirections(
+                                      latitude: _selectedEvent!.latitude,
+                                      longitude: _selectedEvent!.longitude,
+                                      address: _selectedEvent!.location,
+                                    );
                                   },
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
@@ -2102,9 +2102,11 @@ class _EventMapScreenState extends State<EventMapScreen> {
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () async {
-                                  final mapsUrl =
-                                      'https://www.google.com/maps/dir/?api=1&destination=${_selectedPoi!.latitude},${_selectedPoi!.longitude}';
-                                  await UrlLauncherHelper.launchURL(mapsUrl);
+                                  await UrlLauncherHelper.openDirections(
+                                    latitude: _selectedPoi!.latitude,
+                                    longitude: _selectedPoi!.longitude,
+                                    address: _selectedPoi!.title,
+                                  );
                                 },
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

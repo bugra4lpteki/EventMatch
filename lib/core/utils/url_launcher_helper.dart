@@ -57,4 +57,49 @@ class UrlLauncherHelper {
 
     return false;
   }
+
+  /// Platforma uygun navigasyon / harita yol tarifi URL'i üretir.
+  /// iOS üzerinde yerel Apple Haritalar (Apple Maps), diğer platformlarda Google Maps açar.
+  static String getDirectionsUrl({
+    double? latitude,
+    double? longitude,
+    String? address,
+  }) {
+    final hasCoord = latitude != null && longitude != null;
+    final isIosDevice = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+
+    if (isIosDevice) {
+      if (hasCoord) {
+        if (address != null && address.trim().isNotEmpty) {
+          final encodedAddr = Uri.encodeComponent(address.trim());
+          return 'https://maps.apple.com/?daddr=$encodedAddr&ll=$latitude,$longitude&dirflg=d';
+        }
+        return 'https://maps.apple.com/?daddr=$latitude,$longitude&dirflg=d';
+      } else if (address != null && address.trim().isNotEmpty) {
+        return 'https://maps.apple.com/?daddr=${Uri.encodeComponent(address.trim())}&dirflg=d';
+      }
+      return 'https://maps.apple.com/';
+    } else {
+      if (hasCoord) {
+        return 'https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude';
+      } else if (address != null && address.trim().isNotEmpty) {
+        return 'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(address.trim())}';
+      }
+      return 'https://www.google.com/maps';
+    }
+  }
+
+  /// Platforma uygun harita yol tarifini doğrudan açar.
+  static Future<bool> openDirections({
+    double? latitude,
+    double? longitude,
+    String? address,
+  }) async {
+    final url = getDirectionsUrl(
+      latitude: latitude,
+      longitude: longitude,
+      address: address,
+    );
+    return await launchURL(url);
+  }
 }

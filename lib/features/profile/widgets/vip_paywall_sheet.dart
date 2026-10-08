@@ -188,16 +188,21 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
     final currentUser = eventService.currentUser;
     final hasVip = currentUser.hasActiveVip;
 
-    return Container(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.90,
-      ),
-      padding: EdgeInsets.only(
-        top: 20,
-        left: 20,
-        right: 20,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-      ),
+    return SafeArea(
+      top: false,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 600,
+            maxHeight: MediaQuery.of(context).size.height * 0.90,
+          ),
+          child: Container(
+            padding: EdgeInsets.only(
+              top: 20,
+              left: 20,
+              right: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+            ),
       decoration: BoxDecoration(
         color: const Color(0xFF0F111A),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
@@ -632,7 +637,10 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
           ],
         ),
       ),
-    );
+    ),
+  ),
+),
+);
   }
 
   Widget _buildFeatureTile({

@@ -16,6 +16,9 @@ import 'about_settings_screen.dart';
 import 'blocked_users_screen.dart';
 import '../../legal/screens/terms_and_permissions_screen.dart';
 import '../widgets/profile_verification_dialog.dart';
+import '../widgets/vip_paywall_sheet.dart';
+import '../../../core/services/ios_in_app_purchase_service.dart';
+import 'package:flutter/services.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -77,6 +80,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? const Icon(Icons.verified_rounded, color: Color(0xFF38BDF8), size: 20)
                   : const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
               onTap: () => _showVerificationDialog(context),
+            ),
+          ]),
+
+          const SizedBox(height: 24),
+
+          // Section: Abonelik & Satın Alımlar (Apple Guideline 3.1.1)
+          _buildSectionHeader('ABONELİK & SATIN ALIMLAR'),
+          const SizedBox(height: 8),
+          _buildGroupedCard([
+            _buildSettingsTile(
+              icon: Icons.workspace_premium_rounded,
+              iconColor: const Color(0xFFF59E0B),
+              title: 'VIP Üyelik & Avantajlar',
+              subtitle: context.watch<MockEventService>().currentUser.hasActiveVip
+                  ? 'VIP Üyelik Aktif 👑'
+                  : 'Sınırsız beğeni, öne çıkma ve özel rozetler',
+              trailing: context.watch<MockEventService>().currentUser.hasActiveVip
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF59E0B).withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'VIP',
+                        style: GoogleFonts.outfit(
+                          color: const Color(0xFFF59E0B),
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    )
+                  : const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
+              onTap: () => VipPaywallSheet.show(context),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
+              icon: Icons.restore_rounded,
+              iconColor: const Color(0xFF06B6D4),
+              title: 'Satın Alımları Geri Yükle',
+              subtitle: 'Mevcut Apple Kimliğinize ait VIP aboneliğini tara',
+              onTap: () => _handleRestorePurchases(context),
             ),
           ]),
 
@@ -272,6 +317,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _handleRestorePurchases(BuildContext context) async {
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Expanded(child: Text('Apple Kimliği satın alımları taranıyor...')),
+          ],
+        ),
+        backgroundColor: AppColors.surface,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+
+    final restored = await IosInAppPurchaseService().restorePurchases();
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          restored
+              ? 'Satın alımlarınız başarıyla geri yüklendi! 🍏'
+              : 'Aktif bir VIP aboneliği bulunamadı.',
+        ),
+        backgroundColor: restored ? AppColors.success : AppColors.surface,
+      ),
+    );
+  }
+
   void _showVerificationDialog(BuildContext context) {
     showProfileVerificationSheet(context);
   }
@@ -393,6 +474,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: isConfirmValid
                       ? () async {
                           Navigator.pop(dialogContext);
+                          context.read<MockEventService>().clearUserData();
                           final success = await context.read<AuthService>().deleteAccount();
                           if (context.mounted) {
                             if (success) {

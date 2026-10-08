@@ -1513,8 +1513,11 @@ END:VCALENDAR''';
                                   child: InkWell(
                                     onTap: () async {
                                       if (hasCoordinates) {
-                                        final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}';
-                                        await UrlLauncherHelper.launchURL(mapsUrl);
+                                        await UrlLauncherHelper.openDirections(
+                                          latitude: event.latitude,
+                                          longitude: event.longitude,
+                                          address: event.location,
+                                        );
                                       }
                                     },
                                     child: Container(
@@ -1563,8 +1566,11 @@ END:VCALENDAR''';
                           child: ElevatedButton.icon(
                             onPressed: () async {
                               if (hasCoordinates) {
-                                final mapsUrl = 'https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}';
-                                await UrlLauncherHelper.launchURL(mapsUrl);
+                                await UrlLauncherHelper.openDirections(
+                                  latitude: event.latitude,
+                                  longitude: event.longitude,
+                                  address: event.location,
+                                );
                               }
                             },
                             icon: const Icon(Icons.near_me_rounded, color: Colors.white, size: 18),
