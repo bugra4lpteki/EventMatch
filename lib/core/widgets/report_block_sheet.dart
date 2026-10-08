@@ -16,7 +16,11 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return Container(
+        return SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 550),
+              child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -92,7 +96,10 @@ class ReportBlockSheet {
               const SizedBox(height: 12),
             ],
           ),
-        );
+        ),
+      ),
+    ),
+  );
       },
     );
   }
@@ -110,7 +117,11 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return Container(
+        return SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 550),
+              child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -241,7 +252,10 @@ class ReportBlockSheet {
               const SizedBox(height: 12),
             ],
           ),
-        );
+        ),
+      ),
+    ),
+  );
       },
     );
   }
@@ -259,7 +273,11 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return Container(
+        return SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 550),
+              child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -345,7 +363,10 @@ class ReportBlockSheet {
               const SizedBox(height: 12),
             ],
           ),
-        );
+        ),
+      ),
+    ),
+  );
       },
     );
   }

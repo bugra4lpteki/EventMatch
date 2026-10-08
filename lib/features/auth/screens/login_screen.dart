@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -439,6 +440,31 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ],
                                         ),
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Apple App Review & Demo Girişi
+                              Center(
+                                child: TextButton.icon(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () async {
+                                          HapticFeedback.lightImpact();
+                                          _emailController.text = 'demo@eventmatch.app';
+                                          _passwordController.text = 'EventMatch2026!';
+                                          _login();
+                                        },
+                                  icon: const Icon(Icons.apple_rounded, size: 16, color: Colors.white54),
+                                  label: Text(
+                                    'İnceleme Modu ile Giriş Yap (Demo)',
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 12,
+                                      color: Colors.white54,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],

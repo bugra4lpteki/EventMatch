@@ -1963,6 +1963,19 @@ END:VCALENDAR''';
                                     ),
                                   ),
                                   child: ListTile(
+                                    onLongPress: isMe
+                                        ? null
+                                        : () {
+                                            HapticFeedback.mediumImpact();
+                                            ReportBlockSheet.showOptionsModal(
+                                              context,
+                                              userId: user.id,
+                                              userName: user.name,
+                                              onUserBlocked: () {
+                                                if (mounted) setState(() {});
+                                              },
+                                            );
+                                          },
                                     onTap: isMe
                                         ? null
                                         : () {

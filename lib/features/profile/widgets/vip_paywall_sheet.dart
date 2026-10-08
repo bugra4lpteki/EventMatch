@@ -547,17 +547,36 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
 
             // Apple App Store Guideline 3.1.1: Restore Purchases Button
             Center(
-              child: TextButton.icon(
-                onPressed: _isProcessing ? null : _handleRestore,
-                icon: const Icon(Icons.restore_rounded, color: Color(0xFFFBBF24), size: 16),
-                label: Text(
-                  'Satın Alımları Geri Yükle',
-                  style: GoogleFonts.outfit(
-                    color: const Color(0xFFFBBF24),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12.5,
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  TextButton.icon(
+                    onPressed: _isProcessing ? null : _handleRestore,
+                    icon: const Icon(Icons.restore_rounded, color: Color(0xFFFBBF24), size: 16),
+                    label: Text(
+                      'Satın Alımları Geri Yükle',
+                      style: GoogleFonts.outfit(
+                        color: const Color(0xFFFBBF24),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
+                    ),
                   ),
-                ),
+                  TextButton.icon(
+                    onPressed: () => UrlLauncherHelper.launchURL('https://apps.apple.com/account/subscriptions'),
+                    icon: const Icon(Icons.settings_outlined, color: Colors.white70, size: 15),
+                    label: Text(
+                      'Abonelikleri Yönet',
+                      style: GoogleFonts.outfit(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 

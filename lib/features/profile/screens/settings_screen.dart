@@ -18,6 +18,7 @@ import '../../legal/screens/terms_and_permissions_screen.dart';
 import '../widgets/profile_verification_dialog.dart';
 import '../widgets/vip_paywall_sheet.dart';
 import '../../../core/services/ios_in_app_purchase_service.dart';
+import '../../../core/utils/url_launcher_helper.dart';
 import 'package:flutter/services.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -122,6 +123,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Satın Alımları Geri Yükle',
               subtitle: 'Mevcut Apple Kimliğinize ait VIP aboneliğini tara',
               onTap: () => _handleRestorePurchases(context),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
+              icon: Icons.settings_suggest_rounded,
+              iconColor: const Color(0xFF8B5CF6),
+              title: 'Abonelikleri Yönet (Apple ID)',
+              subtitle: 'App Store abonelik planlarınızı ve yenilemeyi yönetin',
+              trailing: const Icon(Icons.open_in_new_rounded, color: Colors.white38, size: 18),
+              onTap: () => UrlLauncherHelper.launchURL('https://apps.apple.com/account/subscriptions'),
             ),
           ]),
 
