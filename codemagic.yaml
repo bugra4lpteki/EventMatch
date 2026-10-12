@@ -12,6 +12,13 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+    triggering:
+      events:
+        - push
+        - tag
+      branch_patterns:
+        - pattern: 'main'
+          include: true
     scripts:
       - name: Install Provisioning Profile
         script: |
@@ -29,9 +36,9 @@ workflows:
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
         script: |
-          BUILD_NUM=${BUILD_NUMBER:-7}
-          if [ "$BUILD_NUM" -lt 7 ]; then
-            BUILD_NUM=7
+          BUILD_NUM=${BUILD_NUMBER:-8}
+          if [ "$BUILD_NUM" -lt 8 ]; then
+            BUILD_NUM=8
           fi
           flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=/Users/builder/export_options.plist
     artifacts:
