@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:appinio_swiper/appinio_swiper.dart';
 import '../../../core/constants/app_colors.dart';
@@ -122,121 +124,8 @@ class _SwipeScreenState extends State<SwipeScreen> {
 
         return Column(
           children: [
-            // Top Bar with Title and Refresh
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(Icons.groups_rounded, color: AppColors.primary, size: 20),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Etkinlik Katılımcıları',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      // Kalan Kaydırma Kotası Rozeti
-                      FutureBuilder<int>(
-                        future: matchService.getRemainingDailySwipes(),
-                        builder: (context, snapshot) {
-                          final isVip = eventService.currentUser.hasActiveVip;
-                          if (isVip) {
-                            return Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.all_inclusive_rounded, color: Color(0xFFF59E0B), size: 14),
-                                  SizedBox(width: 4),
-                                  Text('VIP Sınırsız', style: TextStyle(color: Color(0xFFFDE68A), fontSize: 11, fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                            );
-                          }
-                          final rem = snapshot.data ?? 50;
-                          return Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white24),
-                            ),
-                            child: Text(
-                              '⚡ $rem / 50 Hak',
-                              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600),
-                            ),
-                          );
-                        },
-                      ),
-                      // Geri Al (Undo) Button (VIP)
-                      Container(
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.replay_rounded, color: Colors.amber, size: 20),
-                          tooltip: 'Geri Al (VIP)',
-                          onPressed: _handleUndoSwipe,
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-                        ),
-                        child: IconButton(
-                          icon: Icon(Icons.refresh_rounded, color: AppColors.primary, size: 20),
-                          tooltip: 'Profilleri Yenile',
-                          onPressed: () async {
-                            _locallySwipedIds.clear();
-                            await matchService.loadPotentialMatches();
-                            if (mounted) {
-                              setState(() {
-                                _refreshCount++;
-                                _currentIndex = 0;
-                              });
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Profiller yenilendi! 🔄'),
-                                  duration: Duration(seconds: 1),
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            // Top Bar with Title, VIP Quota & Actions
+            _buildTopHeader(matchService, eventService),
 
             if (items.isEmpty)
               Expanded(
@@ -330,6 +219,226 @@ class _SwipeScreenState extends State<SwipeScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildTopHeader(MockMatchService matchService, MockEventService eventService) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFF161926).withValues(alpha: 0.85),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.25),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Sol: İkon
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.3),
+                    AppColors.secondary.withValues(alpha: 0.15),
+                  ],
+                ),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.35),
+                  width: 1,
+                ),
+              ),
+              child: Icon(Icons.groups_rounded, color: AppColors.primary, size: 20),
+            ),
+            const SizedBox(width: 10),
+            // Orta: Başlık ve VIP / Kota durumu (Genişleyen ve esnek alan)
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Etkinlik Katılımcıları',
+                    style: GoogleFonts.outfit(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  FutureBuilder<int>(
+                    future: matchService.getRemainingDailySwipes(),
+                    builder: (context, snapshot) {
+                      final isVip = eventService.currentUser.hasActiveVip;
+                      if (isVip) {
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            VipPaywallSheet.show(context);
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.workspace_premium_rounded, color: Color(0xFFF59E0B), size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                'VIP Sınırsız',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFFFDE68A),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+                      final rem = snapshot.data ?? 50;
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          VipPaywallSheet.show(context);
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.bolt_rounded, color: Color(0xFFFBBF24), size: 14),
+                            const SizedBox(width: 3),
+                            Text(
+                              '$rem / 50 Hak',
+                              style: GoogleFonts.outfit(
+                                color: Colors.white70,
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4), width: 0.8),
+                              ),
+                              child: Text(
+                                'Yükselt',
+                                style: GoogleFonts.outfit(
+                                  color: const Color(0xFFFDE68A),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Sağ: Geri Al (Undo) ve Yenile Butonları (Ferah ve belirgin)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTopActionButton(
+                  icon: Icons.replay_rounded,
+                  color: const Color(0xFFF59E0B),
+                  tooltip: 'Geri Al (VIP)',
+                  onTap: _handleUndoSwipe,
+                ),
+                const SizedBox(width: 8),
+                _buildTopActionButton(
+                  icon: Icons.refresh_rounded,
+                  color: AppColors.primary,
+                  tooltip: 'Profilleri Yenile',
+                  onTap: () async {
+                    HapticFeedback.mediumImpact();
+                    _locallySwipedIds.clear();
+                    await matchService.loadPotentialMatches();
+                    if (mounted) {
+                      setState(() {
+                        _refreshCount++;
+                        _currentIndex = 0;
+                      });
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: const [
+                              Icon(Icons.refresh_rounded, color: Colors.white, size: 18),
+                              SizedBox(width: 8),
+                              Text('Katılımcı profilleri yenilendi! 🔄'),
+                            ],
+                          ),
+                          backgroundColor: const Color(0xFF1E1E2E),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopActionButton({
+    required IconData icon,
+    required Color color,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap();
+          },
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.12),
+              border: Border.all(
+                color: color.withValues(alpha: 0.35),
+                width: 1.2,
+              ),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+        ),
+      ),
     );
   }
 
