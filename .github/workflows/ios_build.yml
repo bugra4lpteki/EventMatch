@@ -13,9 +13,9 @@ jobs:
     timeout-minutes: 60
 
     env:
-      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPSTORE_ISSUER_ID }}
-      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER || secrets.APPSTORE_KEY_ID }}
-      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY || secrets.APPSTORE_PRIVATE_KEY }}
+      APP_STORE_CONNECT_ISSUER_ID: 23dee70d-c9f4-4d26-888e-d96dde8a1ba1
+      APP_STORE_CONNECT_KEY_IDENTIFIER: P23W77V3QR
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY || secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
 
     steps:
       - name: Checkout Code
@@ -53,8 +53,15 @@ jobs:
 
       - name: Initialize Keychain & Fetch Signing Files
         run: |
+          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
+            echo "::error::APPSTORE_PRIVATE_KEY secret is not set in GitHub repository secrets!"
+            exit 1
+          fi
           keychain initialize
           app-store-connect fetch-signing-files "com.eventmatch.social" \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
             --type IOS_APP_STORE \
             --create
           xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
@@ -79,4 +86,8 @@ jobs:
         run: |
           IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
           echo "Uploading $IPA_PATH to Apple TestFlight..."
-          app-store-connect publish --path "$IPA_PATH"
+          app-store-connect publish \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --path "$IPA_PATH"
