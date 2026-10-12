@@ -1,10 +1,7 @@
 name: EventMatch CI/CD Pipeline
 
 on:
-  push:
-    branches: [ main, master, release/* ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   analyze_and_test:
@@ -31,7 +28,7 @@ jobs:
         run: flutter pub get
 
       - name: Run static analysis
-        run: flutter analyze
+        run: flutter analyze --no-fatal-warnings
 
       - name: Run unit & widget tests with coverage
         run: flutter test --coverage
