@@ -31,6 +31,8 @@ class VipPaywallSheet extends StatefulWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
       builder: (sheetContext) => VipPaywallSheet(highlightedFeature: initialFeature),
     );
   }
@@ -188,50 +190,104 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
     final currentUser = eventService.currentUser;
     final hasVip = currentUser.hasActiveVip;
 
-    return SafeArea(
-      top: false,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 600,
-            maxHeight: MediaQuery.of(context).size.height * 0.90,
-          ),
-          child: Container(
-            padding: EdgeInsets.only(
-              top: 20,
-              left: 20,
-              right: 20,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+    return PopScope(
+      canPop: true,
+      child: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 600,
+              maxHeight: MediaQuery.of(context).size.height * 0.90,
             ),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F111A),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
-        border: Border.all(
-          color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-            blurRadius: 30,
-            spreadRadius: 2,
-          ),
-        ],
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle Bar
-            Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(2),
+            child: Container(
+              padding: EdgeInsets.only(
+                top: 14,
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
               ),
-            ),
-            const SizedBox(height: 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F111A),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                border: Border.all(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                    blurRadius: 30,
+                    spreadRadius: 2,
+                  ),
+                ],
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Üst Bar: Handle Bar ve Sağ Üstte Kapatma (X) Butonu
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        // Handle Bar (Dokunarak da kapatılabilir)
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.of(context).pop();
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: Container(
+                              width: 48,
+                              height: 5,
+                              decoration: BoxDecoration(
+                                color: Colors.white30,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // Sağ Üst Belirgin Kapatma (X) Butonu
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Semantics(
+                            label: 'Kapat',
+                            button: true,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(24),
+                                onTap: () {
+                                  HapticFeedback.lightImpact();
+                                  Navigator.of(context).pop();
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.all(4.0),
+                                  child: Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(alpha: 0.15),
+                                      border: Border.all(color: Colors.white30, width: 1.2),
+                                    ),
+                                    child: const Icon(
+                                      Icons.close_rounded,
+                                      size: 20,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
 
             // Crown Icon with ambient glow
             Container(
@@ -525,6 +581,22 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
                         ),
                 ),
               ),
+              const SizedBox(height: 8),
+              // Vazgeç / Şimdi Değil Butonu
+              TextButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.of(context).pop();
+                },
+                child: Text(
+                  'Şimdi Değil',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white60,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
             ] else ...[
               // Cancel / Manage Plan button
               SizedBox(
@@ -540,6 +612,21 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
                   child: Text(
                     'VIP Üyeliğini İptal Et',
                     style: GoogleFonts.outfit(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  HapticFeedback.lightImpact();
+                  Navigator.of(context).pop();
+                },
+                child: Text(
+                  'Kapat',
+                  style: GoogleFonts.outfit(
+                    color: Colors.white70,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -658,6 +745,7 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
       ),
     ),
   ),
+),
 ),
 );
   }
