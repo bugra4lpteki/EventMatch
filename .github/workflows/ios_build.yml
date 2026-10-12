@@ -2,9 +2,11 @@ name: iOS Release Build & TestFlight Deploy
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+    inputs:
+      build_number:
+        description: 'Özel Build Numarası (Boş bırakırsanız otomatik artar)'
+        required: false
+        default: ''
 
 jobs:
   build-and-deploy:
@@ -106,7 +108,10 @@ jobs:
 
       - name: Build iOS IPA Package
         run: |
-          BUILD_NUM=${{ github.run_number }}
+          BUILD_NUM="${{ github.event.inputs.build_number }}"
+          if [ -z "$BUILD_NUM" ]; then
+            BUILD_NUM=${{ github.run_number }}
+          fi
           if [ -z "$BUILD_NUM" ] || [ "$BUILD_NUM" -lt 8 ]; then
             BUILD_NUM=8
           fi
