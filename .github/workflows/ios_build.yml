@@ -15,7 +15,7 @@ jobs:
     env:
       APP_STORE_CONNECT_ISSUER_ID: 23dee70d-c9f4-4d26-888e-d96dde8a1ba1
       APP_STORE_CONNECT_KEY_IDENTIFIER: P23W77V3QR
-      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY || secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
 
     steps:
       - name: Checkout Code
@@ -59,7 +59,7 @@ jobs:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key cert_key.pem \
+            --certificate-key "@file:cert_key.pem" \
             --type IOS_APP_STORE \
             --create
           xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
