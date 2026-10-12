@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 import CoreSpotlight
 import MobileCoreServices
+import Intents
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
