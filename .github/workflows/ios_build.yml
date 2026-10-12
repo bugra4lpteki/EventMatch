@@ -1,4 +1,4 @@
-name: iOS Release Build & App Store Package
+name: iOS Release Build & IPA Package
 
 on:
   workflow_dispatch:
@@ -10,31 +10,56 @@ jobs:
   build-ios:
     name: Build iOS IPA Package
     runs-on: macos-14
+    timeout-minutes: 45
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
-      - name: Set up Flutter
+      - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           cache: true
 
+      - name: Verify Flutter & Environment
+        run: |
+          flutter --version
+          flutter doctor
+
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build iOS Archive & IPA
+      - name: Install CocoaPods
         run: |
-          flutter build ipa --no-codesign --release
+          cd ios
+          pod install --repo-update
+          cd ..
 
-      - name: Upload IPA Artifact
+      - name: Compile iOS Release App
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Package IPA Bundle
+        run: |
+          mkdir -p build/ios/ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
+          cd build/ios/ipa
+          zip -r -y EventMatch.ipa Payload
+          rm -rf Payload
+          cd ../../..
+          ls -lh build/ios/ipa/EventMatch.ipa
+
+      - name: Upload EventMatch iOS IPA
         uses: actions/upload-artifact@v4
         with:
-          name: EventMatch-iOS-Build
-          path: build/ios/archive/Runner.xcarchive
+          name: EventMatch-iOS-IPA
+          path: build/ios/ipa/EventMatch.ipa
+          retention-days: 14
+
+      - name: Upload App Bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: EventMatch-Runner-App
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 14
