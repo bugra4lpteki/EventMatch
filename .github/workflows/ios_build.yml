@@ -53,6 +53,12 @@ jobs:
 
       - name: Initialize Keychain & Fetch Signing Files
         run: |
+          PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+          PROFILES_DIR2="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+          mkdir -p "$PROFILES_DIR" "$PROFILES_DIR2"
+          cp ios/EventMatch_AppStore.mobileprovision "$PROFILES_DIR/"
+          cp ios/EventMatch_AppStore.mobileprovision "$PROFILES_DIR2/"
+
           openssl genrsa -out cert_key.pem 2048
 
           python3 -c "
@@ -86,7 +92,7 @@ jobs:
             BUILD_NUM=8
           fi
           echo "Building iOS IPA with build number: $BUILD_NUM"
-          flutter build ipa --release --build-number=$BUILD_NUM
+          flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=ios/ExportOptions.plist
 
       - name: Upload IPA Artifact to GitHub
         uses: actions/upload-artifact@v4
