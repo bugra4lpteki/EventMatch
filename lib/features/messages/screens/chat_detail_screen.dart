@@ -1721,6 +1721,13 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                   ),
                 ),
               );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Fotoğraf bağlantısı bulunamadı veya süresi doldu.'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
             }
           },
           child: Padding(
@@ -1906,7 +1913,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
     }
 
     // 1. TEK OYNATIMLIK (VIEW-ONCE) FOTOĞRAF MESAJI
-    if (message.isViewOnce) {
+    if (message.isViewOnce || message.messageType == 'view_once') {
       return _buildViewOnceBubble(message, isMe, msgService, currentChatId, timeStr);
     }
 

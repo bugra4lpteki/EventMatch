@@ -23,7 +23,11 @@ class MessageModel {
   final String? mediaUrl;
   final int? audioDurationSeconds;
   final String messageType; // 'text' | 'audio' | 'image' | 'view_once'
-  final bool isViewOnce;
+  final bool _isViewOnce;
+  bool get isViewOnce {
+    if (isDeleted) return false;
+    return _isViewOnce || messageType == 'view_once' || (mediaUrl != null && mediaUrl!.contains('/view_once/'));
+  }
   bool isViewOnceOpened;
   final bool isDeleted;
 
@@ -41,10 +45,11 @@ class MessageModel {
     this.mediaUrl,
     this.audioDurationSeconds,
     this.messageType = 'text',
-    this.isViewOnce = false,
+    bool isViewOnce = false,
     this.isViewOnceOpened = false,
     this.isDeleted = false,
-  }) : reactions = reactions ?? {};
+  })  : _isViewOnce = isViewOnce,
+        reactions = reactions ?? {};
 
   bool get isRead => status == MessageStatus.read;
   
@@ -243,18 +248,23 @@ class MessageModel {
       }
     }
 
-    // 2. Parse [view_once:URL] or [view_once:URL|||opened]
-    if (currentText.startsWith('[view_once:')) {
-      final closeBracket = currentText.lastIndexOf(']');
-      if (closeBracket > 11) {
-        final inner = currentText.substring(11, closeBracket);
-        final opened = inner.endsWith('|||opened');
-        final cleanUrl = opened ? inner.substring(0, inner.length - 9) : inner;
-        mediaUrl = cleanUrl;
+    // 2. Parse [view_once:URL] or [view_once:URL|||opened] or [view_once:opened]
+    final viewOnceIdx = currentText.indexOf('[view_once:');
+    if (viewOnceIdx >= 0) {
+      final closeBracket = currentText.indexOf(']', viewOnceIdx);
+      if (closeBracket > viewOnceIdx + 11) {
+        final inner = currentText.substring(viewOnceIdx + 11, closeBracket);
+        final opened = inner == 'opened' || inner.endsWith('|||opened');
+        final cleanUrl = (opened && inner == 'opened')
+            ? ''
+            : (inner.endsWith('|||opened') ? inner.substring(0, inner.length - 9) : inner);
+        mediaUrl = cleanUrl.isNotEmpty ? cleanUrl : null;
         messageType = 'view_once';
         isViewOnce = true;
         isViewOnceOpened = opened;
-        final rest = currentText.substring(closeBracket + 1).trim();
+        final before = currentText.substring(0, viewOnceIdx).trim();
+        final after = currentText.substring(closeBracket + 1).trim();
+        final rest = [if (before.isNotEmpty) before, if (after.isNotEmpty) after].join(' ').trim();
         currentText = rest.isNotEmpty ? rest : (opened ? 'Açıldı' : 'Tek seferlik fotoğraf');
       }
     }

@@ -1645,6 +1645,9 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
                 mediaUrl: parsed.mediaUrl,
                 audioDurationSeconds: parsed.audioDuration,
                 messageType: parsed.messageType,
+                isViewOnce: parsed.isViewOnce,
+                isViewOnceOpened: parsed.isViewOnceOpened,
+                isDeleted: parsed.isDeleted,
               );
               messagesByPartner.putIfAbsent(lowerPartnerId, () => []).add(msgModel);
             } catch (e) {
