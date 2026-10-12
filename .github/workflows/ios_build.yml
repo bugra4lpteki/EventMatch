@@ -1,4 +1,4 @@
-name: iOS Release Build & IPA Package
+name: iOS Release Build & TestFlight Deploy
 
 on:
   workflow_dispatch:
@@ -7,14 +7,29 @@ on:
       - main
 
 jobs:
-  build-ios:
-    name: Build iOS IPA Package
+  build-and-deploy:
+    name: Build & Upload to TestFlight
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
+
+    env:
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID || secrets.APPSTORE_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_IDENTIFIER: ${{ secrets.APP_STORE_CONNECT_KEY_IDENTIFIER || secrets.APPSTORE_KEY_ID }}
+      APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY || secrets.APPSTORE_PRIVATE_KEY }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install CLI Tools
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install codemagic-cli-tools
 
       - name: Set up Flutter SDK
         uses: subosito/flutter-action@v2
@@ -22,12 +37,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Verify Flutter & Environment
+      - name: Verify Flutter & System
         run: |
           flutter --version
           flutter doctor
 
-      - name: Install Dependencies
+      - name: Install Flutter Dependencies
         run: flutter pub get
 
       - name: Install CocoaPods
@@ -36,30 +51,32 @@ jobs:
           pod install --repo-update
           cd ..
 
-      - name: Compile iOS Release App
+      - name: Initialize Keychain & Fetch Signing Files
         run: |
-          flutter build ios --release --no-codesign
+          keychain initialize
+          app-store-connect fetch-signing-files "com.eventmatch.social" \
+            --type IOS_APP_STORE \
+            --create
+          xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
 
-      - name: Package IPA Bundle
+      - name: Build iOS IPA Package
         run: |
-          mkdir -p build/ios/ipa/Payload
-          cp -R build/ios/iphoneos/Runner.app build/ios/ipa/Payload/
-          cd build/ios/ipa
-          zip -r -y EventMatch.ipa Payload
-          rm -rf Payload
-          cd ../../..
-          ls -lh build/ios/ipa/EventMatch.ipa
+          BUILD_NUM=${{ github.run_number }}
+          if [ -z "$BUILD_NUM" ] || [ "$BUILD_NUM" -lt 8 ]; then
+            BUILD_NUM=8
+          fi
+          echo "Building iOS IPA with build number: $BUILD_NUM"
+          flutter build ipa --release --build-number=$BUILD_NUM
 
-      - name: Upload EventMatch iOS IPA
+      - name: Upload IPA Artifact to GitHub
         uses: actions/upload-artifact@v4
         with:
-          name: EventMatch-iOS-IPA
-          path: build/ios/ipa/EventMatch.ipa
+          name: EventMatch-TestFlight-IPA
+          path: build/ios/ipa/*.ipa
           retention-days: 14
 
-      - name: Upload App Bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: EventMatch-Runner-App
-          path: build/ios/iphoneos/Runner.app
-          retention-days: 14
+      - name: Publish to TestFlight
+        run: |
+          IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          echo "Uploading $IPA_PATH to Apple TestFlight..."
+          app-store-connect publish --path "$IPA_PATH"
