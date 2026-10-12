@@ -53,15 +53,13 @@ jobs:
 
       - name: Initialize Keychain & Fetch Signing Files
         run: |
-          if [ -z "$APP_STORE_CONNECT_PRIVATE_KEY" ]; then
-            echo "::error::APPSTORE_PRIVATE_KEY secret is not set in GitHub repository secrets!"
-            exit 1
-          fi
+          openssl genrsa -out cert_key.pem 2048
           keychain initialize
           app-store-connect fetch-signing-files "com.eventmatch.social" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key cert_key.pem \
             --type IOS_APP_STORE \
             --create
           xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
