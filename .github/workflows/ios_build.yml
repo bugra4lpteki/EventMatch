@@ -83,7 +83,15 @@ jobs:
             --certificate-key "@file:cert_key.pem" \
             --type IOS_APP_STORE \
             --create
-          xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only
+
+          keychain add-certificates --allow-all-applications
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "" || true
+          keychain list-certificates
+
+          xcode-project use-profiles --project ios/Runner.xcodeproj --warn-only --export-options-plist ios/ExportOptions.plist
+
+          echo "Generated ios/ExportOptions.plist:"
+          cat ios/ExportOptions.plist
 
       - name: Build iOS IPA Package
         run: |
@@ -93,6 +101,18 @@ jobs:
           fi
           echo "Building iOS IPA with build number: $BUILD_NUM"
           flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=ios/ExportOptions.plist
+
+          if [ ! -f build/ios/ipa/*.ipa ] && [ -d build/ios/archive/Runner.xcarchive ]; then
+            echo "Direct exportArchive fallback using xcodebuild..."
+            mkdir -p build/ios/ipa
+            xcodebuild -exportArchive \
+              -archivePath build/ios/archive/Runner.xcarchive \
+              -exportPath build/ios/ipa \
+              -exportOptionsPlist ios/ExportOptions.plist
+          fi
+
+          echo "Generated files in build/ios/ipa:"
+          ls -la build/ios/ipa || true
 
       - name: Upload IPA Artifact to GitHub
         uses: actions/upload-artifact@v4
@@ -104,6 +124,10 @@ jobs:
       - name: Publish to TestFlight
         run: |
           IPA_PATH=$(find build/ios/ipa -name "*.ipa" | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "ERROR: No IPA found to upload!"
+            exit 1
+          fi
           echo "Uploading $IPA_PATH to Apple TestFlight..."
           app-store-connect publish \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
