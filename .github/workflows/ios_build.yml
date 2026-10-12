@@ -21,6 +21,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Select Xcode 26 (iOS 26 SDK)
+        run: |
+          XCODE_26=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -n "$XCODE_26" ]; then
+            echo "Selecting $XCODE_26"
+            sudo xcode-select -s "$XCODE_26/Contents/Developer"
+          else
+            echo "Warning: No Xcode 26 found, using default"
+          fi
+          xcodebuild -version
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
