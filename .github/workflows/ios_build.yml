@@ -54,6 +54,21 @@ jobs:
       - name: Initialize Keychain & Fetch Signing Files
         run: |
           openssl genrsa -out cert_key.pem 2048
+
+          python3 -c "
+          import subprocess, json
+          try:
+              p = subprocess.run(['app-store-connect', 'certificates', 'list', '--json'], capture_output=True, text=True)
+              certs = json.loads(p.stdout)
+              if len(certs) >= 2:
+                  for c in certs:
+                      if c.get('id') != '5KAB9772Q9':
+                          print(f'Cleaning stale CI certificate {c.get(\"id\")}')
+                          subprocess.run(['app-store-connect', 'certificates', 'delete', c.get('id')])
+          except Exception as e:
+              print(f'Cert cleanup note: {e}')
+          "
+
           keychain initialize
           app-store-connect fetch-signing-files "com.eventmatch.social" \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
