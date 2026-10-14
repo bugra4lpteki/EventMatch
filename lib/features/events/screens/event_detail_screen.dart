@@ -31,6 +31,7 @@ import '../widgets/apple_wallet_pass_sheet.dart';
 import '../widgets/event_vibe_guide_sheet.dart';
 import '../widgets/event_weather_card.dart';
 import '../../../core/utils/event_share_helper.dart';
+import '../../../core/services/apple_calendar_service.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -553,7 +554,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ],
               ),
               const SizedBox(height: 18),
-              // 1. Apple Takvim (iOS için 1. Öncelikli Seçenek)
+              // 1. Apple Takvim (Doğrudan Ekle - iOS Native)
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Container(
@@ -565,17 +566,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   child: const Icon(Icons.apple_rounded, color: Colors.white, size: 22),
                 ),
                 title: Text(
-                  'Apple Takvim / iCal (.ics)',
+                  Platform.isIOS ? 'Apple Takvim (Doğrudan Ekle)' : 'Cihaz Takvimine Ekle',
                   style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: Text(
-                  'iOS Takvim uygulamasına ekle veya dosya olarak aç',
+                  Platform.isIOS
+                      ? 'iPhone Takviminde doğrudan etkinlik oluştur'
+                      : 'Cihazın yerel takvimine anında aktar',
                   style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await _exportIcsFile(event);
+                  await _addToAppleCalendar(event);
                 },
               ),
               const Divider(color: Colors.white12, height: 16),
@@ -595,7 +598,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                 ),
                 subtitle: Text(
-                  'Google Takvim servisine doğrudan aktar',
+                  'Google Takvim uygulamasına veya servisine aktar',
                   style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
                 ),
                 trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
@@ -605,6 +608,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 },
               ),
               const Divider(color: Colors.white12, height: 16),
+              // 3. Outlook / Office 365
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Container(
@@ -629,12 +633,94 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   await _openOutlookCalendar(event);
                 },
               ),
+              const Divider(color: Colors.white12, height: 16),
+              // 4. Takvim Dosyası (.ics İndir / Paylaş)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFA855F7).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.file_download_outlined, color: Color(0xFFA855F7), size: 22),
+                ),
+                title: Text(
+                  'Takvim Dosyası (.ics İndir / Paylaş)',
+                  style: GoogleFonts.outfit(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                ),
+                subtitle: Text(
+                  'Tüm takvim uygulamaları ile uyumlu standart dosya',
+                  style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _exportIcsFile(event);
+                },
+              ),
               const SizedBox(height: 8),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Future<void> _addToAppleCalendar(EventModel event) async {
+    try {
+      if (Platform.isIOS) {
+        final success = await AppleCalendarService.addEventToCalendar(event);
+        if (success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text('Apple Takvim açıldı. "Ekle" butonuna basarak kaydedebilirsiniz.'),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        await _exportIcsFile(event);
+      }
+    } on PlatformException catch (e) {
+      debugPrint('[Apple Calendar Channel] PlatformException: ${e.code} - ${e.message}');
+      if (e.code == 'PERMISSION_DENIED') {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Takvim erişim izni kapalı. Ayarlar > EventMatch > Takvimler bölümünden izin verebilir veya .ics dosyası indirebilirsiniz.',
+              ),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              duration: const Duration(seconds: 6),
+              action: SnackBarAction(
+                label: '.ics İndir',
+                textColor: Colors.white,
+                onPressed: () => _exportIcsFile(event),
+              ),
+            ),
+          );
+        }
+      } else {
+        await _exportIcsFile(event);
+      }
+    } catch (e) {
+      debugPrint('[Apple Calendar] Error: $e');
+      await _exportIcsFile(event);
+    }
   }
 
   Future<void> _openGoogleCalendar(EventModel event) async {
@@ -735,27 +821,35 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
     cleanDesc = '$cleanDesc\n\nEventMatch: ${event.title}';
 
-    final icsContent = '''BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//EventMatch//TR
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-BEGIN:VEVENT
-UID:event_${event.id}_${startUtc.millisecondsSinceEpoch}@eventmatch.app
-DTSTAMP:${formatUtc(nowUtc)}
-DTSTART:${formatUtc(startUtc)}
-DTEND:${formatUtc(endUtc)}
-SUMMARY:${escapeIcs(event.title)}
-DESCRIPTION:${escapeIcs(cleanDesc)}
-LOCATION:${escapeIcs(event.location)}
-STATUS:CONFIRMED
-SEQUENCE:0
-END:VEVENT
-END:VCALENDAR''';
+    final icsLines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//EventMatch//TR',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      'UID:event_${event.id}_${startUtc.millisecondsSinceEpoch}@eventmatch.app',
+      'DTSTAMP:${formatUtc(nowUtc)}',
+      'DTSTART:${formatUtc(startUtc)}',
+      'DTEND:${formatUtc(endUtc)}',
+      'SUMMARY:${escapeIcs(event.title)}',
+      'DESCRIPTION:${escapeIcs(cleanDesc)}',
+      'LOCATION:${escapeIcs(event.location)}',
+      'STATUS:CONFIRMED',
+      'SEQUENCE:0',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ];
+    final icsContent = '${icsLines.join('\r\n')}\r\n';
 
     try {
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/etkinlik_${event.id}.ics');
+      final safeTitle = event.title
+          .replaceAll(RegExp(r'[^\w\s\-]'), '')
+          .trim()
+          .replaceAll(RegExp(r'\s+'), '_');
+      final fileName = safeTitle.isNotEmpty ? '$safeTitle.ics' : 'etkinlik_${event.id}.ics';
+      final file = File('${tempDir.path}/$fileName');
       await file.writeAsString(icsContent, encoding: utf8);
 
       final box = mounted ? (context.findRenderObject() as RenderBox?) : null;
@@ -763,16 +857,10 @@ END:VCALENDAR''';
           ? (box.localToGlobal(Offset.zero) & box.size)
           : const Rect.fromLTWH(0, 0, 300, 300);
 
-      final safeTitle = event.title
-          .replaceAll(RegExp(r'[^\w\s\-]'), '')
-          .trim()
-          .replaceAll(RegExp(r'\s+'), '_');
-      final fileName = safeTitle.isNotEmpty ? '$safeTitle.ics' : 'etkinlik_${event.id}.ics';
-
+      // NOT: iOS paylaşım menüsünde Apple Takvim ikonunun çıkması için
+      // text ve subject parametreleri boş bırakılmalıdır. Metin verildiğinde iOS Takvim uygulamasını filtreler.
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'text/calendar', name: fileName)],
-        subject: 'EventMatch Takvim: ${event.title}',
-        text: '${event.title} - ${event.location}',
         sharePositionOrigin: origin,
       );
 
@@ -784,7 +872,7 @@ END:VCALENDAR''';
                 Icon(Icons.check_circle_outline_rounded, color: Colors.white, size: 20),
                 SizedBox(width: 8),
                 Expanded(
-                  child: Text('Takvim dosyası hazırlandı! Açılan pencereden Takvim uygulamasını seçebilirsiniz.'),
+                  child: Text('Takvim dosyası hazırlandı! Açılan pencereden Takvim veya Dosyalar uygulamasını seçebilirsiniz.'),
                 ),
               ],
             ),

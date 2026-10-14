@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:event_match/core/services/quick_actions_service.dart';
 import 'package:event_match/core/services/spotlight_search_service.dart';
 import 'package:event_match/core/services/in_app_review_service.dart';
+import 'package:event_match/core/services/apple_calendar_service.dart';
 import 'package:event_match/features/events/models/event_model.dart';
 import 'package:event_match/features/events/models/user_model.dart';
 import 'package:event_match/features/events/widgets/apple_wallet_pass_sheet.dart';
@@ -87,6 +88,12 @@ void main() {
 
       await review.triggerEventAttendedReview();
       await review.triggerTicketPurchaseReview();
+    });
+
+    test('AppleCalendarService safely handles non-iOS platform checks without errors', () async {
+      final result = await AppleCalendarService.addEventToCalendar(testRockEvent);
+      // Unit test runner is non-iOS
+      expect(result, isFalse);
     });
   });
 

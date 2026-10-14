@@ -4,10 +4,14 @@ import UserNotifications
 import CoreSpotlight
 import MobileCoreServices
 import Intents
+import EventKit
+import EventKitUI
 
 @main
-@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate, EKEventEditViewDelegate {
   private var spotlightChannel: FlutterMethodChannel?
+  private var calendarChannel: FlutterMethodChannel?
+  private let eventStore = EKEventStore()
 
   override func application(
     _ application: UIApplication,
@@ -45,9 +49,157 @@ import Intents
           result(FlutterMethodNotImplemented)
         }
       }
+
+      setupCalendarChannel(controller: controller)
     }
 
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  private func setupCalendarChannel(controller: FlutterViewController) {
+    calendarChannel = FlutterMethodChannel(name: "com.eventmatch.app/calendar", binaryMessenger: controller.binaryMessenger)
+    calendarChannel?.setMethodCallHandler { [weak self] (call, result) in
+      guard let self = self else { return }
+      if call.method == "addEvent" {
+        guard let args = call.arguments as? [String: Any],
+              let title = args["title"] as? String else {
+          result(FlutterError(code: "INVALID_ARGS", message: "Eksik parametre", details: nil))
+          return
+        }
+
+        let startMillis: Int64
+        if let val = args["startDate"] as? Int64 {
+          startMillis = val
+        } else if let val = args["startDate"] as? NSNumber {
+          startMillis = val.int64Value
+        } else if let val = args["startDate"] as? Int {
+          startMillis = Int64(val)
+        } else {
+          startMillis = Int64(Date().timeIntervalSince1970 * 1000)
+        }
+
+        let endMillis: Int64
+        if let val = args["endDate"] as? Int64 {
+          endMillis = val
+        } else if let val = args["endDate"] as? NSNumber {
+          endMillis = val.int64Value
+        } else if let val = args["endDate"] as? Int {
+          endMillis = Int64(val)
+        } else {
+          endMillis = startMillis + 3 * 3600 * 1000
+        }
+
+        let location = args["location"] as? String ?? ""
+        let notes = args["notes"] as? String ?? ""
+        let urlString = args["url"] as? String
+        let url = urlString != nil ? URL(string: urlString!) : nil
+
+        let startDate = Date(timeIntervalSince1970: Double(startMillis) / 1000.0)
+        let endDate = Date(timeIntervalSince1970: Double(endMillis) / 1000.0)
+
+        self.presentCalendarEvent(
+          title: title,
+          notes: notes,
+          location: location,
+          startDate: startDate,
+          endDate: endDate,
+          url: url,
+          result: result
+        )
+      } else {
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func presentCalendarEvent(
+    title: String,
+    notes: String,
+    location: String,
+    startDate: Date,
+    endDate: Date,
+    url: URL?,
+    result: @escaping FlutterResult
+  ) {
+    let showEditor = { [weak self] in
+      guard let self = self else { return }
+      DispatchQueue.main.async {
+        guard let window = self.window,
+              let rootVC = window.rootViewController else {
+          result(FlutterError(code: "NO_ROOT_VC", message: "Pencere yöneticisi bulunamadı", details: nil))
+          return
+        }
+
+        var topController = rootVC
+        while let presented = topController.presentedViewController, !presented.isBeingDismissed {
+          topController = presented
+        }
+
+        let event = EKEvent(eventStore: self.eventStore)
+        event.title = title
+        event.notes = notes
+        event.location = location
+        event.startDate = startDate
+        event.endDate = endDate
+        event.url = url
+        event.calendar = self.eventStore.defaultCalendarForNewEvents
+
+        let editVC = EKEventEditViewController()
+        editVC.event = event
+        editVC.eventStore = self.eventStore
+        editVC.editViewDelegate = self
+
+        topController.present(editVC, animated: true) {
+          result(true)
+        }
+      }
+    }
+
+    let status = EKEventStore.authorizationStatus(for: .event)
+    var isAuthorized = false
+    if #available(iOS 17.0, *) {
+      isAuthorized = (status == .fullAccess || status == .writeOnly)
+    } else {
+      isAuthorized = (status.rawValue == 3) // .authorized
+    }
+
+    if isAuthorized {
+      showEditor()
+      return
+    }
+
+    if status == .notDetermined {
+      if #available(iOS 17.0, *) {
+        eventStore.requestWriteOnlyAccessToEvents { granted, error in
+          if granted {
+            showEditor()
+          } else {
+            DispatchQueue.main.async {
+              result(FlutterError(code: "PERMISSION_DENIED", message: error?.localizedDescription ?? "Takvim izni verilmedi", details: nil))
+            }
+          }
+        }
+      } else {
+        eventStore.requestAccess(to: .event) { granted, error in
+          if granted {
+            showEditor()
+          } else {
+            DispatchQueue.main.async {
+              result(FlutterError(code: "PERMISSION_DENIED", message: error?.localizedDescription ?? "Takvim izni verilmedi", details: nil))
+            }
+          }
+        }
+      }
+    } else {
+      DispatchQueue.main.async {
+        result(FlutterError(code: "PERMISSION_DENIED", message: "Takvim erişim izni kapalı", details: nil))
+      }
+    }
+  }
+
+  // EKEventEditViewDelegate
+  public func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+    controller.dismiss(animated: true, completion: nil)
   }
 
   private func indexSpotlightEvent(id: String, title: String, description: String, keywords: [String]) {
