@@ -225,16 +225,16 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
   Widget build(BuildContext context) {
     final rec = _getOutfitRecommendation();
     final palette = rec['palette'] as List<Color>;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    final maxHeight = MediaQuery.of(context).size.height * 0.90;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF0F0F1A),
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-      ),
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).padding.bottom + 20,
-      ),
-      child: SingleChildScrollView(
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxHeight: maxHeight),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF0F0F1A),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,53 +251,62 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Sheet Title Bar
+            // Sheet Title Bar (Always pinned at top)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFA855F7).withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFFA855F7).withOpacity(0.3)),
-                        ),
-                        child: const Icon(
-                          Icons.checkroom_rounded,
-                          color: Color(0xFFC084FC),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Kombin & Etkinlik Rehberi',
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontSize: 17,
-                              fontWeight: FontWeight.bold,
-                            ),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFA855F7).withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: const Color(0xFFA855F7).withOpacity(0.3)),
                           ),
-                          Text(
-                            'Ne giyilir, ne alınır, mekan atmosferi',
-                            style: GoogleFonts.outfit(
-                              color: Colors.white60,
-                              fontSize: 12,
-                            ),
+                          child: const Icon(
+                            Icons.checkroom_rounded,
+                            color: Color(0xFFC084FC),
+                            size: 20,
                           ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Kombin & Etkinlik Rehberi',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                'Ne giyilir, ne alınır, mekan atmosferi',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white60,
+                                  fontSize: 12,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, color: Colors.white60),
                     onPressed: () => Navigator.pop(context),
@@ -306,325 +315,387 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
               ),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 10),
+            const Divider(color: Colors.white10, height: 1),
 
-            // ── VIBE & OUTFIT CARD ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF1E1E2E),
-                      const Color(0xFF13131F),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
+            // Scrollable Body
+            Flexible(
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                padding: EdgeInsets.only(
+                  top: 16,
+                  bottom: bottomInset + 20,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              rec['vibeEmoji'],
-                              style: const TextStyle(fontSize: 22),
+                    // ── VIBE & OUTFIT CARD ──
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF1E1E2E),
+                              Color(0xFF13131F),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.1)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              rec['vibeTitle'],
-                              style: GoogleFonts.outfit(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  rec['vibeEmoji'],
+                                  style: const TextStyle(fontSize: 22),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    rec['vibeTitle'],
+                                    style: GoogleFonts.outfit(
+                                      color: Colors.white,
+                                      fontSize: 15.5,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Color Palette Chips
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: palette.map((c) {
+                                    return Container(
+                                      margin: const EdgeInsets.only(left: 4),
+                                      width: 14,
+                                      height: 14,
+                                      decoration: BoxDecoration(
+                                        color: c,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: Colors.white38, width: 1.2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: c.withOpacity(0.4),
+                                            blurRadius: 3,
+                                            offset: const Offset(0, 1),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            _buildRecommendationItem(
+                              icon: Icons.checkroom_rounded,
+                              iconColor: const Color(0xFFEC4899),
+                              title: 'Kıyafet Önerisi',
+                              desc: rec['outfitText'],
+                            ),
+                            const SizedBox(height: 14),
+                            _buildRecommendationItem(
+                              icon: Icons.roller_skating_rounded,
+                              iconColor: const Color(0xFF38BDF8),
+                              title: 'Ayakkabı Seçimi',
+                              desc: rec['shoesText'],
+                            ),
+                            const SizedBox(height: 14),
+                            _buildRecommendationItem(
+                              icon: Icons.watch_rounded,
+                              iconColor: const Color(0xFFFBBF24),
+                              title: 'Aksesuar & Detaylar',
+                              desc: rec['accessoryText'],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // ── VENUE & WEATHER CARD ──
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _isOutdoor
+                                    ? const Color(0xFF10B981).withOpacity(0.18)
+                                    : const Color(0xFF3B82F6).withOpacity(0.18),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _isOutdoor
+                                    ? Icons.wb_sunny_rounded
+                                    : Icons.nightlife_rounded,
+                                color: _isOutdoor
+                                    ? const Color(0xFF34D399)
+                                    : const Color(0xFF60A5FA),
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          _isOutdoor
+                                              ? 'Açık Hava Alanı İpuçları 🌳'
+                                              : 'Kapalı Salon & Kulüp İpuçları 🏛️',
+                                          style: GoogleFonts.outfit(
+                                            color: Colors.white,
+                                            fontSize: 13.5,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      if (_weather != null) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: _weather!.iconColor
+                                                .withOpacity(0.15),
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            border: Border.all(
+                                                color: _weather!.iconColor
+                                                    .withOpacity(0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(_weather!.icon,
+                                                  color: _weather!.iconColor,
+                                                  size: 12),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                '${_weather!.temperature.round()}°C · ${_weather!.conditionText}',
+                                                style: TextStyle(
+                                                  color: _weather!.iconColor,
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _isOutdoor
+                                        ? 'Açık hava mekanı: Çim ve toprak zemin için düz tabanlı ayakkabı önerilir. Akşam rüzgarına dikkat.'
+                                        : 'Kapalı salon mekanı: Havalandırma ve salon atmosferine uygun ferah ve rahat bir kombin seç.',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.72),
+                                      fontSize: 12,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                        // Color Palette Chips
-                        Row(
-                          children: palette.map((c) {
-                            return Container(
-                              margin: const EdgeInsets.only(left: 4),
-                              width: 14,
-                              height: 14,
-                              decoration: BoxDecoration(
-                                color: c,
-                                shape: BoxShape.circle,
-                                border:
-                                    Border.all(color: Colors.white30, width: 1),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    _buildRecommendationItem(
-                      icon: Icons.checkroom_rounded,
-                      iconColor: const Color(0xFFEC4899),
-                      title: 'Kıyafet Önerisi',
-                      desc: rec['outfitText'],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRecommendationItem(
-                      icon: Icons.roller_skating_rounded,
-                      iconColor: const Color(0xFF38BDF8),
-                      title: 'Ayakkabı Seçimi',
-                      desc: rec['shoesText'],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRecommendationItem(
-                      icon: Icons.watch_rounded,
-                      iconColor: const Color(0xFFFBBF24),
-                      title: 'Aksesuar & Detaylar',
-                      desc: rec['accessoryText'],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // ── VENUE & WEATHER CARD ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _isOutdoor
-                            ? const Color(0xFF10B981).withOpacity(0.18)
-                            : const Color(0xFF3B82F6).withOpacity(0.18),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isOutdoor
-                            ? Icons.wb_sunny_rounded
-                            : Icons.nightlife_rounded,
-                        color: _isOutdoor
-                            ? const Color(0xFF34D399)
-                            : const Color(0xFF60A5FA),
-                        size: 22,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+
+                    const SizedBox(height: 20),
+
+                    // ── CONCERT BAG CHECKLIST ──
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                _isOutdoor
-                                    ? 'Açık Hava Alanı İpuçları 🌳'
-                                    : 'Kapalı Salon & Kulüp İpuçları 🏛️',
-                                style: GoogleFonts.outfit(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (_weather != null) ...[
-                                const Spacer(),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: _weather!.iconColor.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: _weather!.iconColor.withOpacity(0.3)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(_weather!.icon, color: _weather!.iconColor, size: 12),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        '${_weather!.temperature.round()}°C • ${_weather!.conditionText}',
-                                        style: TextStyle(
-                                          color: _weather!.iconColor,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
                           Text(
-                            _isOutdoor
-                                ? 'Açık hava mekanı: Çim ve toprak zemin için düz tabanlı ayakkabı önerilir. Akşam rüzgarına dikkat.'
-                                : 'Kapalı salon mekanı: Havalandırma ve salon atmosferine uygun ferah ve rahat bir kombin seç.',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              height: 1.35,
+                            'Konser Çantası Hazırlığı 🎒',
+                            style: GoogleFonts.outfit(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withOpacity(0.14),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: const Color(0xFF38BDF8).withOpacity(0.3)),
+                            ),
+                            child: Text(
+                              '${_checklist.values.where((v) => v).length} / ${_checklist.length} Hazır',
+                              style: const TextStyle(
+                                color: Color(0xFF38BDF8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                    const SizedBox(height: 10),
 
-            const SizedBox(height: 20),
-
-            // ── CONCERT BAG CHECKLIST ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Konser Çantası Hazırlığı 🎒',
-                    style: GoogleFonts.outfit(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    '${_checklist.values.where((v) => v).length} / ${_checklist.length} Hazır',
-                    style: const TextStyle(
-                      color: Color(0xFF38BDF8),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.04),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
-                child: Column(
-                  children: _checklist.keys.map((item) {
-                    final isChecked = _checklist[item] ?? false;
-                    return InkWell(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() {
-                          _checklist[item] = !isChecked;
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 10),
-                        child: Row(
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              width: 22,
-                              height: 22,
-                              decoration: BoxDecoration(
-                                color: isChecked
-                                    ? const Color(0xFF10B981)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(
-                                  color: isChecked
-                                      ? const Color(0xFF10B981)
-                                      : Colors.white38,
-                                  width: 1.5,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        ),
+                        child: Column(
+                          children: _checklist.keys.toList().asMap().entries.map((entry) {
+                            final index = entry.key;
+                            final item = entry.value;
+                            final isChecked = _checklist[item] ?? false;
+                            final isLast = index == _checklist.length - 1;
+                            return Column(
+                              children: [
+                                InkWell(
+                                  onTap: () {
+                                    HapticFeedback.selectionClick();
+                                    setState(() {
+                                      _checklist[item] = !isChecked;
+                                    });
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 11),
+                                    child: Row(
+                                      children: [
+                                        AnimatedContainer(
+                                          duration: const Duration(milliseconds: 200),
+                                          width: 22,
+                                          height: 22,
+                                          decoration: BoxDecoration(
+                                            color: isChecked
+                                                ? const Color(0xFF10B981)
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(6),
+                                            border: Border.all(
+                                              color: isChecked
+                                                  ? const Color(0xFF10B981)
+                                                  : Colors.white38,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: isChecked
+                                              ? const Icon(
+                                                  Icons.check,
+                                                  color: Colors.white,
+                                                  size: 16,
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            item,
+                                            style: TextStyle(
+                                              color: isChecked
+                                                  ? Colors.white.withOpacity(0.92)
+                                                  : Colors.white60,
+                                              fontSize: 13,
+                                              decoration: isChecked
+                                                  ? TextDecoration.none
+                                                  : null,
+                                              fontWeight: isChecked
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
-                              child: isChecked
-                                  ? const Icon(
-                                      Icons.check,
-                                      color: Colors.white,
-                                      size: 16,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                item,
-                                style: TextStyle(
-                                  color: isChecked
-                                      ? Colors.white.withOpacity(0.9)
-                                      : Colors.white60,
-                                  fontSize: 13,
-                                  decoration: isChecked
-                                      ? TextDecoration.none
-                                      : null,
-                                  fontWeight: isChecked
-                                      ? FontWeight.w600
-                                      : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                          ],
+                                if (!isLast)
+                                  Divider(
+                                    color: Colors.white.withOpacity(0.05),
+                                    height: 1,
+                                    indent: 14,
+                                    endIndent: 14,
+                                  ),
+                              ],
+                            );
+                          }).toList(),
                         ),
                       ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // Share Guide Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: () => _shareVibeGuide(rec),
-                  icon: const Icon(Icons.share_outlined, size: 18),
-                  label: Text(
-                    'Kombin ve Rehberi Arkadaşınla Paylaş',
-                    style: GoogleFonts.outfit(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFA855F7),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+
+                    const SizedBox(height: 20),
+
+                    // Share Guide Button
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton.icon(
+                          onPressed: () => _shareVibeGuide(rec),
+                          icon: const Icon(Icons.share_outlined, size: 18),
+                          label: Text(
+                            'Kombin ve Rehberi Arkadaşınla Paylaş',
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14.5,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFA855F7),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -644,14 +715,14 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
             color: iconColor.withOpacity(0.16),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(9),
           ),
-          child: Icon(icon, color: iconColor, size: 16),
+          child: Icon(icon, color: iconColor, size: 17),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 11),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -661,16 +732,16 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
                 style: GoogleFonts.outfit(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                  fontSize: 13.5,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 3),
               Text(
                 desc,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  height: 1.35,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.78),
+                  fontSize: 12.5,
+                  height: 1.42,
                 ),
               ),
             ],

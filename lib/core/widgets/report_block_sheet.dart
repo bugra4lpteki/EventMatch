@@ -16,90 +16,88 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 550),
-              child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        final bottomPadding = MediaQuery.of(bottomSheetContext).padding.bottom;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 550),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding > 0 ? bottomPadding + 6 : 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
-              const SizedBox(height: 16),
-              Text(
-                '$userName ile İlgili İşlem',
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
-                ),
-                title: const Text(
-                  'Kullanıcıyı Şikayet Et',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Topluluk kurallarına aykırı davranış veya içerikleri bildirin',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  showReportDialog(context, userId: userId, userName: userName, onUserBlocked: onUserBlocked);
-                },
-              ),
-              const Divider(color: Colors.white10),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 16),
+                  Text(
+                    '$userName ile İlgili İşlem',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
-                ),
-                title: const Text(
-                  'Kullanıcıyı Engelle',
-                  style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Bu kullanıcıyı bir daha görmezsiniz ve size mesaj atamaz',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  showBlockConfirmationDialog(context, userId: userId, userName: userName, onUserBlocked: onUserBlocked);
-                },
+                  const SizedBox(height: 16),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
+                    ),
+                    title: const Text(
+                      'Kullanıcıyı Şikayet Et',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Topluluk kurallarına aykırı davranış veya içerikleri bildirin',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      showReportDialog(context, userId: userId, userName: userName, onUserBlocked: onUserBlocked);
+                    },
+                  ),
+                  const Divider(color: Colors.white10),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
+                    ),
+                    title: const Text(
+                      'Kullanıcıyı Engelle',
+                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Bu kullanıcıyı bir daha görmezsiniz ve size mesaj atamaz',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      showBlockConfirmationDialog(context, userId: userId, userName: userName, onUserBlocked: onUserBlocked);
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
-        ),
-      ),
-    ),
-  );
+        );
       },
     );
   }
@@ -117,145 +115,143 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 550),
-              child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        final bottomPadding = MediaQuery.of(bottomSheetContext).padding.bottom;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 550),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding > 0 ? bottomPadding + 6 : 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Etkinlik Seçenekleri',
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                eventTitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
-              ),
-              const SizedBox(height: 16),
-              // Akıştan Hemen Kaldır
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.visibility_off_rounded, color: Colors.blueAccent, size: 20),
-                ),
-                title: const Text(
-                  'Bu Gönderiyi Akışımdan Kaldır',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Bu etkinliği ana sayfanızda bir daha görmezsiniz',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () async {
-                  Navigator.pop(bottomSheetContext);
-                  await ModerationService().hideEvent(eventId);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Etkinlik akışınızdan kaldırıldı.'),
-                        backgroundColor: Colors.black87,
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                  onEventHidden?.call();
-                },
-              ),
-              const Divider(color: Colors.white10),
-              // Şikayet Et
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
-                ),
-                title: const Text(
-                  'Etkinliği Şikayet Et',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Uygunsuz veya yanıltıcı içerik bildirimi yapın (24 saatte incelenir)',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  showReportEventDialog(
-                    context,
-                    eventId: eventId,
-                    eventTitle: eventTitle,
-                    organizerId: organizerId,
-                    onEventHidden: onEventHidden,
-                  );
-                },
-              ),
-              if (organizerId != null && organizerId.isNotEmpty) ...[
-                const Divider(color: Colors.white10),
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.redAccent.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    child: const Icon(Icons.person_off_rounded, color: Colors.redAccent, size: 20),
                   ),
-                  title: Text(
-                    '${organizerName ?? "Düzenleyiciyi"} Engelle',
-                    style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Etkinlik Seçenekleri',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
-                  subtitle: const Text(
-                    'Bu kullanıcının etkinliklerini ve mesajlarını tamamen engelle',
-                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  const SizedBox(height: 4),
+                  Text(
+                    eventTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
                   ),
-                  onTap: () {
-                    Navigator.pop(bottomSheetContext);
-                    showBlockConfirmationDialog(
-                      context,
-                      userId: organizerId,
-                      userName: organizerName ?? 'Düzenleyici',
-                      onUserBlocked: onEventHidden,
-                    );
-                  },
-                ),
-              ],
-              const SizedBox(height: 12),
-            ],
+                  const SizedBox(height: 16),
+                  // Akıştan Hemen Kaldır
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blueAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.visibility_off_rounded, color: Colors.blueAccent, size: 20),
+                    ),
+                    title: const Text(
+                      'Bu Gönderiyi Akışımdan Kaldır',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Bu etkinliği ana sayfanızda bir daha görmezsiniz',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () async {
+                      Navigator.pop(bottomSheetContext);
+                      await ModerationService().hideEvent(eventId);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Etkinlik akışınızdan kaldırıldı.'),
+                            backgroundColor: Colors.black87,
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                      onEventHidden?.call();
+                    },
+                  ),
+                  const Divider(color: Colors.white10),
+                  // Şikayet Et
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
+                    ),
+                    title: const Text(
+                      'Etkinliği Şikayet Et',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Uygunsuz veya yanıltıcı içerik bildirimi yapın (24 saatte incelenir)',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      showReportEventDialog(
+                        context,
+                        eventId: eventId,
+                        eventTitle: eventTitle,
+                        organizerId: organizerId,
+                        onEventHidden: onEventHidden,
+                      );
+                    },
+                  ),
+                  if (organizerId != null && organizerId.isNotEmpty) ...[
+                    const Divider(color: Colors.white10),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(Icons.person_off_rounded, color: Colors.redAccent, size: 20),
+                      ),
+                      title: Text(
+                        '${organizerName ?? "Düzenleyiciyi"} Engelle',
+                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      subtitle: const Text(
+                        'Bu kullanıcının etkinliklerini ve mesajlarını tamamen engelle',
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      onTap: () {
+                        Navigator.pop(bottomSheetContext);
+                        showBlockConfirmationDialog(
+                          context,
+                          userId: organizerId,
+                          userName: organizerName ?? 'Düzenleyici',
+                          onUserBlocked: onEventHidden,
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-        ),
-      ),
-    ),
-  );
+        );
       },
     );
   }
@@ -273,100 +269,98 @@ class ReportBlockSheet {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (bottomSheetContext) {
-        return SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 550),
-              child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        final bottomPadding = MediaQuery.of(bottomSheetContext).padding.bottom;
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 550),
+            child: Container(
+              padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPadding > 0 ? bottomPadding + 6 : 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Mesaj Seçenekleri',
-                style: GoogleFonts.outfit(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.orangeAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                  child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
-                ),
-                title: const Text(
-                  'Mesajı ve Göndereni Şikayet Et',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Uygunsuz içerik / taciz bildirimi (24 saat içinde incelenir)',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  showReportDialog(
-                    context,
-                    userId: senderId,
-                    userName: senderName,
-                    onUserBlocked: onActionDone,
-                  );
-                },
-              ),
-              const Divider(color: Colors.white10),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Mesaj Seçenekleri',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
                   ),
-                  child: const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
-                ),
-                title: Text(
-                  '$senderName Adlı Kullanıcıyı Engelle',
-                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
-                ),
-                subtitle: const Text(
-                  'Bu kullanıcının mesajları sizden gizlenecektir',
-                  style: TextStyle(color: Colors.white54, fontSize: 12),
-                ),
-                onTap: () {
-                  Navigator.pop(bottomSheetContext);
-                  showBlockConfirmationDialog(
-                    context,
-                    userId: senderId,
-                    userName: senderName,
-                    onUserBlocked: onActionDone,
-                  );
-                },
+                  const SizedBox(height: 16),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.flag_rounded, color: Colors.orangeAccent, size: 20),
+                    ),
+                    title: const Text(
+                      'Mesajı ve Göndereni Şikayet Et',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Uygunsuz içerik / taciz bildirimi (24 saat içinde incelenir)',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      showReportDialog(
+                        context,
+                        userId: senderId,
+                        userName: senderName,
+                        onUserBlocked: onActionDone,
+                      );
+                    },
+                  ),
+                  const Divider(color: Colors.white10),
+                  ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.block_rounded, color: Colors.redAccent, size: 20),
+                    ),
+                    title: Text(
+                      '$senderName Adlı Kullanıcıyı Engelle',
+                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600, fontSize: 14),
+                    ),
+                    subtitle: const Text(
+                      'Bu kullanıcının mesajları sizden gizlenecektir',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    onTap: () {
+                      Navigator.pop(bottomSheetContext);
+                      showBlockConfirmationDialog(
+                        context,
+                        userId: senderId,
+                        userName: senderName,
+                        onUserBlocked: onActionDone,
+                      );
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-            ],
+            ),
           ),
-        ),
-      ),
-    ),
-  );
+        );
       },
     );
   }
