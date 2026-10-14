@@ -2263,9 +2263,30 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      // NOT: Push bildirimini Supabase DB trigger'ı (handle_new_message_push) zaten gönderiyor.
-      // Flutter tarafından ayrıca sendRemotePushNotification çağırmak ÇİFT BİLDİRİME yol açar.
-      // Bu yüzden burada ekstra push gönderilmiyor.
+      // Alıcıya anında Apple APNs & OneSignal kapalı durum/arka plan push bildirimi gönder (Kesin Teslimat)
+      try {
+        final senderName = _eventService.currentUser.name.isNotEmpty
+            ? _eventService.currentUser.name
+            : (_supabase.auth.currentUser?.userMetadata?['name'] as String? ?? 'Biri');
+
+        final pushContent = text.contains('[audio:')
+            ? '🎤 Sesli Mesaj'
+            : (text.contains('[image:')
+                ? '📷 Fotoğraf'
+                : (text.contains('[view_once:')
+                    ? '📷 Tek seferlik fotoğraf'
+                    : MessageModel.parseEncodedContent(text).cleanText));
+
+        NotificationService().sendRemotePushNotification(
+          receiverId: partnerId,
+          senderName: senderName,
+          content: pushContent.isNotEmpty ? pushContent : 'Yeni mesaj',
+          matchId: numericMatchId?.toString(),
+          senderId: effectiveSenderId,
+        );
+      } catch (pushErr) {
+        debugPrint('[MessageService] ⚠️ Remote Push bildirim gönderme hatası: $pushErr');
+      }
     } catch (e) {
       debugPrint('[MessageService] ❌ INSERT HATASI: ${e.toString()}');
       final chatIndex = _chats.indexWhere((c) => c.participant.id.toLowerCase() == partnerId.toLowerCase());

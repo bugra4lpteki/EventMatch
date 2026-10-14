@@ -288,8 +288,6 @@ class NotificationService with WidgetsBindingObserver {
         'include_aliases': {
           'external_id': [receiverId.toLowerCase(), receiverId],
         },
-        'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
-        'channel_for_external_user_ids': 'push',
         'priority': 10,
         'android_priority': 5,
         'headings': {
@@ -320,12 +318,7 @@ class NotificationService with WidgetsBindingObserver {
         'content_available': true,
       };
 
-      if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
-        payload['include_subscription_ids'] = [receiverPushToken];
-        payload['include_player_ids'] = [receiverPushToken];
-      }
-
-      final response = await http.post(
+      var response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -335,6 +328,24 @@ class NotificationService with WidgetsBindingObserver {
       );
 
       debugPrint('[NotificationService] 🚀 OneSignal Push gönderildi ($receiverId): status ${response.statusCode} - ${response.body}');
+
+      // Eğer alias ile ulaşılamadıysa ve token varsa fallback olarak subscription_ids ile gönder
+      if (response.statusCode != 200 && receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        final fallbackPayload = Map<String, dynamic>.from(payload);
+        fallbackPayload.remove('include_aliases');
+        fallbackPayload.remove('target_channel');
+        fallbackPayload['include_subscription_ids'] = [receiverPushToken];
+
+        final fbResponse = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': 'Key ${OneSignalConfig.restApiKey}',
+          },
+          body: utf8.encode(jsonEncode(fallbackPayload)),
+        );
+        debugPrint('[NotificationService] 🔄 OneSignal Push Fallback ($receiverId): status ${fbResponse.statusCode} - ${fbResponse.body}');
+      }
     } catch (e) {
       debugPrint('[NotificationService] ❌ OneSignal Push gönderme hatası: $e');
     }
@@ -366,8 +377,6 @@ class NotificationService with WidgetsBindingObserver {
         'include_aliases': {
           'external_id': [receiverId.toLowerCase(), receiverId],
         },
-        'include_external_user_ids': [receiverId.toLowerCase(), receiverId],
-        'channel_for_external_user_ids': 'push',
         'priority': 10,
         'android_priority': 5,
         'headings': {
@@ -395,12 +404,7 @@ class NotificationService with WidgetsBindingObserver {
         'content_available': true,
       };
 
-      if (receiverPushToken != null && receiverPushToken.isNotEmpty) {
-        payload['include_subscription_ids'] = [receiverPushToken];
-        payload['include_player_ids'] = [receiverPushToken];
-      }
-
-      final response = await http.post(
+      var response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json; charset=utf-8',
@@ -409,6 +413,23 @@ class NotificationService with WidgetsBindingObserver {
         body: utf8.encode(jsonEncode(payload)),
       );
       debugPrint('[NotificationService] ⚡ Eşleşme isteği bildirimi gönderildi -> $receiverId: status ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode != 200 && receiverPushToken != null && receiverPushToken.isNotEmpty) {
+        final fallbackPayload = Map<String, dynamic>.from(payload);
+        fallbackPayload.remove('include_aliases');
+        fallbackPayload.remove('target_channel');
+        fallbackPayload['include_subscription_ids'] = [receiverPushToken];
+
+        final fbResponse = await http.post(
+          url,
+          headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': 'Key ${OneSignalConfig.restApiKey}',
+          },
+          body: utf8.encode(jsonEncode(fallbackPayload)),
+        );
+        debugPrint('[NotificationService] 🔄 Eşleşme İsteği Fallback -> $receiverId: status ${fbResponse.statusCode} - ${fbResponse.body}');
+      }
     } catch (e) {
       debugPrint('[NotificationService] ⚠️ Eşleşme isteği bildirim hatası: $e');
     }

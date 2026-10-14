@@ -36,9 +36,9 @@ workflows:
         script: find . -name "Podfile" -execdir pod install \;
       - name: Build iOS IPA
         script: |
-          BUILD_NUM=${BUILD_NUMBER:-101}
-          if [ "$BUILD_NUM" -lt 101 ]; then
-            BUILD_NUM=101
+          BUILD_NUM=${BUILD_NUMBER:-103}
+          if [ "$BUILD_NUM" -lt 103 ]; then
+            BUILD_NUM=103
           fi
           flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=/Users/builder/export_options.plist
     artifacts:
