@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/weather_service.dart';
 import '../models/event_model.dart';
 
 /// Etkinlik Rehberi, Ne Giyilir (Kombin) ve Konser Çantası Kontrol Listesi
@@ -27,6 +28,31 @@ class EventVibeGuideSheet extends StatefulWidget {
 }
 
 class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
+  EventWeatherData? _weather;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadWeather();
+  }
+
+  Future<void> _loadWeather() async {
+    try {
+      EventWeatherData? data;
+      if (widget.event.latitude != null && widget.event.longitude != null) {
+        data = await WeatherService().getWeatherForCoordinates(
+          latitude: widget.event.latitude!,
+          longitude: widget.event.longitude!,
+        );
+      } else {
+        data = await WeatherService().getWeatherForLocationName(widget.event.location);
+      }
+      if (mounted && data != null) {
+        setState(() => _weather = data);
+      }
+    } catch (_) {}
+  }
+
   // İnteraktif kontrol listesi (Checklist)
   final Map<String, bool> _checklist = {
     '🎟️ Dijital Bilet veya EventMatch QR Kod': true,
@@ -410,21 +436,53 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            _isOutdoor
-                                ? 'Açık Hava Alanı İpuçları 🌳'
-                                : 'Kapalı Salon & Kulüp İpuçları 🏛️',
-                            style: GoogleFonts.outfit(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                _isOutdoor
+                                    ? 'Açık Hava Alanı İpuçları 🌳'
+                                    : 'Kapalı Salon & Kulüp İpuçları 🏛️',
+                                style: GoogleFonts.outfit(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (_weather != null) ...[
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: _weather!.iconColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: _weather!.iconColor.withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(_weather!.icon, color: _weather!.iconColor, size: 12),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${_weather!.temperature.round()}°C',
+                                        style: TextStyle(
+                                          color: _weather!.iconColor,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _isOutdoor
-                                ? 'Konser akşamı serin esinti olabilir; beline veya omzuna bağlayabileceğin hafif bir ceket almayı unutma. Çim ve toprak zemin için düz tabanlı ayakkabı önerilir.'
-                                : 'İçerisi yoğun kalabalık nedeniyle sıcak olabilir. Katmanlı (soğan stili) giyinerek salonda rahat kalabileceğin bir kombin seç.',
+                            _weather != null
+                                ? '${_weather!.advice} (${_isOutdoor ? "Açık hava konseri için önerilir" : "Kapalı mekan için uygundur"}).'
+                                : (_isOutdoor
+                                    ? 'Konser akşamı serin esinti olabilir; beline veya omzuna bağlayabileceğin hafif bir ceket almayı unutma. Çim ve toprak zemin için düz tabanlı ayakkabı önerilir.'
+                                    : 'İçerisi yoğun kalabalık nedeniyle sıcak olabilir. Katmanlı (soğan stili) giyinerek salonda rahat kalabileceğin bir kombin seç.'),
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,

@@ -29,6 +29,7 @@ import '../../../core/services/in_app_review_service.dart';
 import '../../../core/services/spotlight_search_service.dart';
 import '../widgets/apple_wallet_pass_sheet.dart';
 import '../widgets/event_vibe_guide_sheet.dart';
+import '../widgets/event_weather_card.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -1527,6 +1528,11 @@ END:VCALENDAR''';
                       );
                     },
                   ),
+
+                  const SizedBox(height: 32),
+
+                  // --- ANLIK ETKİNLİK MEKAN HAVA DURUMU ---
+                  EventWeatherCard(event: event),
 
                   const SizedBox(height: 32),
 
