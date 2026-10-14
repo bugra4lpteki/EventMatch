@@ -26,6 +26,8 @@ import '../../messages/screens/chat_detail_screen.dart';
 import '../../messages/services/mock_message_service.dart';
 import '../../../services/notification_service.dart';
 import '../../../core/widgets/report_block_sheet.dart';
+import '../widgets/map_weather_overlay.dart';
+import '../../../core/services/weather_service.dart';
 
 enum MapMode {
   events,
@@ -71,12 +73,30 @@ class _EventMapScreenState extends State<EventMapScreen> {
     return dt.isAfter(now.subtract(const Duration(hours: 6))) && dt.isBefore(limit);
   }
 
+  EventWeatherData? _mapWeather;
+  bool _isWeatherFxEnabled = true;
+
+  Future<void> _loadMapWeather([double? lat, double? lng]) async {
+    try {
+      final targetLat = lat ?? _currentPosition?.latitude ?? context.read<MockEventService>().currentUser.latitude ?? 41.0082;
+      final targetLng = lng ?? _currentPosition?.longitude ?? context.read<MockEventService>().currentUser.longitude ?? 28.9784;
+      final w = await WeatherService().getWeatherForCoordinates(
+        latitude: targetLat,
+        longitude: targetLng,
+      );
+      if (mounted && w != null) {
+        setState(() => _mapWeather = w);
+      }
+    } catch (_) {}
+  }
+
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _checkPermissionAndGetLocation();
     _loadMatchMapQuota();
+    _loadMapWeather();
   }
 
   Future<void> _loadMatchMapQuota() async {
@@ -172,6 +192,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
             LatLng(position.latitude, position.longitude),
             13.5,
           );
+          _loadMapWeather(position.latitude, position.longitude);
         }
       } catch (e) {
         debugPrint('[EventMapScreen] Canlı GPS alma hatası: $e');
@@ -1085,6 +1106,12 @@ class _EventMapScreenState extends State<EventMapScreen> {
             ],
           ),
 
+          // ── HAVA DURUMU ATMOSFERİK EFEKT KATMANI (YAĞMUR, GÜNEŞ, KAR) ──
+          MapWeatherOverlay(
+            weather: _mapWeather,
+            isEnabled: _isWeatherFxEnabled,
+          ),
+
           // 2. Üst Kontrol Paneli (Etkinlik Filtresi veya Match Haritası Durum Barı)
           if (_currentMapMode == MapMode.matchMap)
             Positioned(
@@ -1158,6 +1185,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 1. SATIR: TÜM ETKİNLİK VE ZAMAN FİLTRELERİ (YATAY KAYDIRILABİLİR)
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     physics: const BouncingScrollPhysics(),
@@ -1181,18 +1209,18 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             },
                             child: Container(
                               margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                               decoration: BoxDecoration(
                                 gradient: isSelected ? AppColors.primaryGradient : null,
                                 color: isSelected ? null : AppColors.surface,
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
                                   color: isSelected ? Colors.transparent : Colors.white12,
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 8,
+                                    blurRadius: 6,
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
@@ -1201,15 +1229,63 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                 dateFilter,
                                 style: TextStyle(
                                   color: Colors.white,
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                                 ),
                               ),
                             ),
                           );
                         }),
-                        // 🅿️ OTOPARKLAR FİLTRE ÇİPİ (İBB İSPARK DESTEKLİ)
-                        GestureDetector(
+                        ...eventService.categories.where((c) => c != 'Tümü' && c != 'Festival').map((category) {
+                          final isSelected = _selectedCategoryFilter == category;
+                          return GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (_selectedCategoryFilter == category) {
+                                  _selectedCategoryFilter = null;
+                                } else {
+                                  _selectedCategoryFilter = category;
+                                  _showParking = false;
+                                  _showGasStations = false;
+                                  _selectedPoi = null;
+                                }
+                                _selectedEvent = null;
+                              });
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: isSelected ? AppColors.primary.withOpacity(0.25) : AppColors.surface,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: isSelected ? AppColors.primary : Colors.white12,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                category,
+                                style: TextStyle(
+                                  color: isSelected ? AppColors.primaryVariant : AppColors.textSecondary,
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 8),
+
+                  // 2. SATIR: OTOPARK, BENZİNLİK VE CANLI HAVA (MOBİLDE HER ZAMAN EKRANDA GÖRÜNÜR)
+                  Row(
+                    children: [
+                      // 🅿️ OTOPARKLAR
+                      Expanded(
+                        child: GestureDetector(
                           onTap: () {
                             setState(() {
                               _showParking = !_showParking;
@@ -1230,14 +1306,14 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             }
                           },
                           child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
                               gradient: _showParking
                                   ? const LinearGradient(colors: [Color(0xFF2563EB), Color(0xFF1D4ED8)])
                                   : null,
-                              color: _showParking ? null : AppColors.surface,
-                              borderRadius: BorderRadius.circular(20),
+                              color: _showParking ? null : AppColors.surface.withOpacity(0.95),
+                              borderRadius: BorderRadius.circular(18),
                               border: Border.all(
                                 color: _showParking ? const Color(0xFF60A5FA) : Colors.white12,
                                 width: _showParking ? 1.4 : 1.0,
@@ -1247,13 +1323,13 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   color: _showParking
                                       ? const Color(0xFF2563EB).withValues(alpha: 0.4)
                                       : Colors.black.withOpacity(0.3),
-                                  blurRadius: 8,
+                                  blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
                                   Icons.local_parking_rounded,
@@ -1261,21 +1337,25 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   color: _showParking ? Colors.white : const Color(0xFF60A5FA),
                                 ),
                                 const SizedBox(width: 5),
-                                Text(
-                                  MapPoiService().isLoadingIbb
-                                      ? 'İBB İspark Yükleniyor...'
-                                      : (_showParking ? 'Yakın Otoparklar (${nearbyParkingLots.length})' : 'Otoparklar'),
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: _showParking ? FontWeight.bold : FontWeight.w500,
+                                Flexible(
+                                  child: Text(
+                                    MapPoiService().isLoadingIbb
+                                        ? 'Yükleniyor...'
+                                        : (_showParking ? 'Otopark (${nearbyParkingLots.length})' : 'Otoparklar'),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11.5,
+                                      fontWeight: _showParking ? FontWeight.bold : FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 if (_showParking) ...[
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Container(
-                                    width: 7,
-                                    height: 7,
+                                    width: 6,
+                                    height: 6,
                                     decoration: const BoxDecoration(
                                       color: Color(0xFF10B981),
                                       shape: BoxShape.circle,
@@ -1286,8 +1366,13 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             ),
                           ),
                         ),
-                        // ⛽ BENZİNLİKLER FİLTRE ÇİPİ (OPENSTREETMAP CANLI ENTEGRASYON)
-                        GestureDetector(
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // ⛽ BENZİNLİKLER
+                      Expanded(
+                        child: GestureDetector(
                           onTap: () {
                             setState(() {
                               _showGasStations = !_showGasStations;
@@ -1308,14 +1393,14 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             }
                           },
                           child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            height: 38,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             decoration: BoxDecoration(
                               gradient: _showGasStations
                                   ? const LinearGradient(colors: [Color(0xFF059669), Color(0xFF047857)])
                                   : null,
-                              color: _showGasStations ? null : AppColors.surface,
-                              borderRadius: BorderRadius.circular(20),
+                              color: _showGasStations ? null : AppColors.surface.withOpacity(0.95),
+                              borderRadius: BorderRadius.circular(18),
                               border: Border.all(
                                 color: _showGasStations ? const Color(0xFF34D399) : Colors.white12,
                                 width: _showGasStations ? 1.4 : 1.0,
@@ -1325,13 +1410,13 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   color: _showGasStations
                                       ? const Color(0xFF059669).withValues(alpha: 0.4)
                                       : Colors.black.withOpacity(0.3),
-                                  blurRadius: 8,
+                                  blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
                                   Icons.local_gas_station_rounded,
@@ -1339,21 +1424,25 @@ class _EventMapScreenState extends State<EventMapScreen> {
                                   color: _showGasStations ? Colors.white : const Color(0xFF34D399),
                                 ),
                                 const SizedBox(width: 5),
-                                Text(
-                                  MapPoiService().isLoadingOsmGas
-                                      ? 'Benzinlikler Yükleniyor...'
-                                      : (_showGasStations ? 'Yakın Benzinlikler (${nearbyGasStations.length})' : 'Benzinlikler'),
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12.5,
-                                    fontWeight: _showGasStations ? FontWeight.bold : FontWeight.w500,
+                                Flexible(
+                                  child: Text(
+                                    MapPoiService().isLoadingOsmGas
+                                        ? 'Yükleniyor...'
+                                        : (_showGasStations ? 'Benzin (${nearbyGasStations.length})' : 'Benzinlikler'),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11.5,
+                                      fontWeight: _showGasStations ? FontWeight.bold : FontWeight.w600,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
                                 if (_showGasStations) ...[
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 4),
                                   Container(
-                                    width: 7,
-                                    height: 7,
+                                    width: 6,
+                                    height: 6,
                                     decoration: const BoxDecoration(
                                       color: Color(0xFF10B981),
                                       shape: BoxShape.circle,
@@ -1364,53 +1453,91 @@ class _EventMapScreenState extends State<EventMapScreen> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: eventService.categories.where((c) => c != 'Tümü' && c != 'Festival').map((category) {
-                        final isSelected = _selectedCategoryFilter == category;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              if (_selectedCategoryFilter == category) {
-                                _selectedCategoryFilter = null;
-                              } else {
-                                _selectedCategoryFilter = category;
-                                _showParking = false;
-                                _showGasStations = false;
-                                _selectedPoi = null;
-                              }
-                              _selectedEvent = null;
-                            });
-                          },
-                          child: Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: isSelected ? AppColors.primary.withOpacity(0.2) : AppColors.surface.withOpacity(0.9),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected ? AppColors.primary : Colors.white10,
-                                width: 1,
+                      ),
+
+                      const SizedBox(width: 8),
+
+                      // 🌦️ CANLI HAVA DURUMU & ANİMASYON AÇ/KAPAT
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isWeatherFxEnabled = !_isWeatherFxEnabled;
+                          });
+                          HapticFeedback.selectionClick();
+                          if (_mapWeather != null) {
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(_mapWeather!.icon, color: _mapWeather!.iconColor, size: 18),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '${_mapWeather!.conditionText} (${_mapWeather!.temperature.round()}°C) • Harita Efekti: ${_isWeatherFxEnabled ? "Açık ✨" : "Kapalı"}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                backgroundColor: const Color(0xFF1E293B),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                               ),
+                            );
+                          }
+                        },
+                        child: Container(
+                          height: 38,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(
+                            color: _isWeatherFxEnabled
+                                ? const Color(0xFF38BDF8).withOpacity(0.18)
+                                : AppColors.surface.withOpacity(0.95),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: _isWeatherFxEnabled
+                                  ? const Color(0xFF38BDF8).withOpacity(0.5)
+                                  : Colors.white12,
+                              width: 1.0,
                             ),
-                            child: Text(
-                              category,
-                              style: TextStyle(
-                                color: isSelected ? AppColors.primaryVariant : AppColors.textSecondary,
-                                fontSize: 12,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
                               ),
-                            ),
+                            ],
                           ),
-                        );
-                      }).toList(),
-                    ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _mapWeather?.icon ?? Icons.wb_sunny_rounded,
+                                size: 15,
+                                color: _mapWeather?.iconColor ?? const Color(0xFFFBBF24),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                _mapWeather != null ? '${_mapWeather!.temperature.round()}°' : 'Hava',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Icon(
+                                _isWeatherFxEnabled ? Icons.auto_awesome : Icons.auto_awesome_outlined,
+                                size: 11,
+                                color: _isWeatherFxEnabled ? const Color(0xFF38BDF8) : Colors.white38,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

@@ -326,7 +326,7 @@ class _EventWeatherCardState extends State<EventWeatherCard> with SingleTickerPr
 
         const SizedBox(height: 14),
 
-        // ── NEM & RÜZGAR HIZLI BİLGİ PİLLERİ ──
+        // ── METEOROLOJİK VERİ PİLLERİ ──
         Row(
           children: [
             _buildStatPill(
@@ -335,14 +335,21 @@ class _EventWeatherCardState extends State<EventWeatherCard> with SingleTickerPr
               value: '%${weather.humidity}',
               accentColor: const Color(0xFF60A5FA),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             _buildStatPill(
               icon: Icons.air_rounded,
               label: 'Rüzgar',
               value: '${weather.windSpeed.round()} km/s',
               accentColor: const Color(0xFF38BDF8),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
+            _buildStatPill(
+              icon: Icons.umbrella_outlined,
+              label: 'Yağış',
+              value: '${weather.precipitation.toStringAsFixed(1)} mm',
+              accentColor: const Color(0xFF818CF8),
+            ),
+            const SizedBox(width: 6),
             _buildStatPill(
               icon: Icons.schedule_rounded,
               label: 'Saat',
@@ -352,21 +359,20 @@ class _EventWeatherCardState extends State<EventWeatherCard> with SingleTickerPr
           ],
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 12),
 
-        // ── ETKİNLİK & KOMBİN İPUCU BANNERI ──
+        // ── METEOROLOJİK DURUM BİLGİSİ ──
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.04),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.06)),
           ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.tips_and_updates_rounded, color: Color(0xFFFBBF24), size: 16),
+              Icon(weather.icon, color: weather.iconColor, size: 15),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -374,7 +380,7 @@ class _EventWeatherCardState extends State<EventWeatherCard> with SingleTickerPr
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 12,
-                    height: 1.4,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ),

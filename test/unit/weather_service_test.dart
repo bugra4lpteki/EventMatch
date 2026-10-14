@@ -54,7 +54,7 @@ void main() {
       expect(data.weatherCode, 63);
       expect(data.conditionText, 'Yağmurlu');
       expect(data.icon, Icons.water_drop_rounded);
-      expect(data.advice, contains('yağış bekleniyor'));
+      expect(data.advice, contains('yağış'));
     });
 
     test('EventWeatherData generates appropriate clothing advice for cold weather', () {

@@ -30,6 +30,7 @@ import '../../../core/services/spotlight_search_service.dart';
 import '../widgets/apple_wallet_pass_sheet.dart';
 import '../widgets/event_vibe_guide_sheet.dart';
 import '../widgets/event_weather_card.dart';
+import '../../../core/utils/event_share_helper.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final EventModel event;
@@ -480,34 +481,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _shareEvent() async {
     HapticFeedback.lightImpact();
-    final event = widget.event;
-    final formattedDate =
-        '${event.dateTime.day} ${_getTurkishMonthName(event.dateTime.month)} ${event.dateTime.year} - ${event.dateTime.hour.toString().padLeft(2, '0')}:${event.dateTime.minute.toString().padLeft(2, '0')}';
-    final ticketPart = event.effectiveTicketUrl.isNotEmpty ? '\n🎟️ Bilet & Detay: ${event.effectiveTicketUrl}' : '';
-
-    final shareText = '''
-🎵 ${event.title}
-📅 Tarih: $formattedDate
-📍 Konum: ${event.location}
-$ticketPart
-
-EventMatch üzerinden buldum, benimle bu etkinliğe gelmek ister misin? 🎉
-'''.trim();
-
-    try {
-      final box = mounted ? (context.findRenderObject() as RenderBox?) : null;
-      final origin = box != null
-          ? (box.localToGlobal(Offset.zero) & box.size)
-          : const Rect.fromLTWH(0, 0, 300, 300);
-
-      await Share.share(
-        shareText,
-        subject: 'EventMatch: ${event.title}',
-        sharePositionOrigin: origin,
-      );
-    } catch (e) {
-      debugPrint('[Share] Error: $e');
-    }
+    await EventShareHelper.shareEvent(
+      context: context,
+      event: widget.event,
+    );
   }
 
   void _showAddToCalendarModal() {

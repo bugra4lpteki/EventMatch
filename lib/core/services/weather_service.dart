@@ -144,18 +144,18 @@ class EventWeatherData {
 
   static String _generateEventAdvice(double temp, double precip, double wind, int code) {
     if (precip > 0.5 || (code >= 61 && code <= 99)) {
-      return 'Etkinlik alanında yağış bekleniyor 🌧️ Su geçirmez mont veya hafif yağmurluk almayı unutma!';
+      return 'Bölgede anlık yağış kaydediliyor (${precip.toStringAsFixed(1)} mm) 🌧️';
     }
     if (wind > 25.0) {
-      return 'Rüzgarlı bir hava var 💨 Açık hava etkinliği için rüzgarlık veya şal iyi bir tercih olur.';
+      return 'Bölgede kuvvetli rüzgar etkili (${wind.round()} km/s) 💨';
     }
     if (temp < 14.0) {
-      return 'Akşam hava serin olabilir 🧥 Katmanlı giyinmeni ve üzerine kalın bir ceket almanı öneririz.';
+      return 'Bölgede serin hava koşulları hakim (${temp.round()}°C) ❄️';
     }
     if (temp > 27.0) {
-      return 'Sıcak ve açık bir hava! ☀️ Bol su tüketmeyi, güneş gözlüğü ve ferah giysileri unutma.';
+      return 'Bölgede sıcak ve açık hava hakim (${temp.round()}°C) ☀️';
     }
-    return 'Etkinlik ve festival için ideal hava şartları! 🌟 Keyifli anlar dileriz.';
+    return 'Bölgede açık ve sakin meteorolojik koşullar hakim 🌟';
   }
 }
 

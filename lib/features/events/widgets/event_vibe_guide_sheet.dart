@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/weather_service.dart';
+import '../../../core/utils/event_share_helper.dart';
 import '../models/event_model.dart';
 
 /// Etkinlik Rehberi, Ne Giyilir (Kombin) ve Konser Çantası Kontrol Listesi
@@ -211,13 +212,13 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
 
   void _shareVibeGuide(Map<String, dynamic> rec) {
     HapticFeedback.selectionClick();
-    final text = '✨ ${widget.event.title} için Kombin & Rehber:\n'
-        'Tarz: ${rec['vibeTitle']} ${rec['vibeEmoji']}\n'
-        'Kıyafet: ${rec['outfitText']}\n'
-        'Ayakkabı: ${rec['shoesText']}\n'
-        'Mekan: ${_isOutdoor ? "Açık Hava (Akşam serinliği için ceket al!)" : "Kapalı Salon"}\n'
-        'EventMatch ile etkinlikte buluşalım!';
-    Share.share(text);
+    EventShareHelper.shareVibeGuide(
+      context: context,
+      event: widget.event,
+      rec: rec,
+      isOutdoor: _isOutdoor,
+      weather: _weather,
+    );
   }
 
   @override
@@ -463,7 +464,7 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
                                       Icon(_weather!.icon, color: _weather!.iconColor, size: 12),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${_weather!.temperature.round()}°C',
+                                        '${_weather!.temperature.round()}°C • ${_weather!.conditionText}',
                                         style: TextStyle(
                                           color: _weather!.iconColor,
                                           fontSize: 11,
@@ -478,11 +479,9 @@ class _EventVibeGuideSheetState extends State<EventVibeGuideSheet> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            _weather != null
-                                ? '${_weather!.advice} (${_isOutdoor ? "Açık hava konseri için önerilir" : "Kapalı mekan için uygundur"}).'
-                                : (_isOutdoor
-                                    ? 'Konser akşamı serin esinti olabilir; beline veya omzuna bağlayabileceğin hafif bir ceket almayı unutma. Çim ve toprak zemin için düz tabanlı ayakkabı önerilir.'
-                                    : 'İçerisi yoğun kalabalık nedeniyle sıcak olabilir. Katmanlı (soğan stili) giyinerek salonda rahat kalabileceğin bir kombin seç.'),
+                            _isOutdoor
+                                ? 'Açık hava mekanı: Çim ve toprak zemin için düz tabanlı ayakkabı önerilir. Akşam rüzgarına dikkat.'
+                                : 'Kapalı salon mekanı: Havalandırma ve salon atmosferine uygun ferah ve rahat bir kombin seç.',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
