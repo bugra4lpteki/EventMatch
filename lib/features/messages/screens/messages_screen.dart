@@ -512,7 +512,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         subtitle: Text(
           isBlocked
               ? '🚫 Bu kullanıcı engellendi'
-              : (lastMsg != null ? lastMsg.previewText : 'Bağlantı kuruldu! Sohbet başlatın.'),
+              : (lastMsg != null ? lastMsg.previewText : 'Etkinlik arkadaşı oldunuz! Sohbet başlatın.'),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(

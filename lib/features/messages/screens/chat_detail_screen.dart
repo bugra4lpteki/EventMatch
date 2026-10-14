@@ -1295,7 +1295,7 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
                         Icon(Icons.chat_bubble_outline_rounded, size: 48, color: AppColors.surface),
                         const SizedBox(height: 12),
                         Text(
-                          'Bağlantı kuruldu! 🎉',
+                          'Etkinlik arkadaşlığı başladı! 🎉',
                           style: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 16),
                         ),
                         const SizedBox(height: 4),

@@ -2231,7 +2231,7 @@ class MockEventService extends ChangeNotifier {
       return scoredEvents.map((e) => e.key).toList();
     }
     
-    if (_selectedCategory == '💖 Eşleşme Oranı Yüksek') {
+    if (_selectedCategory == '👥 Katılımcı Sayısı Yüksek') {
       int getMatchRateScore(EventModel e) {
         int score = e.attendees.length * 10;
         int matchableUsers = e.attendees.where((u) => u.id != currentUser.id).length;
