@@ -177,9 +177,15 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('EventMatch VIP üyeliği sonlandırıldı.'),
+        content: const Text('EventMatch VIP üyeliği başarıyla sonlandırıldı.'),
         backgroundColor: AppColors.surface,
         behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        action: SnackBarAction(
+          label: 'Abonelikleri Yönet',
+          textColor: const Color(0xFFF59E0B),
+          onPressed: () => UrlLauncherHelper.launchURL('https://apps.apple.com/account/subscriptions'),
+        ),
       ),
     );
   }

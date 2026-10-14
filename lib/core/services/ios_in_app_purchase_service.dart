@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../features/events/services/mock_event_service.dart';
 
@@ -15,6 +16,7 @@ class IosInAppPurchaseService {
   InAppPurchase? _iapInstance;
   InAppPurchase get _iap => _iapInstance ??= InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
+  bool _isUserInitiated = false;
 
   // Apple App Store Connect Product IDs
   static const String vipWeeklyId = 'com.eventmatch.app.vip.weekly';
@@ -109,6 +111,16 @@ class IosInAppPurchaseService {
   Future<void> _deliverProduct(PurchaseDetails purchase) async {
     try {
       final productId = purchase.productID;
+
+      // Kullanıcı manuel iptal etmişse ve bu kullanıcı tarafından tetiklenmemiş bir arka plan olayıysa teslim etme
+      final prefs = await SharedPreferences.getInstance();
+      final isCancelled = prefs.getBool('vip_cancelled') ?? false;
+      if (isCancelled && !_isUserInitiated && purchase.status != PurchaseStatus.restored) {
+        debugPrint('[StoreKit] ⚠️ Kullanıcı üyeliği iptal etmişti, arka plan eski StoreKit işlemi yok sayıldı.');
+        return;
+      }
+      _isUserInitiated = false;
+
       int days = 30;
 
       if (productId == vipWeeklyId) {
@@ -150,6 +162,10 @@ class IosInAppPurchaseService {
   /// Apple In-App Purchase Satın Alma Başlat
   Future<bool> buyProduct(String productId) async {
     try {
+      _isUserInitiated = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('vip_cancelled', false);
+
       if (kIsWeb || (!kIsWeb && !Platform.isIOS)) {
         debugPrint('[StoreKit] ⚠️ iOS harici platform, simülasyon akışı çalıştırılıyor.');
         return _simulatePurchase(productId);
@@ -199,6 +215,10 @@ class IosInAppPurchaseService {
   /// Apple App Store Guideline 3.1.1 Zorunluluğu: Satın Alımları Geri Yükle (Restore Purchases)
   Future<bool> restorePurchases() async {
     try {
+      _isUserInitiated = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('vip_cancelled', false);
+
       if (Platform.isIOS && _isAvailable) {
         await _iap.restorePurchases();
         return true;

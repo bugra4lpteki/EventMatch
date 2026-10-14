@@ -108,6 +108,29 @@ void main() {
       await service.cancelVip();
       expect(service.currentUser.isVip, isFalse);
       expect(service.currentUser.hasActiveVip, isFalse);
+      expect(service.currentUser.badges.contains('vip'), isFalse);
+    });
+
+    test('VIP cancellation persists after app restart (loadUserProfile)', () async {
+      final service = MockEventService();
+
+      // 1. User becomes VIP
+      await service.activateVip(days: 30);
+      expect(service.currentUser.hasActiveVip, isTrue);
+
+      // 2. User cancels VIP
+      await service.cancelVip();
+      expect(service.currentUser.hasActiveVip, isFalse);
+      expect(service.currentUser.isVip, isFalse);
+      expect(service.currentUser.badges.contains('vip'), isFalse);
+
+      // 3. App restarts (loadUserProfile runs)
+      await service.loadUserProfile();
+
+      // 4. Must NOT re-activate as VIP or trial
+      expect(service.currentUser.hasActiveVip, isFalse);
+      expect(service.currentUser.isVip, isFalse);
+      expect(service.currentUser.badges.contains('vip'), isFalse);
     });
 
     test('MockMatchService undoSwipe restores swiped user to deck for VIP undo', () async {

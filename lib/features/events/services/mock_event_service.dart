@@ -902,6 +902,9 @@ class MockEventService extends ChangeNotifier {
     currentUser.socialLinks = [];
     currentUser.avatarUrl = '';
     currentUser.avatarUrls = [];
+    currentUser.isVip = false;
+    currentUser.vipExpiryDate = null;
+    currentUser.badges.remove('vip');
     
     // Önce yerel önbellekteki planlanan etkinlikleri ve check-in durumunu yükle
     final savedPlanned = prefs.getStringList('${userId}_userPlannedEvents') ?? [];
@@ -946,16 +949,59 @@ class MockEventService extends ChangeNotifier {
             currentUser.showVerifiedBadge = userData['show_verified_badge'] != false;
             await prefs.setBool('${userId}_show_verified_badge', currentUser.showVerifiedBadge);
           }
-          if (userData['is_vip'] != null) {
-            currentUser.isVip = userData['is_vip'] == true;
-            await prefs.setBool('${userId}_is_vip', currentUser.isVip);
-          }
-          if (userData['vip_expires_at'] != null) {
-            currentUser.vipExpiryDate = DateTime.tryParse(userData['vip_expires_at'].toString());
-            if (currentUser.vipExpiryDate != null) {
-              await prefs.setString('${userId}_vip_expires_at', currentUser.vipExpiryDate!.toIso8601String());
+          
+          final isVipCancelledLocally = prefs.getBool('${userId}_vip_cancelled') ??
+              prefs.getBool('${currentUser.name}_vip_cancelled') ??
+              prefs.getBool('vip_cancelled') ??
+              false;
+
+          final dbIsVip = userData['is_vip'] == true;
+          final dbVipExpiryStr = userData['vip_expires_at']?.toString();
+          final dbVipExpiry = dbVipExpiryStr != null ? DateTime.tryParse(dbVipExpiryStr) : null;
+          final isDbVipActive = dbIsVip && (dbVipExpiry == null || dbVipExpiry.isAfter(DateTime.now()));
+
+          if (isVipCancelledLocally) {
+            // Kullanıcı üyeliğini iptal etmişse kesinlikle VIP yapılmaz
+            currentUser.isVip = false;
+            currentUser.vipExpiryDate = null;
+            currentUser.badges.remove('vip');
+            await prefs.setBool('${userId}_is_vip', false);
+            await prefs.setBool('is_vip', false);
+            await prefs.remove('${userId}_vip_expires_at');
+            await prefs.remove('vip_expires_at');
+
+            // Eğer Supabase'de hala true kalmışsa orayı da güncelle
+            if (dbIsVip) {
+              try {
+                await _supabase.from('users').update({
+                  'is_vip': false,
+                  'vip_expires_at': null,
+                  'updated_at': DateTime.now().toUtc().toIso8601String(),
+                }).eq('id', userId);
+              } catch (_) {}
             }
+          } else if (isDbVipActive) {
+            currentUser.isVip = true;
+            currentUser.vipExpiryDate = dbVipExpiry;
+            if (!currentUser.badges.contains('vip')) {
+              currentUser.badges.add('vip');
+            }
+            await prefs.setBool('${userId}_is_vip', true);
+            await prefs.setBool('is_vip', true);
+            if (dbVipExpiry != null) {
+              await prefs.setString('${userId}_vip_expires_at', dbVipExpiry.toIso8601String());
+              await prefs.setString('vip_expires_at', dbVipExpiry.toIso8601String());
+            }
+          } else {
+            currentUser.isVip = false;
+            currentUser.vipExpiryDate = null;
+            currentUser.badges.remove('vip');
+            await prefs.setBool('${userId}_is_vip', false);
+            await prefs.setBool('is_vip', false);
+            await prefs.remove('${userId}_vip_expires_at');
+            await prefs.remove('vip_expires_at');
           }
+
           if (userData['boost_expires_at'] != null) {
             currentUser.boostExpiryDate = DateTime.tryParse(userData['boost_expires_at'].toString());
             if (currentUser.boostExpiryDate != null) {
@@ -963,21 +1009,29 @@ class MockEventService extends ChangeNotifier {
             }
           }
 
-          // Yeni Kullanıcı Hoş Geldin Hediyesi: İlk kez gelen ve VIP kaydı olmayan kullanıcılara 1 Hafta Ücretsiz VIP!
-          final hasTrial = prefs.getBool('${userId}_welcome_trial_granted') ?? false;
-          if (!hasTrial && userData['is_vip'] != true && userData['vip_expires_at'] == null) {
-            final trialExpiry = DateTime.now().add(const Duration(days: 7));
-            currentUser.isVip = true;
-            currentUser.vipExpiryDate = trialExpiry;
-            await prefs.setBool('${userId}_welcome_trial_granted', true);
-            await prefs.setBool('${userId}_is_vip', true);
-            await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
-            try {
-              await _supabase.from('users').update({
-                'is_vip': true,
-                'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
-              }).eq('id', userId);
-            } catch (_) {}
+          // Yeni Kullanıcı Hoş Geldin Hediyesi: Sadece yeni açılmış hesaplar için (asla iptal eden veya eski kullanıcılara değil)
+          final hasTrial = prefs.getBool('${userId}_welcome_trial_granted') ?? prefs.getBool('welcome_trial_granted') ?? false;
+          if (!hasTrial && !isVipCancelledLocally && !currentUser.isVip && userData['is_vip'] != true && userData['vip_expires_at'] == null) {
+            final createdAtStr = userData['created_at']?.toString();
+            final createdAt = createdAtStr != null ? DateTime.tryParse(createdAtStr) : null;
+            final isRecentAccount = createdAt != null && DateTime.now().difference(createdAt).inHours < 24;
+            if (isRecentAccount) {
+              final trialExpiry = DateTime.now().add(const Duration(days: 7));
+              currentUser.isVip = true;
+              currentUser.vipExpiryDate = trialExpiry;
+              if (!currentUser.badges.contains('vip')) currentUser.badges.add('vip');
+              await prefs.setBool('${userId}_welcome_trial_granted', true);
+              await prefs.setBool('${userId}_is_vip', true);
+              await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
+              try {
+                await _supabase.from('users').update({
+                  'is_vip': true,
+                  'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
+                }).eq('id', userId);
+              } catch (_) {}
+            } else {
+              await prefs.setBool('${userId}_welcome_trial_granted', true);
+            }
           }
         } else {
           final userName = authUser?.userMetadata?['name'] ?? (authUser?.userMetadata?['full_name']) ?? 'Yeni Kullanıcı';
@@ -986,13 +1040,20 @@ class MockEventService extends ChangeNotifier {
           final derivedUsername = email.contains('@') ? email.split('@')[0] : 'user_${userId.substring(0, 6)}';
           currentUser.username = derivedUsername;
 
-          // Yeni Kullanıcı Hoş Geldin Hediyesi: 7 Gün Ücretsiz VIP Ayrıcalığı!
-          final trialExpiry = DateTime.now().add(const Duration(days: 7));
-          currentUser.isVip = true;
-          currentUser.vipExpiryDate = trialExpiry;
-          await prefs.setBool('${userId}_welcome_trial_granted', true);
-          await prefs.setBool('${userId}_is_vip', true);
-          await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
+          final isCancelledLocally = prefs.getBool('${userId}_vip_cancelled') ?? prefs.getBool('vip_cancelled') ?? false;
+          final hasTrial = prefs.getBool('${userId}_welcome_trial_granted') ?? prefs.getBool('welcome_trial_granted') ?? false;
+          final shouldGrantTrial = !hasTrial && !isCancelledLocally;
+
+          DateTime? trialExpiry;
+          if (shouldGrantTrial) {
+            trialExpiry = DateTime.now().add(const Duration(days: 7));
+            currentUser.isVip = true;
+            currentUser.vipExpiryDate = trialExpiry;
+            if (!currentUser.badges.contains('vip')) currentUser.badges.add('vip');
+            await prefs.setBool('${userId}_welcome_trial_granted', true);
+            await prefs.setBool('${userId}_is_vip', true);
+            await prefs.setString('${userId}_vip_expires_at', trialExpiry.toIso8601String());
+          }
 
           try {
             await _supabase.from('users').upsert({
@@ -1001,8 +1062,8 @@ class MockEventService extends ChangeNotifier {
               'username': derivedUsername,
               'email': email,
               'city': 'İstanbul',
-              'is_vip': true,
-              'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
+              if (shouldGrantTrial) 'is_vip': true,
+              if (shouldGrantTrial && trialExpiry != null) 'vip_expires_at': trialExpiry.toUtc().toIso8601String(),
             });
           } catch (e) {
             debugPrint('Auto upsert user profile error: $e');
@@ -1141,6 +1202,24 @@ class MockEventService extends ChangeNotifier {
         }
       }
       currentUser.pastEvents = prefs.getStringList('${userId}_userPastEvents') ?? ['2', '3'];
+
+      final isCancelled = prefs.getBool('${userId}_vip_cancelled') ?? prefs.getBool('vip_cancelled') ?? false;
+      if (!isCancelled) {
+        currentUser.isVip = prefs.getBool('${userId}_is_vip') ?? prefs.getBool('is_vip') ?? false;
+        final expiryStr = prefs.getString('${userId}_vip_expires_at') ?? prefs.getString('vip_expires_at');
+        currentUser.vipExpiryDate = expiryStr != null ? DateTime.tryParse(expiryStr) : null;
+        if (currentUser.isVip && currentUser.hasActiveVip) {
+          if (!currentUser.badges.contains('vip')) currentUser.badges.add('vip');
+        } else {
+          currentUser.isVip = false;
+          currentUser.vipExpiryDate = null;
+          currentUser.badges.remove('vip');
+        }
+      } else {
+        currentUser.isVip = false;
+        currentUser.vipExpiryDate = null;
+        currentUser.badges.remove('vip');
+      }
     }
 
     currentUser.isPrivateProfile = false;
@@ -1159,6 +1238,13 @@ class MockEventService extends ChangeNotifier {
 
     if (currentUser.isVerified && !currentUser.badges.contains('verified')) {
       currentUser.badges.add('verified');
+    }
+
+    if (currentUser.hasActiveVip) {
+      if (!currentUser.badges.contains('vip')) currentUser.badges.add('vip');
+    } else {
+      currentUser.badges.remove('vip');
+      currentUser.isVip = false;
     }
 
     _syncPlannedEventsWithAttendees();
@@ -1282,6 +1368,8 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> activateVip({int days = 30}) async {
     final prefs = await SharedPreferences.getInstance();
+    final userId = currentUserId;
+    currentUser.id = userId;
     final expiry = DateTime.now().add(Duration(days: days));
     currentUser.isVip = true;
     currentUser.vipExpiryDate = expiry;
@@ -1290,17 +1378,29 @@ class MockEventService extends ChangeNotifier {
     }
 
     await prefs.setBool('is_vip', true);
+    await prefs.setBool('${userId}_is_vip', true);
     await prefs.setBool('${currentUser.id}_is_vip', true);
     await prefs.setString('vip_expires_at', expiry.toIso8601String());
+    await prefs.setString('${userId}_vip_expires_at', expiry.toIso8601String());
     await prefs.setString('${currentUser.id}_vip_expires_at', expiry.toIso8601String());
 
-    if (_isValidUuid(currentUser.id)) {
+    // Karşılama denemesini tamamlandı olarak kaydet
+    await prefs.setBool('${userId}_welcome_trial_granted', true);
+    await prefs.setBool('${currentUser.id}_welcome_trial_granted', true);
+    await prefs.setBool('welcome_trial_granted', true);
+
+    // İptal bayrağını kaldır
+    await prefs.setBool('${userId}_vip_cancelled', false);
+    await prefs.setBool('${currentUser.id}_vip_cancelled', false);
+    await prefs.setBool('vip_cancelled', false);
+
+    if (_isValidUuid(userId)) {
       try {
         await _supabase.from('users').update({
           'is_vip': true,
           'vip_expires_at': expiry.toUtc().toIso8601String(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', currentUser.id);
+        }).eq('id', userId);
         debugPrint('[EventService] ✅ Supabase VIP başarıyla aktifleştirildi.');
       } catch (e) {
         debugPrint('[EventService] Supabase is_vip güncelleme notu: $e');
@@ -1311,25 +1411,37 @@ class MockEventService extends ChangeNotifier {
 
   Future<void> cancelVip() async {
     final prefs = await SharedPreferences.getInstance();
+    final userId = currentUserId;
+    currentUser.id = userId;
     currentUser.isVip = false;
     currentUser.vipExpiryDate = null;
     currentUser.badges.remove('vip');
 
     await prefs.setBool('is_vip', false);
+    await prefs.setBool('${userId}_is_vip', false);
     await prefs.setBool('${currentUser.id}_is_vip', false);
     await prefs.remove('vip_expires_at');
+    await prefs.remove('${userId}_vip_expires_at');
     await prefs.remove('${currentUser.id}_vip_expires_at');
 
-    if (_isValidUuid(currentUser.id)) {
+    // VIP iptal edildi olarak işaretle ve karşılama denemesinin tekrar tetiklenmesini engelle
+    await prefs.setBool('${userId}_welcome_trial_granted', true);
+    await prefs.setBool('${currentUser.id}_welcome_trial_granted', true);
+    await prefs.setBool('welcome_trial_granted', true);
+    await prefs.setBool('${userId}_vip_cancelled', true);
+    await prefs.setBool('${currentUser.id}_vip_cancelled', true);
+    await prefs.setBool('vip_cancelled', true);
+
+    if (_isValidUuid(userId)) {
       try {
         await _supabase.from('users').update({
           'is_vip': false,
           'vip_expires_at': null,
           'updated_at': DateTime.now().toUtc().toIso8601String(),
-        }).eq('id', currentUser.id);
-        debugPrint('[EventService] Supabase VIP iptal edildi.');
+        }).eq('id', userId);
+        debugPrint('[EventService] ✅ Supabase VIP başarıyla iptal edildi (User: $userId).');
       } catch (e) {
-        debugPrint('[EventService] Supabase cancel VIP notu: $e');
+        debugPrint('[EventService] ⚠️ Supabase cancel VIP hatası: $e');
       }
     }
     notifyListeners();
