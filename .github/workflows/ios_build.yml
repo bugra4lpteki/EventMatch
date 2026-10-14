@@ -110,10 +110,10 @@ jobs:
         run: |
           BUILD_NUM="${{ github.event.inputs.build_number }}"
           if [ -z "$BUILD_NUM" ]; then
-            BUILD_NUM=${{ github.run_number }}
+            BUILD_NUM=101
           fi
-          if [ -z "$BUILD_NUM" ] || [ "$BUILD_NUM" -lt 9 ]; then
-            BUILD_NUM=9
+          if [ -z "$BUILD_NUM" ] || [ "$BUILD_NUM" -lt 101 ]; then
+            BUILD_NUM=101
           fi
           echo "Building iOS IPA with build number: $BUILD_NUM"
           flutter build ipa --release --build-number=$BUILD_NUM --export-options-plist=ios/ExportOptions.plist
