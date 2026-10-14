@@ -85,7 +85,18 @@ Apple ve Google mağaza test ekipleri uygulamanızı incelerken giriş yapabilme
 - **Kullanıcı Adı / E-posta:** `demo@eventmatch.app`
 - **Şifre:** `EventMatch2026!`
 - **İletişim Telefonu:** *(Kendi telefon numaranız)*
-- **Ek Notlar:**
+- **Ek Notlar (Reviewer Notes):**
 ```text
-EventMatch is an event discovery and social matching application in Turkey. Test account credentials have been provided above. All User Generated Content (UGC) features comply with Guideline 1.2 by providing in-app reporting, user blocking, and full account deletion under Settings.
+EventMatch is an event activity discovery, community, and social companion platform in Turkey. It connects users based on mutual interests in concerts, festivals, theatre, and cultural events (Guideline 4.3(b) compliant).
+
+Test Account Credentials:
+- Email: demo@eventmatch.app
+- Password: EventMatch2026!
+(Note: 2FA is automatically bypassed for this official reviewer account).
+
+Apple Guideline Compliance Highlights:
+1. Guideline 1.2 (Safety / UGC): Users can report objectionable content or block users from any profile, chat, or attendee sheet. Terms of Service & EULA are displayed before registration and on the VIP paywall.
+2. Guideline 3.1.1 & 3.1.2 (StoreKit & Subscriptions): All digital features (VIP, Boost) utilize StoreKit 2 / Apple In-App Purchase. Transparent auto-renewing terms, EULA link, Privacy Policy link, and "Restore Purchases" button are prominently placed.
+3. Guideline 4.8 (Sign in with Apple): Native Sign in with Apple is provided alongside email auth.
+4. Guideline 5.1.1 (Account Deletion): Users can permanently delete their entire account and all associated data directly under Settings -> Hesabımı Sil.
 ```

@@ -391,7 +391,7 @@ class ReportBlockSheet {
             style: GoogleFonts.outfit(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 18),
           ),
           content: Text(
-            'Bu kullanıcı engellendiğinde karşılıklı eşleşme havuzunuzdan, etkinliklerden ve mesajlarınızdan anında tamamen kaldırılacaktır.',
+            'Bu kullanıcı engellendiğinde etkinlik havuzunuzdan, katılımcı listelerinden ve mesajlarınızdan anında tamamen kaldırılacaktır.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 13, height: 1.4),
           ),
           actions: [

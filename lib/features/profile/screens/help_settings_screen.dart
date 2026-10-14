@@ -30,8 +30,8 @@ class _HelpSettingsScreenState extends State<HelpSettingsScreen> {
       'answer': 'EventMatch sizi doğrudan Biletix, Biletinial, Bubilet veya Passo gibi resmi bilet sağlayıcılarına yönlendirir. Ödeme güvenliğiniz doğrudan bu sağlayıcılar tarafından güvence altındadır.'
     },
     {
-      'question': 'Eşleştiğim biriyle mesajlaşmayı nasıl durdurabilirim?',
-      'answer': 'Mesaj ekranının sağ üst köşesindeki ayarlar menüsünden kullanıcıyı engelleyebilir veya eşleşmeyi dilediğiniz an kaldırabilirsiniz.'
+      'question': 'Bağlantı kurduğum biriyle mesajlaşmayı nasıl durdurabilirim?',
+      'answer': 'Mesaj ekranının sağ üst köşesindeki ayarlar menüsünden kullanıcıyı engelleyebilir veya bağlantıyı dilediğiniz an kaldırabilirsiniz.'
     },
     {
       'question': 'Şifremi unutursam ne yapmalıyım?',

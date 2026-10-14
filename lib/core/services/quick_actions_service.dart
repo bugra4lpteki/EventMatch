@@ -24,7 +24,7 @@ class QuickActionsService {
       await _quickActions.setShortcutItems(<ShortcutItem>[
         const ShortcutItem(
           type: 'shortcut_radar',
-          localizedTitle: 'Eşleşme Radarı',
+          localizedTitle: 'Etkinlik Radarı',
           icon: 'AppIcon',
         ),
         const ShortcutItem(

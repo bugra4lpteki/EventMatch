@@ -413,7 +413,7 @@ class _EventMapScreenState extends State<EventMapScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '${targetUser.name} kişisine eşleşme isteğiniz iletildi. Kabul ettiğinde sohbet başlayacak.',
+                    '${targetUser.name} kişisine katılım isteğiniz iletildi. Kabul ettiğinde sohbet başlayacak.',
                     style: const TextStyle(color: Colors.white, fontSize: 13),
                   ),
                 ),

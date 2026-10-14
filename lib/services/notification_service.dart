@@ -375,8 +375,8 @@ class NotificationService with WidgetsBindingObserver {
           'tr': 'Yeni Katılım İsteği',
         },
         'contents': {
-          'en': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
-          'tr': '$senderName seninle tanışmak istiyor! İstekler sekmesinden hemen yanıt ver.',
+          'en': '$senderName wants to be your event buddy! Respond in the Requests tab.',
+          'tr': '$senderName seninle etkinlik arkadaşı olmak istiyor! İstekler sekmesinden hemen yanıt ver.',
         },
         'data': {
           'type': 'match_request',
