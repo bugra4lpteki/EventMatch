@@ -350,3 +350,26 @@ BEGIN
   END IF;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
+
+-- 16. AFTER PARTY & NEARBY SPOTS TABLE
+CREATE TABLE IF NOT EXISTS public.after_party_spots (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT DEFAULT 'Toplanma Noktası',
+  address TEXT,
+  latitude DOUBLE PRECISION NOT NULL,
+  longitude DOUBLE PRECISION NOT NULL,
+  note TEXT,
+  created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  attendee_names JSONB DEFAULT '[]'::jsonb,
+  is_user_created BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.after_party_spots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow read after party spots" ON public.after_party_spots;
+DROP POLICY IF EXISTS "Allow insert after party spots" ON public.after_party_spots;
+CREATE POLICY "Allow read after party spots" ON public.after_party_spots FOR SELECT USING (true);
+CREATE POLICY "Allow insert after party spots" ON public.after_party_spots FOR INSERT WITH CHECK (true);
+
