@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/after_party_spot_model.dart';
 import '../models/event_model.dart';
 
@@ -11,9 +10,6 @@ class AfterPartyService extends ChangeNotifier {
   AfterPartyService._internal();
 
   final Map<String, List<AfterPartySpotModel>> _spotsCache = {};
-  final Set<String> _joinedSpotIds = {};
-
-  bool isUserJoined(String spotId) => _joinedSpotIds.contains(spotId);
 
   List<AfterPartySpotModel> getCachedSpots(String eventId) {
     return _spotsCache[eventId] ?? [];
@@ -65,7 +61,6 @@ class AfterPartyService extends ChangeNotifier {
             'address': street,
             'latitude': nodeLat,
             'longitude': nodeLon,
-            'attendee_names': _generateSimulatedAttendees(name.hashCode),
           }, eventLat: lat, eventLng: lng));
         }
       }
@@ -73,28 +68,7 @@ class AfterPartyService extends ChangeNotifier {
       debugPrint('[AfterPartyService] Overpass live fetch note: $e');
     }
 
-    // 2. Fetch User-Created spots from Supabase
-    try {
-      final supabase = Supabase.instance.client;
-      final res = await supabase
-          .from('after_party_spots')
-          .select()
-          .eq('event_id', eventId);
-
-      final fetchedUgc = (res as List)
-          .map((item) => AfterPartySpotModel.fromMap(Map<String, dynamic>.from(item), eventLat: lat, eventLng: lng))
-          .toList();
-
-      for (final ugc in fetchedUgc) {
-        if (!spots.any((s) => s.id == ugc.id)) {
-          spots.insert(0, ugc);
-        }
-      }
-    } catch (e) {
-      debugPrint('[AfterPartyService] Supabase UGC fetch note: $e');
-    }
-
-    // 3. Fallback Curated Spots for Turkey's prime event venues if spots is low
+    // 2. Curated Fallback Spots for Turkey's prime event venues if spots is low
     if (spots.length < 3) {
       spots.addAll(_getCuratedFallbackSpots(event, lat, lng));
     }
@@ -107,21 +81,7 @@ class AfterPartyService extends ChangeNotifier {
     return spots;
   }
 
-  List<String> _generateSimulatedAttendees(int seed) {
-    final names = [
-      'Emre Can', 'Selin Yılmaz', 'Alp Kaya', 'Deniz Akın', 'Ece Demir',
-      'Burak Çelik', 'Melis Arslan', 'Kaan Yıldız', 'Gizem Şen', 'Oğuzhan K.'
-    ];
-    final count = (seed.abs() % 5) + 2; // 2 to 6 people
-    final result = <String>[];
-    for (int i = 0; i < count; i++) {
-      result.add(names[(seed.abs() + i) % names.length]);
-    }
-    return result;
-  }
-
   List<AfterPartySpotModel> _getCuratedFallbackSpots(EventModel event, double lat, double lng) {
-    final title = event.title.toLowerCase();
     final loc = event.location.toLowerCase();
 
     // Beşiktaş / Harbiye / Maçka (KüçükÇiftlik Park civarı)
@@ -137,8 +97,7 @@ class AfterPartyService extends ChangeNotifier {
           longitude: 29.0062,
           distanceMeters: 450,
           walkingMinutes: 6,
-          note: 'Geniş bira menüsü ve dış alan masaları var.',
-          attendeeNames: ['Selin Kaya', 'Burak Demir', 'Efe Yıldız', 'Zeynep Ak'],
+          note: 'Geniş bira menüsü ve dış alan masalarıyla popüler mekan.',
         ),
         AfterPartySpotModel(
           id: 'curated_2',
@@ -150,55 +109,61 @@ class AfterPartyService extends ChangeNotifier {
           longitude: 29.0005,
           distanceMeters: 620,
           walkingMinutes: 8,
-          note: 'Konser çıkışı en popüler toplanma ve kutlama noktası.',
-          attendeeNames: ['Kaan Tekin', 'Melis Kurt', 'Deniz Arı'],
+          note: 'Konser çıkışı en çok tercih edilen kokteyl ve lounge bar.',
         ),
         AfterPartySpotModel(
           id: 'curated_3',
           eventId: event.id,
-          name: 'Kafes / Park Sahne Buluşması',
-          category: 'Toplanma Noktası',
-          address: 'Maçka Parkı Girişi',
-          latitude: 41.0435,
-          longitude: 28.9942,
-          distanceMeters: 280,
-          walkingMinutes: 3,
-          isUserCreated: true,
-          createdByName: 'Ahmet (EventMatch)',
-          note: 'Konser bitince çimlerde toplanıp sohbet ediyoruz!',
-          attendeeNames: ['Ahmet Kaya', 'Ezgi Şen', 'Doruk B.', 'Caner O.'],
+          name: 'Beer Hall Beşiktaş',
+          category: 'Pub & Bira',
+          address: 'Akaretler, Süleyman Seba Cd. No:46',
+          latitude: 41.0408,
+          longitude: 28.9985,
+          distanceMeters: 750,
+          walkingMinutes: 9,
+          note: 'Canlı atmosfer, zengin sokak lezzetleri ve fıçı biralar.',
         ),
       ];
     }
 
-    // Kadıköy & Moda (Kadıköy Sahne, Moda Kayıkhane)
+    // Kadıköy & Moda (Kadıköy Sahne, Moda Kayıkhane, Bostancı)
     if (loc.contains('kadıköy') || loc.contains('moda') || loc.contains('bostancı')) {
       return [
         AfterPartySpotModel(
           id: 'curated_k1',
           eventId: event.id,
           name: 'Karga Bar Kadıköy',
-          category: 'Bar & Alternatif',
+          category: 'Kokteyl & Bar',
           address: 'Caferağa, Kadife Sk. No:16 (Barlar Sokağı)',
           latitude: 40.9882,
           longitude: 29.0275,
           distanceMeters: 380,
           walkingMinutes: 5,
-          note: 'Tarihi köşk atmosferi ve indie müzik.',
-          attendeeNames: ['Okan Vural', 'Ece Dinçer', 'Tolga Tan'],
+          note: 'Tarihi köşk atmosferi, alternatif müzikler ve keyifli avlu.',
         ),
         AfterPartySpotModel(
           id: 'curated_k2',
           eventId: event.id,
           name: 'Zeplin Pub & Delicatessen',
-          category: 'Pub & Craft Bira',
+          category: 'Pub & Bira',
           address: 'Caferağa, Moda Cd. No:70, Kadıköy',
           latitude: 40.9855,
           longitude: 29.0298,
           distanceMeters: 550,
           walkingMinutes: 7,
-          note: 'Özel fıçı biralar ve sıcak ortam.',
-          attendeeNames: ['Buse Çelik', 'Görkem S.', 'Aylin Y.'],
+          note: 'Özel craft biralar ve sıcak pub ambiyansı.',
+        ),
+        AfterPartySpotModel(
+          id: 'curated_k3',
+          eventId: event.id,
+          name: 'Arkaoda Kadıköy',
+          category: 'Kokteyl & Bar',
+          address: 'Caferağa, Kadife Sk. No:18',
+          latitude: 40.9881,
+          longitude: 29.0277,
+          distanceMeters: 390,
+          walkingMinutes: 5,
+          note: 'Geniş bahçe, DJ performansları ve rahat sohbet ortamı.',
         ),
       ];
     }
@@ -209,106 +174,38 @@ class AfterPartyService extends ChangeNotifier {
         id: 'curated_g1',
         eventId: event.id,
         name: 'The Populist',
-        category: 'Craft Bira & Gastropub',
-        address: 'Etkinlik Alanı Çevresi (1. Cadde)',
+        category: 'Pub & Bira',
+        address: 'Etkinlik Alanı Çevresi (Ana Cadde)',
         latitude: lat + 0.003,
         longitude: lng + 0.002,
         distanceMeters: 360,
         walkingMinutes: 4,
-        note: 'Konser sonrası DJ performansı ve gece atıştırmalıkları.',
-        attendeeNames: ['Serkan B.', 'Zehra D.', 'Mert K.'],
+        note: 'Özel kraft biralar ve lezzetli atıştırmalıklar.',
       ),
       AfterPartySpotModel(
         id: 'curated_g2',
         eventId: event.id,
         name: 'Retro Kokteyl & Lounge',
         category: 'Kokteyl & Bar',
-        address: 'Ana Cadde Üzeri No:42',
+        address: 'Merkez Cadde Üzeri No:42',
         latitude: lat + 0.005,
         longitude: lng - 0.003,
         distanceMeters: 590,
         walkingMinutes: 7,
-        note: 'İmza kokteyller ve rahat müzik.',
-        attendeeNames: ['Derya Kaya', 'Barış Ö.'],
+        note: 'İmza kokteyller, rahat müzik ve şık oturma alanları.',
+      ),
+      AfterPartySpotModel(
+        id: 'curated_g3',
+        eventId: event.id,
+        name: 'Club Nightfall',
+        category: 'Gece Kulübü',
+        address: 'Eğlence Sokağı No:15',
+        latitude: lat + 0.006,
+        longitude: lng + 0.004,
+        distanceMeters: 720,
+        walkingMinutes: 9,
+        note: 'Konser sonrası dans ve kesintisiz DJ seti.',
       ),
     ];
-  }
-
-  void toggleJoinSpot(String eventId, String spotId, String userName) {
-    final list = _spotsCache[eventId];
-    if (list == null) return;
-
-    final index = list.indexWhere((s) => s.id == spotId);
-    if (index == -1) return;
-
-    final current = list[index];
-    final updatedAttendees = List<String>.from(current.attendeeNames);
-
-    if (_joinedSpotIds.contains(spotId)) {
-      _joinedSpotIds.remove(spotId);
-      updatedAttendees.remove(userName);
-    } else {
-      _joinedSpotIds.add(spotId);
-      if (!updatedAttendees.contains(userName)) {
-        updatedAttendees.add(userName);
-      }
-    }
-
-    list[index] = current.copyWith(attendeeNames: updatedAttendees);
-    notifyListeners();
-  }
-
-  Future<void> addCustomSpot({
-    required EventModel event,
-    required String name,
-    required String category,
-    required String note,
-    required String creatorName,
-    required String creatorId,
-  }) async {
-    final eventLat = event.latitude ?? 41.042;
-    final eventLng = event.longitude ?? 28.995;
-
-    final newSpot = AfterPartySpotModel(
-      id: 'ugc_${DateTime.now().millisecondsSinceEpoch}',
-      eventId: event.id,
-      name: name,
-      category: category,
-      address: '${event.location} Yakını',
-      latitude: eventLat + 0.0015,
-      longitude: eventLng + 0.0015,
-      distanceMeters: 220,
-      walkingMinutes: 3,
-      note: note,
-      isUserCreated: true,
-      createdByName: creatorName,
-      attendeeNames: [creatorName],
-    );
-
-    _joinedSpotIds.add(newSpot.id);
-
-    _spotsCache.putIfAbsent(event.id, () => []);
-    _spotsCache[event.id]!.insert(0, newSpot);
-    notifyListeners();
-
-    // Persist to Supabase if connected
-    try {
-      final supabase = Supabase.instance.client;
-      await supabase.from('after_party_spots').insert({
-        'id': newSpot.id,
-        'event_id': event.id,
-        'name': name,
-        'category': category,
-        'address': newSpot.address,
-        'latitude': newSpot.latitude,
-        'longitude': newSpot.longitude,
-        'note': note,
-        'created_by': creatorId,
-        'attendee_names': [creatorName],
-        'is_user_created': true,
-      });
-    } catch (e) {
-      debugPrint('[AfterPartyService] Supabase insert note: $e');
-    }
   }
 }

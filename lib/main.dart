@@ -24,7 +24,6 @@ import 'core/services/connectivity_service.dart';
 import 'core/widgets/offline_banner_widget.dart';
 import 'core/localization/locale_provider.dart';
 import 'features/profile/services/ticket_wallet_service.dart';
-import 'features/events/services/event_review_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -123,7 +122,6 @@ void main() async {
         ChangeNotifierProvider(create: (_) => MockEventService()),
         ChangeNotifierProvider(create: (_) => LocaleProvider()),
         ChangeNotifierProvider(create: (_) => TicketWalletService()),
-        ChangeNotifierProvider(create: (_) => EventReviewService()),
         ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
           create: (context) => MockMatchService(context.read<MockEventService>()),
           update: (context, eventService, matchService) => matchService ?? MockMatchService(eventService),

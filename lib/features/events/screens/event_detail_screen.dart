@@ -10,8 +10,6 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../screens/event_community_chat_screen.dart';
-import '../widgets/event_reviews_sheet.dart';
-import '../services/event_review_service.dart';
 import '../../profile/services/ticket_wallet_service.dart';
 import '../widgets/after_party_sheet.dart';
 import '../services/after_party_service.dart';
@@ -1878,92 +1876,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   ),
 
 
-                  // Reviews and Ratings Section Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1E1E2E), Color(0xFF161624)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 26),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '4.9',
-                                  style: GoogleFonts.outfit(
-                                    color: Colors.white,
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '• Etkinlik Puanı',
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.6),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            TextButton.icon(
-                              onPressed: () => EventReviewsSheet.show(context, event: event),
-                              icon: const Icon(Icons.rate_review_rounded, size: 16, color: Color(0xFF38BDF8)),
-                              label: const Text(
-                                'Değerlendir',
-                                style: TextStyle(
-                                  color: Color(0xFF38BDF8),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Bu etkinliğe katılanların yorumlarını ve deneyimlerini inceleyin veya ilk yorumu siz bırakın.',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.65),
-                            fontSize: 12.5,
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: () => EventReviewsSheet.show(context, event: event),
-                            icon: const Icon(Icons.forum_outlined, size: 16),
-                            label: const Text(
-                              'Yorumları Gör & Puan Ver',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: BorderSide(color: Colors.white.withOpacity(0.18)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
                   const SizedBox(height: 16),
 
                   // After Party & Çevre Mekanlar Card
@@ -2033,13 +1945,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                color: const Color(0xFFEC4899).withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text(
-                                'CANLI',
+                                'ÖNERİLER',
                                 style: TextStyle(
-                                  color: Color(0xFF34D399),
+                                  color: Color(0xFFF472B6),
                                   fontSize: 10,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 0.8,
@@ -2050,7 +1962,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          'Etkinlik bittiğinde dağılmak yok! Yürüme mesafesindeki popüler pub, bar ve toplanma noktalarında EventMatch topluluğuyla buluşun.',
+                          'Konser ve etkinlik sonrası yürüme mesafesinde gidebileceğiniz en iyi pub, bar ve gece mekanı önerileri.',
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 12.5,
@@ -2064,7 +1976,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             onPressed: () => AfterPartySheet.show(context, event: event),
                             icon: const Icon(Icons.local_bar_rounded, size: 16, color: Colors.white),
                             label: const Text(
-                              'Çevre Mekanları & Buluşmaları Gör',
+                              'Çevre Mekan Önerilerini Gör 🍸',
                               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
                             ),
                             style: ElevatedButton.styleFrom(
