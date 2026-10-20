@@ -9,7 +9,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import '../screens/event_community_chat_screen.dart';
 import '../../profile/services/ticket_wallet_service.dart';
 import '../widgets/after_party_sheet.dart';
 import '../services/after_party_service.dart';
@@ -1420,63 +1419,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                           ],
 
-                          const SizedBox(height: 10),
-                          // Community Group Chat Button (Always available for attendees & interested users)
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                gradient: const LinearGradient(
-                                  colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF8B5CF6).withOpacity(0.25),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => EventCommunityChatScreen(event: event),
-                                      ),
-                                    );
-                                  },
-                                  borderRadius: BorderRadius.circular(14),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.forum_rounded,
-                                        color: Colors.white,
-                                        size: 19,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        'Topluluk Sohbeti (${event.attendees.length} Katılımcı) 💬',
-                                        style: GoogleFonts.outfit(
-                                          fontSize: 14.5,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+
 
                           if (event.effectiveTicketUrl.isNotEmpty) ...[
                             const SizedBox(height: 10),
