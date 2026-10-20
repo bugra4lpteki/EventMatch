@@ -318,12 +318,35 @@ DROP POLICY IF EXISTS "Allow manage own tickets" ON public.user_tickets;
 CREATE POLICY "Allow read own tickets" ON public.user_tickets FOR SELECT USING (auth.uid() = user_id);
 CREATE POLICY "Allow manage own tickets" ON public.user_tickets FOR ALL USING (auth.uid() = user_id);
 
--- 15. ENABLE REALTIME PUBLICATION
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;
+-- 15. ENABLE REALTIME PUBLICATION (Safely add if not already added)
 DO $$
 BEGIN
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.event_attendees;
-  ALTER PUBLICATION supabase_realtime ADD TABLE public.event_reviews;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'matches'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.matches;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'event_attendees'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.event_attendees;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'event_reviews'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.event_reviews;
+  END IF;
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
