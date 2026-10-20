@@ -131,8 +131,6 @@ class _TwoFactorVerificationSheetState extends State<TwoFactorVerificationSheet>
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final authService = context.watch<AuthService>();
-    final activeCode = authService.activeTwoFactorCode;
 
     return Container(
       padding: EdgeInsets.only(

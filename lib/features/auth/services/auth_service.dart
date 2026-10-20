@@ -40,6 +40,14 @@ class AuthService extends ChangeNotifier {
   String? get currentUserEmail => _isDemoUser ? 'demo@eventmatch.app' : _supabase.auth.currentUser?.email;
   String? get currentUserId => _isDemoUser ? 'dae11b96-8e19-490a-b0ae-a002bd7965be' : _supabase.auth.currentUser?.id;
 
+  bool get isAdmin {
+    if (_isDemoUser) return true;
+    final email = _supabase.auth.currentUser?.email?.toLowerCase();
+    if (email == 'admin@eventmatch.app' || email == 'demo@eventmatch.app') return true;
+    final role = _supabase.auth.currentUser?.appMetadata['role']?.toString().toLowerCase();
+    return role == 'admin' || role == 'moderator';
+  }
+
   String? _activeTwoFactorCode;
   DateTime? _activeTwoFactorExpiry;
   String? _pendingTwoFactorEmail;

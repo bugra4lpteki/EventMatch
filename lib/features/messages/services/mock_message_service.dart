@@ -2567,7 +2567,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   void _handleDeleteMessageEvent(Map<String, dynamic> payload) {
     try {
-      final msgId = payload['message_id']?.toString()?.toLowerCase().trim();
+      final msgId = payload['message_id']?.toString().toLowerCase().trim();
       final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
       final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
       final currentId = currentUserId.toLowerCase().trim();
@@ -2631,7 +2631,7 @@ class MockMessageService extends ChangeNotifier with WidgetsBindingObserver {
 
   void _handleViewOnceOpenedEvent(Map<String, dynamic> payload) {
     try {
-      final msgId = payload['message_id']?.toString()?.toLowerCase().trim();
+      final msgId = payload['message_id']?.toString().toLowerCase().trim();
       final senderId = (payload['sender_id']?.toString() ?? '').toLowerCase().trim();
       final receiverId = (payload['receiver_id']?.toString() ?? '').toLowerCase().trim();
       final currentId = currentUserId.toLowerCase().trim();

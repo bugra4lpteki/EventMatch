@@ -16,7 +16,13 @@ class EventModel {
   final String? ticketUrl;
   final String? ticketProvider;
   final String? creatorId;
+  final bool isUserCreated;
+  final String? price;
+  final double rating;
+  final int reviewCount;
   bool isActive;
+
+  String get city => location.contains(',') ? location.split(',').last.trim() : (location.isNotEmpty ? location : 'İstanbul');
 
   EventModel({
     required this.id,
@@ -31,6 +37,10 @@ class EventModel {
     this.ticketUrl,
     this.ticketProvider,
     this.creatorId,
+    this.isUserCreated = false,
+    this.price,
+    this.rating = 0.0,
+    this.reviewCount = 0,
     this.isActive = true,
     this.atmosphere = 'Sakin',
     this.isPopular = false,
@@ -394,6 +404,10 @@ class EventModel {
         ticketUrl: json['ticketUrl']?.toString() ?? json['ticket_url']?.toString() ?? json['url']?.toString(),
         ticketProvider: json['ticketProvider']?.toString() ?? json['ticket_provider']?.toString() ?? json['provider']?.toString(),
         creatorId: json['creator_id']?.toString() ?? json['creatorId']?.toString() ?? json['user_id']?.toString(),
+        isUserCreated: json['is_user_created'] as bool? ?? json['isUserCreated'] as bool? ?? false,
+        price: json['price']?.toString(),
+        rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+        reviewCount: (json['review_count'] as num?)?.toInt() ?? (json['reviewCount'] as num?)?.toInt() ?? 0,
         isActive: json['isActive'] as bool? ?? true,
         isPopular: json['isPopular'] is bool ? json['isPopular'] as bool : (json['tag']?.toString().toLowerCase().contains('popüler') ?? false),
         atmosphere: json['atmosphere']?.toString() ?? json['tag']?.toString() ?? 'Canlı',
@@ -746,6 +760,10 @@ class EventModel {
     String? ticketUrl,
     String? ticketProvider,
     String? creatorId,
+    bool? isUserCreated,
+    String? price,
+    double? rating,
+    int? reviewCount,
     bool? isActive,
     String? atmosphere,
     bool? isPopular,
@@ -764,6 +782,10 @@ class EventModel {
       ticketUrl: ticketUrl ?? this.ticketUrl,
       ticketProvider: ticketProvider ?? this.ticketProvider,
       creatorId: creatorId ?? this.creatorId,
+      isUserCreated: isUserCreated ?? this.isUserCreated,
+      price: price ?? this.price,
+      rating: rating ?? this.rating,
+      reviewCount: reviewCount ?? this.reviewCount,
       isActive: isActive ?? this.isActive,
       atmosphere: atmosphere ?? this.atmosphere,
       isPopular: isPopular ?? this.isPopular,
@@ -784,6 +806,10 @@ class EventModel {
       'ticketUrl': ticketUrl,
       'ticketProvider': ticketProvider,
       'creator_id': creatorId,
+      'is_user_created': isUserCreated,
+      'price': price,
+      'rating': rating,
+      'review_count': reviewCount,
       'isActive': isActive,
       'atmosphere': atmosphere,
       'isPopular': isPopular,

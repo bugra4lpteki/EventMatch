@@ -6,6 +6,7 @@ import '../widgets/event_card.dart';
 import '../widgets/popular_events_carousel.dart';
 import 'event_detail_screen.dart';
 import '../../admin/screens/admin_login_screen.dart';
+import '../../admin/screens/event_form_screen.dart';
 import 'package:flutter/services.dart';
 
 import 'dart:ui';
@@ -540,6 +541,73 @@ class _ExploreScreenState extends State<ExploreScreen> {
                       ),
                     );
                   },
+                ),
+                // Topluluk Buluşması / Kullanıcı Etkinliği Başlatma Kartı
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+                  child: GestureDetector(
+                    onTap: () {
+                      HapticFeedback.mediumImpact();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EventFormScreen(isCommunityMeetup: true),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppColors.primary.withValues(alpha: 0.22),
+                            AppColors.secondary.withValues(alpha: 0.12),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Buluşma veya Etkinlik Başlat',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Konser ekibi topla, kahve veya açık hava buluşması aç',
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white54, size: 14),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ] else ...[
                 Consumer<MockEventService>(

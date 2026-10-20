@@ -36,7 +36,6 @@ class MatchDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userAvatar = currentAvatarUrl ?? '';
-    final matchAvatar = matchedUser.avatarUrl;
 
     return Dialog(
       backgroundColor: Colors.transparent,

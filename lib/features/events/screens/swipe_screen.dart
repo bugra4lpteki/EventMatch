@@ -586,33 +586,6 @@ class _SwipeScreenState extends State<SwipeScreen> {
   );
 }
 
-  IconData _getTagIcon(String tag) {
-    switch (tag.toLowerCase()) {
-      case 'tiyatro':
-        return Icons.theater_comedy;
-      case 'spor':
-        return Icons.sports_basketball;
-      case 'konser':
-        return Icons.music_note;
-      case 'stand-up':
-        return Icons.mic;
-      case 'müzik':
-        return Icons.music_video;
-      case 'sanat':
-        return Icons.palette;
-      case 'techno':
-        return Icons.surround_sound;
-      case 'kahve':
-        return Icons.coffee;
-      case 'gaming':
-        return Icons.videogame_asset;
-      default:
-        return Icons.star;
-    }
-  }
-
-
-
   Widget _buildMessageInputBar(List<UserModel> items) {
     if (items.isEmpty) return const SizedBox.shrink();
 

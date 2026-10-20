@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/services/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
@@ -21,6 +20,8 @@ import '../../../core/services/ios_in_app_purchase_service.dart';
 import '../../../core/utils/url_launcher_helper.dart';
 import '../../../core/services/in_app_review_service.dart';
 import 'package:flutter/services.dart';
+import 'ticket_wallet_screen.dart';
+import '../../../core/localization/locale_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -127,6 +128,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _buildDivider(),
             _buildSettingsTile(
+              icon: Icons.confirmation_number_rounded,
+              iconColor: const Color(0xFF38BDF8),
+              title: 'Bilet Cüzdanım',
+              subtitle: 'Kayıtlı ve satın alınan etkinlik biletleri, QR kodlar',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketWalletScreen())),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
               icon: Icons.settings_suggest_rounded,
               iconColor: const Color(0xFF8B5CF6),
               title: 'Abonelikleri Yönet (Apple ID)',
@@ -161,6 +170,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Temalar',
               subtitle: 'Renk paleti ve karanlık mod tercihleri',
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ThemesScreen())),
+            ),
+            _buildDivider(),
+            _buildSettingsTile(
+              icon: Icons.language_rounded,
+              iconColor: const Color(0xFF10B981),
+              title: 'Uygulama Dili (Language)',
+              subtitle: context.watch<LocaleProvider>().isTurkish ? 'Türkçe (TR)' : 'English (EN)',
+              trailing: const Icon(Icons.swap_horiz_rounded, color: Colors.white70, size: 20),
+              onTap: () {
+                context.read<LocaleProvider>().toggleLocale();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      context.read<LocaleProvider>().isTurkish
+                          ? 'Dil Türkçe olarak ayarlandı.'
+                          : 'Language switched to English.',
+                    ),
+                    duration: const Duration(seconds: 1),
+                  ),
+                );
+              },
             ),
           ]),
 

@@ -168,7 +168,7 @@ class IosInAppPurchaseService {
 
       if (kIsWeb || (!kIsWeb && !Platform.isIOS)) {
         debugPrint('[StoreKit] ⚠️ iOS harici platform, simülasyon akışı çalıştırılıyor.');
-        return _simulatePurchase(productId);
+        return await _simulatePurchase(productId);
       }
 
       // iOS Platformundayız

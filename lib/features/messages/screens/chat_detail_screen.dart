@@ -21,7 +21,6 @@ import '../../events/services/mock_match_service.dart';
 import '../../profile/screens/user_profile_screen.dart';
 import '../widgets/chat_wallpaper_background.dart';
 import 'view_once_viewer_screen.dart';
-import '../../../core/services/security_screen_service.dart';
 
 class ChatDetailScreen extends StatefulWidget {
   final ChatModel chat;

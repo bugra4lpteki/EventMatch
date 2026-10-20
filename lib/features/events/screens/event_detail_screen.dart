@@ -9,7 +9,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
-import 'package:shimmer/shimmer.dart';
+import '../screens/event_community_chat_screen.dart';
+import '../widgets/event_reviews_sheet.dart';
+import '../services/event_review_service.dart';
+import '../../profile/services/ticket_wallet_service.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/url_launcher_helper.dart';
@@ -1308,7 +1311,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                       );
                                     } else {
                                       eventService.joinEvent(event.id, event);
-                                    InAppReviewService().triggerEventAttendedReview();
+                                      TicketWalletService().addTicketFromEvent(event, eventService.currentUser);
+                                      InAppReviewService().triggerEventAttendedReview();
                                       ScaffoldMessenger.of(context).showSnackBar(
                                         SnackBar(
                                           content: const Row(
@@ -1415,6 +1419,64 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               ),
                             ),
                           ],
+
+                          const SizedBox(height: 10),
+                          // Community Group Chat Button (Always available for attendees & interested users)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF8B5CF6).withOpacity(0.25),
+                                    blurRadius: 12,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EventCommunityChatScreen(event: event),
+                                      ),
+                                    );
+                                  },
+                                  borderRadius: BorderRadius.circular(14),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      const Icon(
+                                        Icons.forum_rounded,
+                                        color: Colors.white,
+                                        size: 19,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Topluluk Sohbeti (${event.attendees.length} Katılımcı) 💬',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
 
                           if (event.effectiveTicketUrl.isNotEmpty) ...[
                             const SizedBox(height: 10),
@@ -1813,6 +1875,94 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     ),
                   ),
 
+
+                  // Reviews and Ratings Section Card
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF1E1E2E), Color(0xFF161624)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.star_rounded, color: Color(0xFFFBBF24), size: 26),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '4.9',
+                                  style: GoogleFonts.outfit(
+                                    color: Colors.white,
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '• Etkinlik Puanı',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            TextButton.icon(
+                              onPressed: () => EventReviewsSheet.show(context, event: event),
+                              icon: const Icon(Icons.rate_review_rounded, size: 16, color: Color(0xFF38BDF8)),
+                              label: const Text(
+                                'Değerlendir',
+                                style: TextStyle(
+                                  color: Color(0xFF38BDF8),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Bu etkinliğe katılanların yorumlarını ve deneyimlerini inceleyin veya ilk yorumu siz bırakın.',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.65),
+                            fontSize: 12.5,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: () => EventReviewsSheet.show(context, event: event),
+                            icon: const Icon(Icons.forum_outlined, size: 16),
+                            label: const Text(
+                              'Yorumları Gör & Puan Ver',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: BorderSide(color: Colors.white.withOpacity(0.18)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
 
                   // Check-in and Streamer Live Chat Section
                   Consumer<MockEventService>(

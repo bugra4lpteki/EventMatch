@@ -30,64 +30,6 @@ class _AboutSettingsScreenState extends State<AboutSettingsScreen> {
     }
   }
 
-  void _showLegalModal(BuildContext context, String title, String contentText) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.75,
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
-          ),
-          child: Column(
-            children: [
-              const SizedBox(height: 12),
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, color: Colors.white70),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(color: Colors.white10),
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Text(
-                    contentText,
-                    style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 13, height: 1.6),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

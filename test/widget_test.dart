@@ -12,6 +12,9 @@ import 'package:event_match/features/messages/services/mock_message_service.dart
 import 'package:event_match/features/events/services/location_radar_service.dart';
 import 'package:event_match/core/services/connectivity_service.dart';
 import 'package:event_match/core/constants/supabase_config.dart';
+import 'package:event_match/core/localization/locale_provider.dart';
+import 'package:event_match/features/profile/services/ticket_wallet_service.dart';
+import 'package:event_match/features/events/services/event_review_service.dart';
 
 void main() {
   setUpAll(() async {
@@ -35,6 +38,9 @@ void main() {
           ChangeNotifierProvider(create: (_) => ConnectivityService()),
           ChangeNotifierProvider(create: (_) => AuthService()),
           ChangeNotifierProvider(create: (_) => eventService),
+          ChangeNotifierProvider(create: (_) => LocaleProvider()),
+          ChangeNotifierProvider(create: (_) => TicketWalletService()),
+          ChangeNotifierProvider(create: (_) => EventReviewService()),
           ChangeNotifierProxyProvider<MockEventService, MockMatchService>(
             create: (context) => MockMatchService(eventService),
             update: (context, es, ms) => ms ?? MockMatchService(es),

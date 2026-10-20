@@ -476,7 +476,6 @@ class _VipPaywallSheetState extends State<VipPaywallSheet> {
                 children: List.generate(_plans.length, (index) {
                   final plan = _plans[index];
                   final isSelected = _selectedPlanIndex == index;
-                  final isPopular = plan['isPopular'] == true;
 
                   return Expanded(
                     child: GestureDetector(

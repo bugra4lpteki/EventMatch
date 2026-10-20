@@ -14,6 +14,7 @@ import '../../events/screens/event_detail_screen.dart';
 import '../../admin/widgets/secret_admin_dialog.dart';
 import 'dart:async';
 import 'edit_profile_screen.dart';
+import 'ticket_wallet_screen.dart';
 import '../widgets/vip_paywall_sheet.dart';
 import '../../events/widgets/apple_wallet_pass_sheet.dart';
 
@@ -249,23 +250,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                               ),
                               const SizedBox(height: 14),
-                              SizedBox(
-                                width: double.infinity,
-                                child: OutlinedButton.icon(
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                                      ),
+                                      icon: const Icon(Icons.edit_outlined, size: 16),
+                                      label: const Text('Profili Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.white,
+                                        side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        backgroundColor: AppColors.surface.withValues(alpha: 0.5),
+                                      ),
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.edit_outlined, size: 16),
-                                  label: const Text('Profili Düzenle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.white,
-                                    side: BorderSide(color: Colors.white.withValues(alpha: 0.2)),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                    padding: const EdgeInsets.symmetric(vertical: 10),
-                                    backgroundColor: AppColors.surface.withValues(alpha: 0.5),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const TicketWalletScreen()),
+                                      ),
+                                      icon: const Icon(Icons.confirmation_number_rounded, size: 16, color: Color(0xFF38BDF8)),
+                                      label: const Text('Bilet Cüzdanım', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF1E293B),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        side: BorderSide(color: const Color(0xFF38BDF8).withValues(alpha: 0.3)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
                               // ── EventMatch VIP Kartı / Bannerı ───────────
                               if (user.hasActiveVip)

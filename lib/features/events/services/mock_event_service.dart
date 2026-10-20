@@ -20,6 +20,7 @@ class MockEventService extends ChangeNotifier {
   RealtimeChannel? _attendeesSyncChannel;
   RealtimeChannel? _venueBroadcastChannel;
   String? _activeVenueEventId;
+  String? get activeVenueEventId => _activeVenueEventId;
 
   String get currentUserId {
     final sbId = _supabase.auth.currentUser?.id;
@@ -2005,6 +2006,8 @@ class MockEventService extends ChangeNotifier {
     if (event.isSportsEvent) return;
     _events.insert(0, event);
     notifyListeners();
+    _saveEventsToCache();
+    _persistEventToSupabase(event);
   }
 
   void updateEvent(EventModel event) {
@@ -2017,6 +2020,31 @@ class MockEventService extends ChangeNotifier {
     if (index >= 0) {
       _events[index] = event;
       notifyListeners();
+      _saveEventsToCache();
+      _persistEventToSupabase(event);
+    }
+  }
+
+  Future<void> _persistEventToSupabase(EventModel event) async {
+    try {
+      await _supabase.from('events').upsert({
+        'id': event.id,
+        'title': event.title,
+        'type': event.category,
+        'venue': event.location,
+        'date': event.dateTime.toUtc().toIso8601String(),
+        'description': event.description,
+        'image_url': event.imageUrl,
+        'lat': event.latitude,
+        'lng': event.longitude,
+        'ticket_url': event.ticketUrl,
+        'ticket_provider': event.ticketProvider,
+        'price': event.price,
+        'created_by': _isValidUuid(event.creatorId ?? '') ? event.creatorId : null,
+        'is_user_created': event.isUserCreated,
+      });
+    } catch (e) {
+      debugPrint('[EventService] Supabase add/update event error: $e');
     }
   }
 

@@ -441,38 +441,36 @@ class LocationRadarService extends ChangeNotifier {
           continue;
         }
 
-        if (uLat != null && uLng != null) {
-          double dist = 0;
-          if (_lastPosition != null) {
-            dist = Geolocator.distanceBetween(
-              _lastPosition!.latitude,
-              _lastPosition!.longitude,
-              uLat,
-              uLng,
-            );
-          }
+        double dist = 0;
+        if (_lastPosition != null) {
+          dist = Geolocator.distanceBetween(
+            _lastPosition!.latitude,
+            _lastPosition!.longitude,
+            uLat,
+            uLng,
+          );
+        }
 
-          if (dist <= _radarDistanceKm * 1000 || dist == 0) {
-            final userPhotos = userPhotosMap[uid.toLowerCase()] ?? [];
-            final userPhoto = userPhotos.isNotEmpty
-                ? userPhotos.first
-                : (row['avatar_url']?.toString() ?? '');
-            _liveRealtimeUsers[uid.toLowerCase()] = UserModel(
-              id: uid,
-              name: uname,
-              username: row['username']?.toString(),
-              avatarUrl: userPhoto,
-              avatarUrls: userPhotos.isNotEmpty ? userPhotos : (userPhoto.isNotEmpty ? [userPhoto] : []),
-              city: row['city']?.toString() ?? 'İstanbul',
-              aboutMe: (row['bio'] ?? row['about_me'])?.toString(),
-              latitude: uLat,
-              longitude: uLng,
-              enableLocationSharing: true,
-              isVerified: row['is_verified'] == true || (row['badges'] is List && (row['badges'] as List).contains('verified')),
-              showVerifiedBadge: row['show_verified_badge'] != false,
-              tags: row['interests'] != null ? List<String>.from(row['interests']) : ['Müzik', 'Festival'],
-            );
-          }
+        if (dist <= _radarDistanceKm * 1000 || dist == 0) {
+          final userPhotos = userPhotosMap[uid.toLowerCase()] ?? [];
+          final userPhoto = userPhotos.isNotEmpty
+              ? userPhotos.first
+              : (row['avatar_url']?.toString() ?? '');
+          _liveRealtimeUsers[uid.toLowerCase()] = UserModel(
+            id: uid,
+            name: uname,
+            username: row['username']?.toString(),
+            avatarUrl: userPhoto,
+            avatarUrls: userPhotos.isNotEmpty ? userPhotos : (userPhoto.isNotEmpty ? [userPhoto] : []),
+            city: row['city']?.toString() ?? 'İstanbul',
+            aboutMe: (row['bio'] ?? row['about_me'])?.toString(),
+            latitude: uLat,
+            longitude: uLng,
+            enableLocationSharing: true,
+            isVerified: row['is_verified'] == true || (row['badges'] is List && (row['badges'] as List).contains('verified')),
+            showVerifiedBadge: row['show_verified_badge'] != false,
+            tags: row['interests'] != null ? List<String>.from(row['interests']) : ['Müzik', 'Festival'],
+          );
         }
       }
       _recalculateNearbyUsers();
